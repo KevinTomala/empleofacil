@@ -1,0 +1,12 @@
+services:
+  frontend:
+    container_name: frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "${FRONTEND_PORT:-3001}:80"
+    environment:
+      - NODE_ENV=production
+    restart: on-failure
