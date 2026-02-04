@@ -1,12 +1,76 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-/* App defaults */
+@theme inline {
+  --font-sans: 'Manrope', system-ui, sans-serif;
+  --font-heading: 'Sora', system-ui, sans-serif;
+  
+  /* Colores principales segun AGENTS.md */
+  --color-primary: oklch(0.35 0.12 250);
+  --color-accent: oklch(0.55 0.18 170);
+  --color-background: oklch(0.98 0.005 250);
+  --color-foreground: oklch(0.15 0.02 250);
+  
+  /* Colores de soporte */
+  --color-secondary: oklch(0.95 0.01 250);
+  --color-muted: oklch(0.94 0.01 250);
+  --color-destructive: oklch(0.55 0.22 27);
+  --color-border: oklch(0.88 0.02 250);
+  
+  /* Sidebar (dashboard futuro) */
+  --color-sidebar: oklch(0.20 0.05 250);
+  --color-sidebar-foreground: oklch(0.95 0.01 250);
+  --color-sidebar-primary: oklch(0.55 0.18 170);
+  --color-sidebar-accent: oklch(0.28 0.05 250);
+}
+
+* {
+  margin: 10;
+  padding: 10;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+:root {
+  --header-height: 80px;
+}
+
 body {
+  font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  line-height: 1.6;
+  padding-top: var(--header-height);
+}
+
+.page-container {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+  .page-container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page-container {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+#root {
+  width: 100%;
   min-height: 100vh;
-  background-color: #ffffff;
-  color: #0f172a;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
 }
