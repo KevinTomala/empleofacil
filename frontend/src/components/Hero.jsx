@@ -1,6 +1,25 @@
 import { ArrowRight, CheckCircle, Users, Building2 } from 'lucide-react'
+import { useCallback } from 'react'
 
 export default function Hero() {
+  const handleSvgLoad = useCallback((event) => {
+    const svgDoc = event.currentTarget?.contentDocument
+    if (!svgDoc) return
+
+    const paths = svgDoc.querySelectorAll('#features path')
+    paths.forEach((path) => {
+      const hasTitle = path.querySelector('title')
+      if (hasTitle) return
+
+      const name = path.getAttribute('name') || path.getAttribute('id')
+      if (!name) return
+
+      const title = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'title')
+      title.textContent = name
+      path.prepend(title)
+    })
+  }, [])
+
   return (
     <section className="bg-background">
       <div className="page-container">
@@ -19,7 +38,7 @@ export default function Hero() {
             </h1>
 
             <p className="text-lg text-foreground/70 leading-relaxed max-w-xl">
-              La plataforma de empleo especializada en el sector de seguridad privada. 
+              La plataforma de empleo especializada en el sector de seguridad privada.
               Agentes con credencial ministerial y empresas que buscan personal calificado.
             </p>
 
@@ -50,38 +69,22 @@ export default function Hero() {
             </div>
           </div>
 
-          {/* Right Content - Stats Cards */}
+          {/* Right Content - Interactive Map */}
           <div className="relative">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-primary text-white p-6 rounded-2xl">
-                <Users className="w-10 h-10 mb-4 opacity-80" />
-                <p className="font-heading text-4xl font-bold">500+</p>
-                <p className="text-white/80 mt-1">Agentes registrados</p>
-              </div>
-              <div className="bg-secondary p-6 rounded-2xl border border-border mt-8">
-                <Building2 className="w-10 h-10 mb-4 text-primary" />
-                <p className="font-heading text-4xl font-bold text-foreground">50+</p>
-                <p className="text-foreground/70 mt-1">Empresas activas</p>
-              </div>
-              <div className="bg-accent/10 p-6 rounded-2xl border border-accent/20">
-                <div className="w-10 h-10 mb-4 bg-accent rounded-lg flex items-center justify-center">
-                  <CheckCircle className="w-6 h-6 text-white" />
-                </div>
-                <p className="font-heading text-4xl font-bold text-foreground">98%</p>
-                <p className="text-foreground/70 mt-1">Tasa de colocacion</p>
-              </div>
-              <div className="bg-white p-6 rounded-2xl border border-border shadow-sm -mt-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="flex -space-x-2">
-                    <div className="w-8 h-8 bg-primary/20 rounded-full border-2 border-white" />
-                    <div className="w-8 h-8 bg-accent/20 rounded-full border-2 border-white" />
-                    <div className="w-8 h-8 bg-foreground/20 rounded-full border-2 border-white" />
-                  </div>
-                </div>
-                <p className="font-heading text-2xl font-bold text-foreground">24/7</p>
-                <p className="text-foreground/70 mt-1">Soporte disponible</p>
+            <div className="bg-white border border-border rounded-2xl p-6 shadow-sm">
+              <div className="hero-map-frame mx-auto">
+                <object
+                  data="/ec.svg"
+                  type="image/svg+xml"
+                  aria-label="Mapa interactivo de Ecuador"
+                  className="hero-map-svg"
+                  onLoad={handleSvgLoad}
+                />
               </div>
             </div>
+            <p className="text-xs text-foreground/60 mt-2 text-center">
+              Pasa el cursor por una provincia para resaltarla
+            </p>
           </div>
         </div>
       </div>
