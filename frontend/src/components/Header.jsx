@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react'
-import { Menu, X, Shield } from 'lucide-react'
+import { Menu, X, Briefcase } from 'lucide-react'
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   const navLinks = [
     { href: '#beneficios-empresas', label: 'Para Empresas' },
-    { href: '#beneficios-agentes', label: 'Para Agentes' },
+    { href: '#beneficios-candidatos', label: 'Para Candidatos' },
     { href: '#como-funciona', label: 'Como Funciona' },
     { href: '#contacto', label: 'Contacto' },
   ]
@@ -20,10 +20,10 @@ export default function Header() {
           {/* Logo */}
           <a href="/" className="flex items-center gap-2">
             <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <Shield className="w-6 h-6 text-white" />
+              <Briefcase className="w-6 h-6 text-white" />
             </div>
             <span className="font-heading font-bold text-xl text-foreground">
-              EmpleoFacil
+              EmpleoFácil
             </span>
           </a>
 

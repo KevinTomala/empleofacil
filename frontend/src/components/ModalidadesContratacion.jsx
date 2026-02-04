@@ -16,20 +16,20 @@ const modalidades = [
   {
     icon: Briefcase,
     title: 'Fijo',
-    description: 'Contratacion permanente para necesidades continuas de seguridad.',
-    ejemplos: ['Edificios', 'Empresas', 'Residenciales']
+    description: 'Contratacion permanente para roles clave y equipos estables.',
+    ejemplos: ['Administracion', 'Operaciones', 'Comercial']
   },
   {
     icon: Timer,
     title: 'Medio Tiempo',
-    description: 'Horarios parciales ideales para complementar equipos de seguridad.',
-    ejemplos: ['Turnos nocturnos', 'Fines de semana', 'Horarios especificos']
+    description: 'Horarios parciales ideales para cubrir franjas y picos de demanda.',
+    ejemplos: ['Fines de semana', 'Tardes', 'Horarios especificos']
   },
   {
     icon: Star,
     title: 'Eventos Especiales',
-    description: 'Seguridad especializada para ocasiones que requieren atencion extra.',
-    ejemplos: ['Conciertos', 'Conferencias', 'Deportivos']
+    description: 'Refuerzos puntuales para ocasiones que requieren personal extra.',
+    ejemplos: ['Conciertos', 'Conferencias', 'Promociones']
   }
 ]
 
@@ -45,7 +45,7 @@ export default function ModalidadesContratacion() {
             Modalidades de contratacion
           </h2>
           <p className="text-foreground/70 max-w-2xl mx-auto text-lg">
-            Adaptamos las opciones de contratacion a las necesidades de cada empresa y la disponibilidad de cada agente.
+            Adaptamos las opciones de contratacion a las necesidades de cada empresa y la disponibilidad de cada candidato.
           </p>
         </div>
 

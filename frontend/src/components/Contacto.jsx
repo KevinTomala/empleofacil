@@ -25,8 +25,8 @@ export default function Contacto() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-foreground mb-1">Email</h3>
-                  <p className="text-foreground/70">info@empleofacil.ec</p>
-                  <p className="text-foreground/70">soporte@empleofacil.ec</p>
+                  <p className="text-foreground/70">info@EmpleoFácil.ec</p>
+                  <p className="text-foreground/70">soporte@EmpleoFácil.ec</p>
                 </div>
               </div>
 
@@ -94,7 +94,7 @@ export default function Contacto() {
                   className="w-full px-4 py-3 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                 >
                   <option value="">Selecciona una opcion</option>
-                  <option value="agente">Agente de Seguridad</option>
+                  <option value="candidato">Candidato</option>
                   <option value="empresa">Empresa</option>
                   <option value="otro">Otro</option>
                 </select>

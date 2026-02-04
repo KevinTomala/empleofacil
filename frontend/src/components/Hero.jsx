@@ -34,17 +34,17 @@ export default function Hero() {
             </div>
 
             <h1 className="font-heading text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground leading-tight text-balance">
-              Conectamos guardias de seguridad certificados con empresas
+              Conectamos talento con empresas de todo tipo
             </h1>
 
             <p className="text-lg text-foreground/70 leading-relaxed max-w-xl">
-              La plataforma de empleo especializada en el sector de seguridad privada.
-              Agentes con credencial ministerial y empresas que buscan personal calificado.
+              La plataforma de empleo para publicar vacantes y encontrar candidatos verificados. 
+              Personas con experiencia y empresas que buscan talento calificado.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4">
               <button className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white font-medium rounded-lg hover:bg-primary/90 transition-colors">
-                Soy Agente de Seguridad
+                Soy Candidato
                 <ArrowRight className="w-5 h-5" />
               </button>
               <button className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-secondary text-foreground font-medium rounded-lg hover:bg-muted transition-colors border border-border">
@@ -56,11 +56,11 @@ export default function Hero() {
             <div className="flex flex-wrap gap-6 pt-4">
               <div className="flex items-center gap-2 text-sm text-foreground/70">
                 <CheckCircle className="w-5 h-5 text-accent" />
-                <span>Guardias certificados</span>
+                <span>Perfiles verificados</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-foreground/70">
                 <CheckCircle className="w-5 h-5 text-accent" />
-                <span>Verificacion ministerial</span>
+                <span>Validaciones de experiencia</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-foreground/70">
                 <CheckCircle className="w-5 h-5 text-accent" />

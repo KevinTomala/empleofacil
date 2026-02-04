@@ -11,7 +11,7 @@ const pasosAgentes = [
     step: '02',
     icon: FileText,
     title: 'Completa tu perfil',
-    description: 'Agrega tu credencial ministerial, experiencia y certificaciones.'
+    description: 'Agrega tu experiencia, habilidades, certificaciones y referencias.'
   },
   {
     step: '03',
@@ -44,7 +44,7 @@ const pasosEmpresas = [
     step: '03',
     icon: Search,
     title: 'Revisa candidatos',
-    description: 'Explora perfiles de guardias certificados y verificados.'
+    description: 'Explora perfiles de candidatos verificados y calificados.'
   },
   {
     step: '04',
@@ -71,10 +71,10 @@ export default function ComoFunciona() {
         </div>
 
         <div className="grid lg:grid-cols-2 gap-12">
-          {/* Para Agentes */}
+          {/* Para Candidatos */}
           <div>
             <h3 className="font-heading text-xl font-semibold mb-8 text-center lg:text-left">
-              Para Agentes de Seguridad
+              Para Candidatos
             </h3>
             <div className="space-y-6">
               {pasosAgentes.map((paso, index) => (

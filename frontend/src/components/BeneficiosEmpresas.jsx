@@ -4,17 +4,17 @@ const beneficios = [
   {
     icon: Search,
     title: 'Busqueda Inteligente',
-    description: 'Filtra candidatos por experiencia, ubicacion, disponibilidad y tipo de credencial ministerial.'
+    description: 'Filtra candidatos por experiencia, ubicacion, disponibilidad y habilidades.'
   },
   {
     icon: Clock,
     title: 'Contratacion Rapida',
-    description: 'Publica vacantes y recibe postulaciones de guardias calificados en cuestion de horas.'
+    description: 'Publica vacantes y recibe postulaciones de candidatos calificados en cuestion de horas.'
   },
   {
     icon: FileCheck,
     title: 'Documentacion Verificada',
-    description: 'Todos los agentes cuentan con credencial vigente del Ministerio del Interior de Ecuador.'
+    description: 'Verificacion de documentos y datos clave para contratar con confianza.'
   },
   {
     icon: ShieldCheck,
@@ -42,10 +42,10 @@ export default function BeneficiosEmpresas() {
             Para Empresas
           </span>
           <h2 className="font-heading text-3xl sm:text-4xl font-bold text-foreground mb-4 text-balance">
-            Encuentra al personal de seguridad ideal
+            Encuentra al talento ideal para tu empresa
           </h2>
           <p className="text-foreground/70 max-w-2xl mx-auto text-lg">
-            Simplifica tu proceso de contratacion con acceso directo a guardias de seguridad certificados y verificados.
+            Simplifica tu proceso de contratacion con acceso directo a candidatos verificados y perfiles completos.
           </p>
         </div>
 

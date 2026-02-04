@@ -20,13 +20,13 @@ export default function CTA() {
               Empieza hoy mismo
             </h2>
             <p className="text-white/80 text-lg max-w-2xl mx-auto mb-8">
-              Unete a la plataforma de empleo especializada en seguridad privada mas grande de Ecuador. 
-              Es completamente gratis para agentes.
+              Unete a la plataforma de empleo que conecta talento y empresas en todo Ecuador. 
+              Es completamente gratis para candidatos.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-primary font-semibold rounded-lg hover:bg-white/90 transition-colors">
-                Soy Agente
+                Soy Candidato
                 <ArrowRight className="w-5 h-5" />
               </button>
               <button className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white/10 text-white font-semibold rounded-lg hover:bg-white/20 transition-colors border border-white/20">

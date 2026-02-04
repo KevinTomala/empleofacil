@@ -4,7 +4,7 @@ const beneficios = [
   {
     icon: Briefcase,
     title: 'Oportunidades Verificadas',
-    description: 'Accede a vacantes reales de empresas establecidas que buscan guardias de seguridad.'
+    description: 'Accede a vacantes reales de empresas establecidas que buscan talento.'
   },
   {
     icon: TrendingUp,
@@ -19,7 +19,7 @@ const beneficios = [
   {
     icon: Award,
     title: 'Credencial Validada',
-    description: 'Tu credencial del ministerio es tu carta de presentacion ante las empresas.'
+    description: 'Tu documentacion y experiencia validada generan confianza ante las empresas.'
   },
   {
     icon: Calendar,
@@ -35,20 +35,19 @@ const beneficios = [
 
 export default function BeneficiosAgentes() {
   return (
-    <section id="beneficios-agentes" className="py-20 bg-background">
+    <section id="beneficios-candidatos" className="py-20 bg-background">
       <div className="page-container">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           {/* Left - Content */}
           <div>
             <span className="inline-block px-4 py-2 bg-accent/10 text-accent rounded-full text-sm font-medium mb-4">
-              Para Agentes de Seguridad
+              Para Candidatos
             </span>
             <h2 className="font-heading text-3xl sm:text-4xl font-bold text-foreground mb-4 text-balance">
               Tu proxima oportunidad laboral esta aqui
             </h2>
             <p className="text-foreground/70 text-lg mb-8">
-              Si eres guardia de seguridad con credencial vigente del Ministerio del Interior, 
-              EmpleoFacil es tu plataforma para conectar con empresas que valoran tu profesionalismo.
+              Si estas buscando empleo, EmpleoFácil es tu plataforma para conectar con empresas que valoran tu experiencia.
             </p>
 
             <div className="grid sm:grid-cols-2 gap-4">
@@ -71,14 +70,14 @@ export default function BeneficiosAgentes() {
 
             <div className="mt-8">
               <button className="inline-flex items-center gap-2 px-8 py-4 bg-accent text-white font-medium rounded-lg hover:bg-accent/90 transition-colors">
-                Registrarme como Agente
+                Registrarme como Candidato
               </button>
             </div>
           </div>
 
           {/* Right - Visual */}
           <div className="relative">
-            <div className="bg-gradient-to-br from-primary/5 to-accent/5 rounded-3xl p-8 border border-border">
+            <div className="bg-linear-to-br from-primary/5 to-accent/5 rounded-3xl p-8 border border-border">
               <div className="space-y-4">
                 {/* Sample Job Card */}
                 <div className="bg-background p-4 rounded-xl border border-border shadow-sm">
@@ -87,8 +86,8 @@ export default function BeneficiosAgentes() {
                       <span className="inline-block px-2 py-1 bg-accent/10 text-accent text-xs font-medium rounded mb-2">
                         Temporal
                       </span>
-                      <h4 className="font-semibold text-foreground">Guardia de Seguridad</h4>
-                      <p className="text-sm text-foreground/70">Empresa de Eventos S.A.</p>
+                      <h4 className="font-semibold text-foreground">Asistente Operativo</h4>
+                      <p className="text-sm text-foreground/70">Empresa de Servicios S.A.</p>
                     </div>
                     <span className="text-sm font-medium text-accent">$600/mes</span>
                   </div>
@@ -109,8 +108,8 @@ export default function BeneficiosAgentes() {
                       <span className="inline-block px-2 py-1 bg-primary/10 text-primary text-xs font-medium rounded mb-2">
                         Fijo
                       </span>
-                      <h4 className="font-semibold text-foreground">Supervisor de Seguridad</h4>
-                      <p className="text-sm text-foreground/70">Centro Comercial Mall</p>
+                      <h4 className="font-semibold text-foreground">Supervisor de Operaciones</h4>
+                      <p className="text-sm text-foreground/70">Centro Comercial</p>
                     </div>
                     <span className="text-sm font-medium text-primary">$850/mes</span>
                   </div>
@@ -131,8 +130,8 @@ export default function BeneficiosAgentes() {
                       <span className="inline-block px-2 py-1 bg-foreground/10 text-foreground text-xs font-medium rounded mb-2">
                         Evento
                       </span>
-                      <h4 className="font-semibold text-foreground">Seguridad para Concierto</h4>
-                      <p className="text-sm text-foreground/70">Productora Musical</p>
+                      <h4 className="font-semibold text-foreground">Apoyo para Evento</h4>
+                      <p className="text-sm text-foreground/70">Productora</p>
                     </div>
                     <span className="text-sm font-medium text-foreground">$50/dia</span>
                   </div>

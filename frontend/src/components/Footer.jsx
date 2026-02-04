@@ -1,9 +1,9 @@
-import { Shield } from 'lucide-react'
+import { Briefcase } from 'lucide-react'
 
 const links = {
   plataforma: [
     { label: 'Para Empresas', href: '#beneficios-empresas' },
-    { label: 'Para Agentes', href: '#beneficios-agentes' },
+    { label: 'Para Candidatos', href: '#beneficios-candidatos' },
     { label: 'Como Funciona', href: '#como-funciona' },
     { label: 'Precios', href: '#' },
   ],
@@ -29,13 +29,13 @@ export default function Footer() {
           <div className="lg:col-span-2 text-left">
             <a href="/" className="inline-flex items-center gap-3 mb-6">
               <div className="w-11 h-11 bg-primary rounded-xl flex items-center justify-center shrink-0">
-                <Shield className="w-6 h-6 text-white" />
+                <Briefcase className="w-6 h-6 text-white" />
               </div>
-              <span className="font-heading font-bold text-xl">EmpleoFacil</span>
+              <span className="font-heading font-bold text-xl">EmpleoFácil</span>
             </a>
 
             <p className="text-white/70 max-w-sm mb-4 leading-relaxed">
-              La plataforma de empleo especializada en guardias de seguridad certificados en Ecuador.
+              La plataforma de empleo que conecta talento y empresas en Ecuador.
             </p>
             <p className="text-white/50 text-sm">
               Conectando talento con oportunidades desde 2024.
@@ -95,7 +95,7 @@ export default function Footer() {
         {/* Bottom */}
         <div className="pt-8 border-t border-white/10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <p className="text-white/40 text-sm">
-            2024 EmpleoFacil. Todos los derechos reservados.
+            2024 EmpleoFácil. Todos los derechos reservados.
           </p>
           <span className="text-white/40 text-sm md:text-right">
             Hecho con dedicacion en Ecuador
