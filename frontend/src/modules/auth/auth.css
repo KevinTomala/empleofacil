@@ -278,6 +278,12 @@
   box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-primary) 20%, transparent);
 }
 
+.auth-error {
+  color: color-mix(in oklch, var(--color-destructive) 80%, black);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 .auth-actions {
   display: flex;
   align-items: center;

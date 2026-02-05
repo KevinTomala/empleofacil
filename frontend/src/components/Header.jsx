@@ -1,18 +1,57 @@
 'use client';
 
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Menu, X, Briefcase } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
 
-  const navLinks = [
-    { href: '/#beneficios-empresas', label: 'Para Empresas' },
-    { href: '/#beneficios-candidatos', label: 'Para Candidatos' },
-    { href: '/#como-funciona', label: 'Como Funciona' },
-    { href: '/#contacto', label: 'Contacto' },
-  ]
+  const navLinks = useMemo(() => {
+    if (user?.role === 'company') {
+      return [
+        { href: '/app/company#vacantes', label: 'Vacantes' },
+        { href: '/app/company#candidatos', label: 'Candidatos' },
+        { href: '/app/company#mensajes', label: 'Mensajes' },
+        { href: '/app/company#empresa', label: 'Empresa' },
+      ]
+    }
+
+    if (user?.role === 'candidate') {
+      return [
+        { href: '/app/candidate/vacantes', label: 'Vacantes' },
+        { href: '/app/candidate/postulaciones', label: 'Postulaciones' },
+        { href: '/app/candidate/perfil', label: 'Perfil' },
+      ]
+    }
+
+    return [
+      { href: '/#beneficios-empresas', label: 'Para Empresas' },
+      { href: '/#beneficios-candidatos', label: 'Para Candidatos' },
+      { href: '/#como-funciona', label: 'Como Funciona' },
+      { href: '/#contacto', label: 'Contacto' },
+    ]
+  }, [user])
+
+  const handleLogout = () => {
+    logout()
+    if (location.pathname.startsWith('/app')) {
+      navigate('/')
+    }
+  }
+
+  const initials = user?.name
+    ? user.name
+        .split(' ')
+        .map((part) => part[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
+    : 'US'
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
@@ -43,18 +82,37 @@ export default function Header() {
 
           {/* Auth Buttons */}
           <div className="hidden md:flex items-center gap-3">
-            <Link
-              to="/login"
-              className="px-4 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
-            >
-              Iniciar Sesion
-            </Link>
-            <Link
-              to="/register"
-              className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              Crear Cuenta
-            </Link>
+            {user ? (
+              <>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-muted/60">
+                  <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">
+                    {initials}
+                  </span>
+                  <span className="text-sm font-medium text-foreground">{user.name}</span>
+                </div>
+                <button
+                  className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                  onClick={handleLogout}
+                >
+                  Salir
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="px-4 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+                >
+                  Iniciar Sesion
+                </Link>
+                <Link
+                  to="/register"
+                  className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  Crear Cuenta
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -82,20 +140,42 @@ export default function Header() {
                 </a>
               ))}
               <div className="flex flex-col gap-2 pt-4 border-t border-border">
-                <Link
-                  to="/login"
-                  className="px-4 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors text-left"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Iniciar Sesion
-                </Link>
-                <Link
-                  to="/register"
-                  className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Crear Cuenta
-                </Link>
+                {user ? (
+                  <>
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-muted/60">
+                      <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">
+                        {initials}
+                      </span>
+                      <span className="text-sm font-medium text-foreground">{user.name}</span>
+                    </div>
+                    <button
+                      className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-left"
+                      onClick={() => {
+                        handleLogout()
+                        setIsMenuOpen(false)
+                      }}
+                    >
+                      Salir
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      to="/login"
+                      className="px-4 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors text-left"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Iniciar Sesion
+                    </Link>
+                    <Link
+                      to="/register"
+                      className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Crear Cuenta
+                    </Link>
+                  </>
+                )}
               </div>
             </nav>
           </div>

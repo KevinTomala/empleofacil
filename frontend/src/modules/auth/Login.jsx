@@ -1,9 +1,31 @@
+import { useState } from 'react'
 import { Briefcase, ShieldCheck, Sparkles } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Header from '../../components/Header'
+import { useAuth } from '../../context/AuthContext'
 import './auth.css'
 
 export default function Login() {
+  const navigate = useNavigate()
+  const { login } = useAuth()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+
+  const handleSubmit = (event) => {
+    event.preventDefault()
+    const result = login(email.trim(), password)
+    if (!result.ok) {
+      setError(result.message)
+      return
+    }
+
+    setError('')
+    const nextPath =
+      result.user.role === 'company' ? '/app/company' : '/app/candidate/vacantes'
+    navigate(nextPath)
+  }
+
   return (
     <div className="auth-page">
       <Header />
@@ -28,14 +50,28 @@ export default function Login() {
             <p>Inicia sesion para revisar tus postulaciones y mensajes.</p>
           </div>
 
-          <form className="auth-form">
+          <form className="auth-form" onSubmit={handleSubmit}>
             <div className="auth-field">
               <label htmlFor="email">Correo electronico</label>
-              <input id="email" name="email" type="email" placeholder="nombre@correo.com" />
+              <input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="nombre@correo.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
             </div>
             <div className="auth-field">
               <label htmlFor="password">Contrasena</label>
-              <input id="password" name="password" type="password" placeholder="Tu contrasena segura" />
+              <input
+                id="password"
+                name="password"
+                type="password"
+                placeholder="Tu contrasena segura"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
             </div>
 
             <div className="auth-actions">
@@ -47,6 +83,8 @@ export default function Login() {
                 Olvidaste tu contrasena?
               </Link>
             </div>
+
+            {error && <p className="auth-error">{error}</p>}
 
             <button className="auth-submit" type="submit">
               Iniciar sesion
