@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Menu, X, Briefcase } from 'lucide-react'
 
 export default function Header() {
@@ -42,9 +43,12 @@ export default function Header() {
 
           {/* Auth Buttons */}
           <div className="hidden md:flex items-center gap-3">
-            <button className="px-4 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors">
+            <Link
+              to="/login"
+              className="px-4 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+            >
               Iniciar Sesion
-            </button>
+            </Link>
             <button className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
               Crear Cuenta
             </button>
@@ -75,9 +79,13 @@ export default function Header() {
                 </a>
               ))}
               <div className="flex flex-col gap-2 pt-4 border-t border-border">
-                <button className="px-4 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors text-left">
+                <Link
+                  to="/login"
+                  className="px-4 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors text-left"
+                  onClick={() => setIsMenuOpen(false)}
+                >
                   Iniciar Sesion
-                </button>
+                </Link>
                 <button className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
                   Crear Cuenta
                 </button>
