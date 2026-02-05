@@ -49,9 +49,12 @@ export default function Header() {
             >
               Iniciar Sesion
             </Link>
-            <button className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+            <Link
+              to="/register"
+              className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            >
               Crear Cuenta
-            </button>
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -86,9 +89,13 @@ export default function Header() {
                 >
                   Iniciar Sesion
                 </Link>
-                <button className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+                <Link
+                  to="/register"
+                  className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                  onClick={() => setIsMenuOpen(false)}
+                >
                   Crear Cuenta
-                </button>
+                </Link>
               </div>
             </nav>
           </div>
