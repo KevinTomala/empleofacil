@@ -1,4 +1,5 @@
 import { Search, Clock, FileCheck, ShieldCheck, Zap, Users } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 const beneficios = [
   {
@@ -69,9 +70,12 @@ export default function BeneficiosEmpresas() {
         </div>
 
         <div className="mt-12 text-center">
-          <button className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-white font-medium rounded-lg hover:bg-primary/90 transition-colors">
-            Publicar una Vacante
-          </button>
+          <Link
+            to="/login"
+            className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-white font-medium rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Publicar una vacante
+          </Link>
         </div>
       </div>
     </section>

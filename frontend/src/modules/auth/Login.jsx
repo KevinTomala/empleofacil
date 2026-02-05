@@ -43,9 +43,9 @@ export default function Login() {
                 <input type="checkbox" name="remember" />
                 Recordarme
               </label>
-              <a className="auth-link" href="#">
+              <Link className="auth-link" to="/request-password">
                 Olvidaste tu contrasena?
-              </a>
+              </Link>
             </div>
 
             <button className="auth-submit" type="submit">

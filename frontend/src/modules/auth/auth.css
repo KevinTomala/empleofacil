@@ -246,6 +246,32 @@
   transition: border 0.2s ease, box-shadow 0.2s ease;
 }
 
+.auth-input-icon {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.9rem;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklch, var(--color-border) 70%, white);
+  background: color-mix(in oklch, var(--color-secondary) 70%, white);
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.auth-input-icon svg {
+  color: color-mix(in oklch, var(--color-foreground) 55%, white);
+}
+
+.auth-input-icon input {
+  border: none;
+  padding: 0.85rem 0;
+  background: transparent;
+}
+
+.auth-input-icon:focus-within {
+  border-color: color-mix(in oklch, var(--color-primary) 70%, white);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-primary) 20%, transparent);
+}
+
 .auth-field input:focus {
   outline: none;
   border-color: color-mix(in oklch, var(--color-primary) 70%, white);

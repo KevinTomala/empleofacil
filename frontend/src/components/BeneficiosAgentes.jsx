@@ -1,4 +1,5 @@
 import { Briefcase, TrendingUp, Bell, Award, Calendar, MapPin } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 const beneficios = [
   {
@@ -69,9 +70,12 @@ export default function BeneficiosAgentes() {
             </div>
 
             <div className="mt-8">
-              <button className="inline-flex items-center gap-2 px-8 py-4 bg-accent text-white font-medium rounded-lg hover:bg-accent/90 transition-colors">
+              <Link
+                to="/register"
+                className="inline-flex items-center gap-2 px-8 py-4 bg-accent text-white font-medium rounded-lg hover:bg-accent/90 transition-colors"
+              >
                 Registrarme como Candidato
-              </button>
+              </Link>
             </div>
           </div>
 

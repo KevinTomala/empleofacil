@@ -1,12 +1,20 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Briefcase, Building2, User } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import Header from '../../components/Header'
 import './auth.css'
 
 export default function Register() {
+  const [searchParams] = useSearchParams()
   const [accountType, setAccountType] = useState('candidate')
   const [step, setStep] = useState(1)
+
+  useEffect(() => {
+    const type = searchParams.get('type')
+    if (type === 'company' || type === 'candidate') {
+      setAccountType(type)
+    }
+  }, [searchParams])
 
   return (
     <div className="auth-page">

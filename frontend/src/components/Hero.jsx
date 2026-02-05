@@ -1,5 +1,6 @@
 import { ArrowRight, CheckCircle, Users, Building2 } from 'lucide-react'
 import { useCallback } from 'react'
+import { Link } from 'react-router-dom'
 
 export default function Hero() {
   const handleSvgLoad = useCallback((event) => {
@@ -43,14 +44,20 @@ export default function Hero() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4">
-              <button className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white font-medium rounded-lg hover:bg-primary/90 transition-colors">
+              <Link
+                to="/register?type=candidate"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white font-medium rounded-lg hover:bg-primary/90 transition-colors"
+              >
                 Soy Candidato
                 <ArrowRight className="w-5 h-5" />
-              </button>
-              <button className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-secondary text-foreground font-medium rounded-lg hover:bg-muted transition-colors border border-border">
+              </Link>
+              <Link
+                to="/register?type=company"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-secondary text-foreground font-medium rounded-lg hover:bg-muted transition-colors border border-border"
+              >
                 Soy Empresa
                 <Building2 className="w-5 h-5" />
-              </button>
+              </Link>
             </div>
 
             <div className="flex flex-wrap gap-6 pt-4">

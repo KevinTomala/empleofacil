@@ -8,10 +8,10 @@ export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   const navLinks = [
-    { href: '#beneficios-empresas', label: 'Para Empresas' },
-    { href: '#beneficios-candidatos', label: 'Para Candidatos' },
-    { href: '#como-funciona', label: 'Como Funciona' },
-    { href: '#contacto', label: 'Contacto' },
+    { href: '/#beneficios-empresas', label: 'Para Empresas' },
+    { href: '/#beneficios-candidatos', label: 'Para Candidatos' },
+    { href: '/#como-funciona', label: 'Como Funciona' },
+    { href: '/#contacto', label: 'Contacto' },
   ]
 
   return (

@@ -1,4 +1,5 @@
 import { ArrowRight, Shield } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 export default function CTA() {
   return (
@@ -25,14 +26,20 @@ export default function CTA() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-primary font-semibold rounded-lg hover:bg-white/90 transition-colors">
+              <Link
+                to="/register?type=candidate"
+                className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-primary font-semibold rounded-lg hover:bg-white/90 transition-colors"
+              >
                 Soy Candidato
                 <ArrowRight className="w-5 h-5" />
-              </button>
-              <button className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white/10 text-white font-semibold rounded-lg hover:bg-white/20 transition-colors border border-white/20">
+              </Link>
+              <Link
+                to="/register?type=company"
+                className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white/10 text-white font-semibold rounded-lg hover:bg-white/20 transition-colors border border-white/20"
+              >
                 Soy Empresa
                 <ArrowRight className="w-5 h-5" />
-              </button>
+              </Link>
             </div>
 
             <p className="text-white/60 text-sm mt-6">
