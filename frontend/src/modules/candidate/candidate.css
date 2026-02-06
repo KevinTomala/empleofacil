@@ -1,0 +1,164 @@
+.candidate-page {
+  min-height: 100vh;
+  background: var(--color-background);
+}
+
+.candidate-content {
+  padding-top: 3rem;
+  padding-bottom: 5rem;
+}
+
+.candidate-vacantes-grid {
+  display: grid;
+  gap: 2rem;
+  align-items: start;
+}
+
+.candidate-vacantes-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.candidate-filters {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  padding: 0.75rem 0.9rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.candidate-link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.candidate-link:hover {
+  text-decoration: underline;
+}
+
+.candidate-filters-compact {
+  padding: 0.5rem 0.75rem;
+}
+
+.candidate-filters-row {
+  display: grid;
+  gap: 0.6rem 0.9rem;
+  align-items: end;
+  grid-template-columns: 1fr;
+}
+
+.candidate-filters-row .candidate-filter-inline select {
+  min-width: 0;
+  width: 100%;
+}
+
+.candidate-filters-row-line {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.candidate-selected-province {
+  align-self: end;
+}
+
+@media (max-width: 900px) {
+  .candidate-filters-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.candidate-vacantes-grid.is-wide .candidate-filters-row,
+.candidate-vacantes-grid.is-wide .candidate-filters-advanced {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+@media (min-width: 1200px) {
+  .candidate-vacantes-grid.is-wide .candidate-filters-row,
+  .candidate-vacantes-grid.is-wide .candidate-filters-advanced {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.candidate-filter-inline {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  color: color-mix(in oklch, var(--color-foreground) 70%, white);
+}
+
+.candidate-filter-inline select {
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  padding: 0.35rem 0.5rem;
+  background: color-mix(in oklch, var(--color-secondary) 70%, white);
+  color: var(--color-foreground);
+  font-size: 0.8rem;
+}
+
+.candidate-filter-inline select:focus {
+  outline: none;
+  border-color: color-mix(in oklch, var(--color-primary) 70%, white);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-primary) 20%, transparent);
+}
+
+.candidate-reset {
+  background: transparent;
+  border: none;
+  color: color-mix(in oklch, var(--color-foreground) 65%, white);
+  font-size: 0.75rem;
+  cursor: pointer;
+  justify-self: end;
+}
+
+@media (min-width: 1024px) {
+  .candidate-vacantes-grid {
+    grid-template-columns: 1.05fr 0.95fr;
+  }
+
+  .candidate-vacantes-grid.is-wide {
+    grid-template-columns: 1.05fr 0.95fr;
+  }
+
+  .candidate-vacantes-list {
+    max-height: calc(100vh - 240px);
+    overflow-y: auto;
+    padding-right: 0.5rem;
+    scrollbar-width: none;
+  }
+
+  .candidate-vacantes-list::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+.candidate-map-card {
+  position: sticky;
+  top: 6rem;
+}
+
+.candidate-job-card {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 0.9rem;
+  padding: 0.85rem;
+}
+
+.candidate-cta {
+  margin-top: 0.45rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  background: var(--color-primary);
+  color: white;
+  border-radius: 0.7rem;
+  font-weight: 600;
+  border: none;
+}
+.candidate-filters-panel {
+  display: grid;
+  gap: 1rem;
+}
