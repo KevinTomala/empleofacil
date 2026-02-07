@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isProfileOpen, setIsProfileOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
@@ -39,6 +40,7 @@ export default function Header() {
 
   const handleLogout = () => {
     logout()
+    setIsProfileOpen(false)
     if (location.pathname.startsWith('/app')) {
       navigate('/')
     }
@@ -84,18 +86,33 @@ export default function Header() {
           <div className="hidden md:flex items-center gap-3">
             {user ? (
               <>
-                <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-muted/60">
-                  <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">
-                    {initials}
-                  </span>
-                  <span className="text-sm font-medium text-foreground">{user.name}</span>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 px-3 py-2 rounded-full bg-muted/60 hover:bg-muted transition-colors"
+                    onClick={() => setIsProfileOpen((open) => !open)}
+                    aria-haspopup="menu"
+                    aria-expanded={isProfileOpen}
+                  >
+                    <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">
+                      {initials}
+                    </span>
+                    <span className="text-sm font-medium text-foreground">{user.name}</span>
+                  </button>
+                  {isProfileOpen && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 mt-2 w-40 rounded-lg border border-border bg-background shadow-lg p-1"
+                    >
+                      <button
+                        className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-muted rounded-md"
+                        onClick={handleLogout}
+                      >
+                        Salir
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <button
-                  className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-                  onClick={handleLogout}
-                >
-                  Salir
-                </button>
               </>
             ) : (
               <>
