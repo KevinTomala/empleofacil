@@ -95,7 +95,7 @@ export default function Footer() {
         {/* Bottom */}
         <div className="pt-8 border-t border-white/10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <p className="text-white/40 text-sm">
-            2024 EmpleoFácil. Todos los derechos reservados.
+            2024 EmpleoFácil · Alpha Technologies. Todos los derechos reservados.
           </p>
           <span className="text-white/40 text-sm md:text-right">
             Hecho con dedicacion en Ecuador
