@@ -12,13 +12,19 @@ export default function Header() {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
 
+  const homeLink = useMemo(() => {
+    if (user?.role === 'company') return '/app/company'
+    if (user?.role === 'candidate') return '/app/candidate/vacantes'
+    return '/'
+  }, [user])
+
   const navLinks = useMemo(() => {
     if (user?.role === 'company') {
       return [
-        { href: '/app/company#vacantes', label: 'Vacantes' },
-        { href: '/app/company#candidatos', label: 'Candidatos' },
-        { href: '/app/company#mensajes', label: 'Mensajes' },
-        { href: '/app/company#empresa', label: 'Empresa' },
+        { href: '/app/company/vacantes', label: 'Vacantes' },
+        { href: '/app/company/candidatos', label: 'Candidatos' },
+        { href: '/app/company/mensajes', label: 'Mensajes' },
+        { href: '/app/company/empresa', label: 'Empresa' },
       ]
     }
 
@@ -60,14 +66,14 @@ export default function Header() {
       <div className="page-container">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <a href="/" className="flex items-center gap-2">
+          <Link to={homeLink} className="flex items-center gap-2">
             <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
               <Briefcase className="w-6 h-6 text-white" />
             </div>
             <span className="font-heading font-bold text-xl text-foreground">
               EmpleoFácil
             </span>
-          </a>
+          </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">

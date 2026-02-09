@@ -13,7 +13,12 @@ import ProfileExperiencia from './modules/candidate/ProfileExperiencia'
 import ProfileFormacion from './modules/candidate/ProfileFormacion'
 import ProfileIdiomas from './modules/candidate/ProfileIdiomas'
 import ProfileDocumentos from './modules/candidate/ProfileDocumentos'
+import ProfileDatosPersonales from './modules/candidate/ProfileDatosPersonales'
 import CompanyHome from './modules/company/CompanyHome'
+import CompanyVacantes from './modules/company/CompanyVacantes'
+import CompanyCandidatos from './modules/company/CompanyCandidatos'
+import CompanyMensajes from './modules/company/CompanyMensajes'
+import CompanyPerfil from './modules/company/CompanyPerfil'
 import { AuthProvider } from './context/AuthContext'
 
 function ScrollToHash() {
@@ -50,8 +55,12 @@ function App() {
           <Route path="/perfil/formacion" element={<ProfileFormacion />} />
           <Route path="/perfil/idiomas" element={<ProfileIdiomas />} />
           <Route path="/perfil/documentos" element={<ProfileDocumentos />} />
-          <Route path="/perfil/datos-personales" element={<ProfileDatosBasicos />} />
+          <Route path="/perfil/datos-personales" element={<ProfileDatosPersonales />} />
           <Route path="/app/company" element={<CompanyHome />} />
+          <Route path="/app/company/vacantes" element={<CompanyVacantes />} />
+          <Route path="/app/company/candidatos" element={<CompanyCandidatos />} />
+          <Route path="/app/company/mensajes" element={<CompanyMensajes />} />
+          <Route path="/app/company/empresa" element={<CompanyPerfil />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
