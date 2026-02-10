@@ -1,0 +1,68 @@
+.company-scope {
+  --background: 36 33% 97%;
+  --foreground: 222 20% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 20% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 20% 12%;
+  --primary: 16 72% 45%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 36 25% 93%;
+  --secondary-foreground: 222 20% 12%;
+  --muted: 36 20% 92%;
+  --muted-foreground: 222 10% 40%;
+  --accent: 20 50% 92%;
+  --accent-foreground: 222 20% 12%;
+  --destructive: 0 72% 50%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 24 20% 86%;
+  --input: 24 20% 86%;
+  --ring: 16 72% 45%;
+  --radius: 0.75rem;
+}
+
+.company-scope .company-title {
+  letter-spacing: -0.02em;
+}
+
+.company-scope .company-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) + 0.25rem);
+  box-shadow: 0 6px 20px rgba(20, 20, 20, 0.06);
+}
+
+.company-scope header {
+  border-bottom-color: transparent;
+}
+
+.company-scope.company-compact {
+  font-size: 0.9375rem;
+}
+
+.company-scope.company-compact .company-title {
+  font-size: 1.75rem;
+}
+
+.company-scope.company-compact .company-card {
+  border-radius: var(--radius);
+}
+
+.company-scope .company-list {
+  max-height: 560px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.company-scope .company-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.company-scope .company-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.company-scope .company-list::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+}

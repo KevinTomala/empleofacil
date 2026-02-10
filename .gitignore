@@ -34,7 +34,6 @@ mysql-data/
 backend/.cache/puppeteer/
 .vscode
 AGENTS.md
-docs
 docker-compose.prod.yml
 # ==========================
 # Sistema
