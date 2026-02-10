@@ -19,6 +19,10 @@ import CompanyVacantes from './modules/company/CompanyVacantes'
 import CompanyCandidatos from './modules/company/CompanyCandidatos'
 import CompanyMensajes from './modules/company/CompanyMensajes'
 import CompanyPerfil from './modules/company/CompanyPerfil'
+import AdminHome from './modules/admin/AdminHome'
+import AdminRolesPermisos from './modules/admin/AdminRolesPermisos'
+import AdminCuentas from './modules/admin/AdminCuentas'
+import AdminAuditoria from './modules/admin/AdminAuditoria'
 import { AuthProvider } from './context/AuthContext'
 
 function ScrollToHash() {
@@ -61,6 +65,10 @@ function App() {
           <Route path="/app/company/candidatos" element={<CompanyCandidatos />} />
           <Route path="/app/company/mensajes" element={<CompanyMensajes />} />
           <Route path="/app/company/empresa" element={<CompanyPerfil />} />
+          <Route path="/app/admin" element={<AdminHome />} />
+          <Route path="/app/admin/roles" element={<AdminRolesPermisos />} />
+          <Route path="/app/admin/cuentas" element={<AdminCuentas />} />
+          <Route path="/app/admin/auditoria" element={<AdminAuditoria />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

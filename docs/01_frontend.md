@@ -61,6 +61,7 @@
 - Registro en 2 pasos (selector de tipo de cuenta + credenciales minimas).
 - Mockups post-login: `/app/candidate/vacantes`, `/app/candidate/postulaciones`, `/app/candidate/perfil` y rutas empresa `/app/company/*`.
 - Modulo `company` en `src/modules/company/` con rutas `/app/company/vacantes`, `/app/company/candidatos`, `/app/company/mensajes`, `/app/company/empresa`.
+- Modulo `admin` (rol root) en `src/modules/admin/` con rutas `/app/admin`, `/app/admin/roles`, `/app/admin/cuentas`, `/app/admin/auditoria`.
 - Dashboard empresa en `/app/company` muestra hero con CTA publicar, actividad reciente, vacantes activas, candidatos destacados y resumen de mensajes.
 - Seccion Vacantes (empresa) en `/app/company/vacantes` incluye listado con estado, filtros clave, acciones rapidas y metricas por vacante.
 - Seccion Candidatos (empresa) en `/app/company/candidatos` incluye listado por vacante, estados del proceso, filtros potentes y acciones en lista.
@@ -81,3 +82,4 @@
 - Para contenedores, usar `.page-container` (centrado y con padding consistente).
 - El header es fijo y se compensa con `padding-top` en `body` usando `--header-height`.
 - Estilos del modulo empresa estan aislados en `frontend/src/modules/company/company.css` y se aplican con la clase `company-scope` en cada pagina de empresa.
+- Estilos del modulo admin estan aislados en `frontend/src/modules/admin/admin.css` y se aplican con la clase `admin-scope`.
