@@ -1,0 +1,53 @@
+﻿.admin-scope {
+  --background: 210 25% 98%;
+  --foreground: 222 22% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 22% 12%;
+  --primary: 214 85% 45%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 28% 94%;
+  --secondary-foreground: 222 22% 12%;
+  --muted: 210 20% 92%;
+  --muted-foreground: 222 10% 40%;
+  --border: 210 20% 86%;
+  --ring: 214 85% 45%;
+  --radius: 0.8rem;
+}
+
+.admin-scope .admin-title {
+  letter-spacing: -0.02em;
+}
+
+.admin-scope .admin-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) + 0.2rem);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.admin-scope .admin-pill {
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.admin-scope .admin-list {
+  max-height: 560px;
+  overflow-y: auto;
+  padding-right: 0.35rem;
+}
+
+.admin-scope .admin-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.admin-scope .admin-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-scope .admin-list::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+}
