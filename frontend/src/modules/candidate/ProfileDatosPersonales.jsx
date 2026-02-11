@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import Header from '../../components/Header'
+import ProfileTabs from './ProfileTabs'
 
 export default function ProfileDatosPersonales() {
   const navigate = useNavigate()
@@ -12,6 +13,7 @@ export default function ProfileDatosPersonales() {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="page-container pt-12 pb-20 space-y-8">
+        <ProfileTabs current="/perfil/datos-personales" />
         <section className="max-w-3xl space-y-6">
           <div>
             <h1 className="font-heading text-2xl font-semibold">Datos personales</h1>

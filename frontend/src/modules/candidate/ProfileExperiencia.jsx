@@ -65,7 +65,7 @@ export default function ProfileExperiencia() {
               <button
                 className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium"
                 type="button"
-                onClick={() => navigate('/perfil/documentos')}
+                onClick={() => navigate('/perfil/formacion')}
               >
                 Guardar y continuar
               </button>
