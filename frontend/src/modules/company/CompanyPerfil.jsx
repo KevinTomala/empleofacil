@@ -1,101 +1,175 @@
 import './company.css'
-import { Building2, Globe, MapPin, Phone } from 'lucide-react'
+import {
+  Building2,
+  CheckCircle2,
+  Globe,
+  Link2,
+  ShieldCheck,
+  TriangleAlert,
+  Users,
+} from 'lucide-react'
 import Header from '../../components/Header'
 
 export default function CompanyPerfil() {
+  const pendientes = ['Beneficios', 'Cultura', 'Redes sociales']
+
   return (
     <div className="company-scope company-compact min-h-screen bg-secondary">
       <Header />
-      <main className="page-container pt-10 pb-16 space-y-8">
-        <section className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div className="space-y-2">
-            <span className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary text-sm font-medium rounded-full">
-              <Building2 className="w-4 h-4" /> Perfil de empresa
-            </span>
-            <h1 className="company-title font-heading text-2xl sm:text-3xl font-bold">
-              Informacion corporativa
-            </h1>
-            <p className="text-foreground/70 max-w-xl">
-              Mantén tus datos actualizados para aumentar la confianza de los candidatos.
-            </p>
-          </div>
-          <button className="px-5 py-2.5 bg-primary text-white rounded-lg font-medium">
-            Guardar cambios
-          </button>
+      <main className="page-container pt-10 pb-16 space-y-6">
+        <section className="space-y-3">
+          <h1 className="company-title font-heading text-2xl sm:text-3xl font-bold">
+            Perfil de empresa
+          </h1>
+          <p className="text-sm text-foreground/70">
+            Completa tu perfil para recibir mas postulaciones calificadas.
+          </p>
         </section>
 
         <section className="grid lg:grid-cols-[1.1fr_0.9fr] gap-6">
-          <div className="company-card p-5 space-y-4">
-            <h2 className="font-heading text-base font-semibold">Datos generales</h2>
-            <div className="grid sm:grid-cols-2 gap-4 text-sm">
-              <label className="flex flex-col gap-2">
-                Razon social
-                <input
-                  type="text"
-                  defaultValue="Servicios S.A."
-                  className="px-3 py-2 border border-border rounded-lg bg-white"
-                />
-              </label>
-              <label className="flex flex-col gap-2">
-                RUC
-                <input
-                  type="text"
-                  defaultValue="1790012345001"
-                  className="px-3 py-2 border border-border rounded-lg bg-white"
-                />
-              </label>
-              <label className="flex flex-col gap-2">
-                Sector
-                <input
-                  type="text"
-                  defaultValue="Servicios corporativos"
-                  className="px-3 py-2 border border-border rounded-lg bg-white"
-                />
-              </label>
-              <label className="flex flex-col gap-2">
-                Numero de empleados
-                <input
-                  type="text"
-                  defaultValue="120"
-                  className="px-3 py-2 border border-border rounded-lg bg-white"
-                />
-              </label>
+          <div className="company-card p-5 space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 text-sm text-foreground/70">
+                <Building2 className="w-5 h-5 text-primary" />
+                Perfil de empresa
+              </div>
+              <span className="text-xs font-semibold bg-secondary px-2.5 py-1 rounded-full">
+                70% completado
+              </span>
             </div>
+            <div className="w-full h-2 rounded-full bg-secondary">
+              <div className="h-2 rounded-full bg-primary w-[70%]" />
+            </div>
+            <p className="text-xs text-foreground/60">
+              Las empresas con perfil completo reciben mas postulaciones.
+            </p>
+            <div className="bg-secondary rounded-xl p-3 text-xs text-foreground/70 flex items-start gap-2">
+              <TriangleAlert className="w-4 h-4 text-amber-600 mt-0.5" />
+              <div>
+                <p className="font-semibold text-foreground/80">Falta completar</p>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  {pendientes.map((item) => (
+                    <span
+                      key={item}
+                      className="px-2 py-0.5 rounded-full bg-white border border-border"
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4 text-sm">
+              <div className="border border-border rounded-xl p-4">
+                <p className="text-foreground/60">Nombre</p>
+                <p className="font-semibold">CENDCAP S.A.S.</p>
+              </div>
+              <div className="border border-border rounded-xl p-4">
+                <p className="text-foreground/60">Industria</p>
+                <p className="font-semibold">Servicios</p>
+              </div>
+              <div className="border border-border rounded-xl p-4">
+                <p className="text-foreground/60">Ubicacion</p>
+                <p className="font-semibold">Barranquilla</p>
+              </div>
+              <div className="border border-border rounded-xl p-4">
+                <p className="text-foreground/60">Tamaño</p>
+                <p className="font-semibold">120 personas</p>
+              </div>
+            </div>
+            <div className="border border-border rounded-xl p-4 text-sm space-y-2">
+              <p className="text-foreground/60">Descripcion</p>
+              <p className="font-semibold">
+                Empresa especializada en soluciones logisticas y operativas.
+              </p>
+              <button className="text-xs text-primary font-semibold">Editar descripcion</button>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4 text-sm">
+              <div className="border border-border rounded-xl p-4 space-y-2">
+                <p className="text-foreground/60">Logo</p>
+                <span className="inline-flex items-center gap-2 text-xs font-semibold bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full">
+                  Cargado
+                </span>
+                <button className="text-xs text-primary font-semibold">Cambiar logo</button>
+              </div>
+              <div className="border border-border rounded-xl p-4 space-y-2">
+                <p className="text-foreground/60">Redes / web</p>
+                <a
+                  className="inline-flex items-center gap-2 text-primary text-sm font-semibold"
+                  href="https://cendcap.com"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Globe className="w-4 h-4" /> cendcap.com
+                </a>
+                <button className="text-xs text-primary font-semibold">Editar enlace</button>
+              </div>
+            </div>
+            <button className="px-4 py-2 bg-primary text-white rounded-lg font-medium">
+              Editar datos generales
+            </button>
           </div>
 
-          <div className="company-card p-5 space-y-4">
-            <h2 className="font-heading text-base font-semibold">Contacto</h2>
-            <div className="space-y-3 text-sm text-foreground/70">
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-primary" />
-                Av. Republica 123, Quito
+          <div className="space-y-4">
+            <div className="company-card p-4 bg-secondary/60 shadow-none space-y-3">
+              <div className="flex items-center gap-3 text-xs text-foreground/60">
+                <Users className="w-5 h-5 text-primary" />
+                Usuarios / reclutadores
               </div>
-              <div className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-primary" />
-                +593 2 123 4567
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span>Recruiter principal</span>
+                  <span className="font-semibold">2 activos</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Roles asignados</span>
+                  <span className="font-semibold">Admin / Reclutador</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Globe className="w-4 h-4 text-primary" />
-                www.servicios.com.ec
-              </div>
+              <button className="text-xs text-primary font-semibold">Gestionar usuarios</button>
             </div>
-            <div className="space-y-3 text-sm">
-              <label className="flex flex-col gap-2">
-                Email de contacto
-                <input
-                  type="email"
-                  defaultValue="talento@servicios.com.ec"
-                  className="px-3 py-2 border border-border rounded-lg bg-white"
-                />
-              </label>
-              <label className="flex flex-col gap-2">
-                Sitio web
-                <input
-                  type="text"
-                  defaultValue="www.servicios.com.ec"
-                  className="px-3 py-2 border border-border rounded-lg bg-white"
-                />
-              </label>
+
+            <div className="company-card p-4 bg-secondary/60 shadow-none space-y-3">
+              <div className="flex items-center gap-3 text-xs text-foreground/60">
+                <Link2 className="w-5 h-5 text-primary" />
+                Preferencias de contratacion
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span>Modalidad</span>
+                  <span className="font-semibold">Hibrido / Presencial</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Nivel de experiencia</span>
+                  <span className="font-semibold">Junior / Semi-senior</span>
+                </div>
+              </div>
+              <button className="text-xs text-primary font-semibold">Editar preferencias</button>
+            </div>
+
+            <div className="company-card p-4 bg-secondary/60 shadow-none space-y-3">
+              <div className="flex items-center gap-3 text-xs text-foreground/60">
+                <ShieldCheck className="w-5 h-5 text-primary" />
+                Verificacion
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span>Estado</span>
+                <span className="inline-flex items-center gap-2 text-xs font-semibold bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full">
+                  Verificado
+                </span>
+              </div>
+              <button className="text-xs text-primary font-semibold">Ver detalles</button>
+            </div>
+
+            <div className="company-card p-4 bg-secondary/60 shadow-none space-y-3">
+              <div className="flex items-center gap-3 text-xs text-foreground/60">
+                <Globe className="w-5 h-5 text-primary" />
+                Facturacion
+              </div>
+              <p className="text-sm text-foreground/70">
+                Configura metodos de pago y plan de suscripcion si aplica.
+              </p>
+              <button className="text-xs text-primary font-semibold">Configurar facturacion</button>
             </div>
           </div>
         </section>

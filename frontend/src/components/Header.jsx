@@ -13,12 +13,22 @@ export default function Header() {
   const { user, logout } = useAuth()
 
   const homeLink = useMemo(() => {
+    if (user?.role === 'root') return '/app/admin'
     if (user?.role === 'company') return '/app/company'
     if (user?.role === 'candidate') return '/app/candidate/vacantes'
     return '/'
   }, [user])
 
   const navLinks = useMemo(() => {
+    if (user?.role === 'root') {
+      return [
+        { href: '/app/admin', label: 'Resumen' },
+        { href: '/app/admin/roles', label: 'Roles' },
+        { href: '/app/admin/cuentas', label: 'Cuentas' },
+        { href: '/app/admin/auditoria', label: 'Auditoría' },
+      ]
+    }
+
     if (user?.role === 'company') {
       return [
         { href: '/app/company/vacantes', label: 'Vacantes' },

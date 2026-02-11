@@ -15,6 +15,12 @@ const MOCK_USERS = [
     role: 'company',
     name: 'Empresa',
   },
+  {
+    email: 'root@gmail.com',
+    password: 'root',
+    role: 'root',
+    name: 'Root Admin',
+  },
 ]
 
 export function AuthProvider({ children }) {

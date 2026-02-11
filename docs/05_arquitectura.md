@@ -26,6 +26,10 @@ EmpleoFacil es un monorepo full-stack orientado a conectar talento y empresas en
   - `src/modules/candidate/CandidatePostulaciones.jsx` (candidato: postulaciones).
   - `src/modules/candidate/CandidateProfile.jsx` (candidato: perfil).
   - `src/modules/company/CompanyHome.jsx` (inicio empresa).
+  - `src/modules/admin/AdminHome.jsx` (root: consola de admin).
+  - `src/modules/admin/AdminRolesPermisos.jsx` (root: roles y permisos).
+  - `src/modules/admin/AdminCuentas.jsx` (root: empresas y candidatos).
+  - `src/modules/admin/AdminAuditoria.jsx` (root: auditoria y logs).
 - **Variables de entorno:** `VITE_API_URL`, `VITE_WS_URL` (opcional).
 
 ## Backend
