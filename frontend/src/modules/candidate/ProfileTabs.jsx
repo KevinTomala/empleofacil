@@ -2,10 +2,9 @@ import { Link } from 'react-router-dom'
 
 const tabs = [
   { label: 'Informacion basica', to: '/perfil/datos-basicos' },
-  { label: 'Preferencias', to: '/perfil/preferencias' },
+  { label: 'Datos personales', to: '/perfil/datos-personales' },
   { label: 'Experiencia', to: '/perfil/experiencia' },
   { label: 'Formacion', to: '/perfil/formacion' },
-  { label: 'Idiomas', to: '/perfil/idiomas' },
   { label: 'Documentos', to: '/perfil/documentos' },
 ]
 

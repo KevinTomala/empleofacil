@@ -1,160 +1,151 @@
 import './admin.css'
-import { Activity, Download, FileText, Filter, ShieldAlert } from 'lucide-react'
+import {
+  AlertTriangle,
+  BadgeCheck,
+  Calendar,
+  Download,
+  Filter,
+  ShieldCheck,
+  UserCircle2,
+} from 'lucide-react'
 import Header from '../../components/Header'
 
 export default function AdminAuditoria() {
-  const registros = [
+  const logs = [
     {
-      action: 'Cambio de permisos',
+      id: 'LOG-2331',
+      action: 'Cambio de permisos en rol Operaciones',
       actor: 'Root admin',
-      target: 'Empresa #EF-233',
-      time: 'Hace 12 minutos',
-      level: 'Alta',
+      date: 'Hoy · 09:21',
+      level: 'Crítico',
     },
     {
-      action: 'Suspension de cuenta',
-      actor: 'Operaciones',
-      target: 'Candidato #CA-889',
-      time: 'Hace 38 minutos',
-      level: 'Media',
-    },
-    {
-      action: 'Exportacion de logs',
+      id: 'LOG-2329',
+      action: 'Bloqueo de empresa Servicios Omega',
       actor: 'Compliance',
-      target: 'Auditoria semanal',
-      time: 'Hoy, 07:30',
-      level: 'Baja',
+      date: 'Hoy · 08:05',
+      level: 'Alto',
     },
     {
-      action: 'Cambio de rol',
-      actor: 'Root admin',
-      target: 'Soporte regional',
-      time: 'Ayer, 18:10',
-      level: 'Media',
+      id: 'LOG-2320',
+      action: 'Exportación de logs por soporte',
+      actor: 'Soporte',
+      date: 'Ayer · 16:40',
+      level: 'Medio',
     },
   ]
-
-  const filtros = ['Criticidad', 'Modulo', 'Usuario', 'Rango de fechas']
 
   return (
     <div className="admin-scope min-h-screen bg-secondary">
       <Header />
       <main className="page-container pt-10 pb-16 space-y-8">
-        <section className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-2">
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">
-              <Activity className="w-4 h-4" /> Registro trazable
-            </span>
-            <h1 className="admin-title font-heading text-2xl sm:text-3xl font-bold">
-              Auditoria y logs
-            </h1>
-            <p className="text-sm text-foreground/70 max-w-2xl">
-              Consulta la actividad critica del sistema, exporta reportes y revisa
-              incidencias con filtros por modulo y criticidad.
-            </p>
-          </div>
-          <div className="admin-card px-4 py-3 flex items-center gap-3 text-sm">
-            <ShieldAlert className="w-5 h-5 text-primary" />
-            3 alertas activas · 1 requiere accion
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-2">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                <BadgeCheck className="w-4 h-4" /> Auditoría
+              </span>
+              <h1 className="admin-title font-heading text-2xl sm:text-3xl font-bold">
+                Logs y trazabilidad
+              </h1>
+              <p className="text-sm text-foreground/70 max-w-xl">
+                Consulta eventos críticos, cambios de permisos y acciones de seguridad.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button className="px-4 py-2 bg-primary text-white rounded-lg font-medium flex items-center gap-2">
+                <Download className="w-4 h-4" /> Exportar
+              </button>
+              <button className="px-4 py-2 border border-border rounded-lg font-medium flex items-center gap-2">
+                <Calendar className="w-4 h-4" /> Rango de fechas
+              </button>
+            </div>
           </div>
         </section>
 
-        <section className="admin-card p-4">
+        <section className="admin-card p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Filter className="w-4 h-4 text-primary" />
               Filtros avanzados
             </div>
-            <button className="text-sm text-primary font-semibold">
-              Limpiar filtros
-            </button>
+            <button className="text-sm text-primary font-semibold">Limpiar filtros</button>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-2 mt-3">
-            {filtros.map((label) => (
-              <button
-                key={label}
-                className="flex items-center justify-between px-3 py-2 border border-border rounded-lg text-sm text-foreground/70 hover:border-primary/40"
-              >
-                <span>{label}</span>
-                <span className="text-xs text-foreground/40">Seleccionar</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {['Nivel', 'Actor', 'Tipo de acción', 'Módulo', 'IP'].map((label) => (
+              <button key={label} className="px-3 py-2 border border-border rounded-lg text-foreground/70">
+                {label}
               </button>
             ))}
           </div>
         </section>
 
-        <section className="grid lg:grid-cols-[1.1fr_0.9fr] gap-6">
+        <section className="grid lg:grid-cols-[1.2fr_0.8fr] gap-6">
           <div className="admin-card p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-heading text-lg font-semibold">Eventos recientes</h2>
-              <button className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold flex items-center gap-2">
-                <Download className="w-4 h-4" /> Exportar CSV
-              </button>
+              <span className="text-xs text-foreground/60">Últimas 24 horas</span>
             </div>
-            <div className="space-y-3 admin-list">
-              {registros.map((item) => (
-                <div
-                  key={`${item.action}-${item.time}`}
-                  className="border border-border rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-sm"
-                >
-                  <div>
-                    <p className="font-semibold">{item.action}</p>
-                    <p className="text-xs text-foreground/60 mt-1">
-                      {item.actor} · {item.target}
-                    </p>
-                  </div>
-                  <div className="text-right">
+            <div className="space-y-3">
+              {logs.map((log) => (
+                <article key={log.id} className="border border-border rounded-xl p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-sm">{log.action}</p>
+                      <p className="text-xs text-foreground/60 mt-1">
+                        {log.id} · {log.date}
+                      </p>
+                    </div>
                     <span
                       className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                        item.level === 'Alta'
+                        log.level === 'Crítico'
                           ? 'bg-rose-100 text-rose-700'
-                          : item.level === 'Media'
+                          : log.level === 'Alto'
                           ? 'bg-amber-100 text-amber-700'
-                          : 'bg-emerald-100 text-emerald-700'
+                          : 'bg-slate-100 text-slate-600'
                       }`}
                     >
-                      {item.level}
+                      {log.level}
                     </span>
-                    <p className="text-xs text-foreground/50 mt-2">{item.time}</p>
                   </div>
-                </div>
+                  <div className="flex items-center gap-2 text-xs text-foreground/60 mt-3">
+                    <UserCircle2 className="w-4 h-4" /> {log.actor}
+                  </div>
+                </article>
               ))}
             </div>
           </div>
 
-          <div className="space-y-4">
+          <aside className="space-y-4">
             <div className="admin-card p-5 space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <FileText className="w-4 h-4 text-primary" />
-                Resumen de cumplimiento
+                <ShieldCheck className="w-4 h-4 text-primary" />
+                Alertas de seguridad
               </div>
-              {[
-                { label: 'Cambios criticos', value: '6 esta semana' },
-                { label: 'Exportaciones', value: '4 reportes' },
-                { label: 'Alertas resueltas', value: '9 en 24 h' },
-              ].map((item) => (
-                <div key={item.label} className="border border-border rounded-xl p-3 text-sm">
-                  <p className="font-semibold">{item.label}</p>
-                  <p className="text-xs text-foreground/60 mt-1">{item.value}</p>
-                </div>
-              ))}
+              <div className="border border-border rounded-xl p-3 text-sm">
+                <p className="font-semibold">3 intentos fallidos</p>
+                <p className="text-xs text-foreground/60 mt-1">IP 186.44.23.18 · Hoy 08:00</p>
+              </div>
+              <div className="border border-border rounded-xl p-3 text-sm">
+                <p className="font-semibold">Cambio de 2FA</p>
+                <p className="text-xs text-foreground/60 mt-1">Usuario soporte-03 · Ayer 19:10</p>
+              </div>
             </div>
 
             <div className="admin-card p-5 space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <ShieldAlert className="w-4 h-4 text-primary" />
-                Alertas activas
+                <AlertTriangle className="w-4 h-4 text-primary" />
+                Cumplimiento
               </div>
-              {[
-                'Validar 2FA en cuentas root.',
-                'Auditar accesos fuera de horario.',
-                'Revisar exportacion masiva del lunes.',
-              ].map((item) => (
-                <div key={item} className="border border-border rounded-xl p-3 text-sm">
-                  {item}
-                </div>
-              ))}
+              <div className="text-sm text-foreground/70 space-y-2">
+                <p>2 eventos requieren verificación manual.</p>
+                <p>Exportaciones sensibles: 4 en la última semana.</p>
+                <button className="px-3 py-2 border border-border rounded-lg text-xs">
+                  Ver reporte completo
+                </button>
+              </div>
             </div>
-          </div>
+          </aside>
         </section>
       </main>
     </div>

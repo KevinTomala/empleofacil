@@ -65,7 +65,7 @@ export default function ProfileFormacion() {
               <button
                 className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium"
                 type="button"
-                onClick={() => navigate('/perfil/idiomas')}
+                onClick={() => navigate('/perfil/documentos')}
               >
                 Guardar y continuar
               </button>

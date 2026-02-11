@@ -1,14 +1,10 @@
 import {
-  AlertTriangle,
   CheckCircle2,
-  CircleX,
   FileText,
   GraduationCap,
-  Languages,
-  Lock,
   Briefcase,
+  MapPin,
   User,
-  Target,
 } from 'lucide-react'
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -17,42 +13,40 @@ import Header from '../../components/Header'
 export default function CandidateProfile() {
   const navigate = useNavigate()
   const sections = useMemo(() => {
-    const basicComplete = false
-
     return [
       {
         id: 'datos-basicos',
         title: 'Informacion basica',
-        summary: 'Documento, nombres, contacto, ciudad',
-        why: 'Necesario para identificarte y contactarte',
-        status: basicComplete ? 'complete' : 'incomplete',
-        progress: basicComplete ? 1 : 0.4,
+        summary: 'Documento, nombres y fecha de nacimiento',
+        why: 'Sincronizado desde el sistema academico.',
+        status: 'sync',
+        progress: 1,
         route: '/perfil/datos-basicos',
-        actionLabel: 'Completar',
+        actionLabel: 'Ver detalle',
         icon: User,
         level: 'basico',
       },
       {
-        id: 'preferencias',
-        title: 'Preferencias laborales',
-        summary: 'Cargo deseado, modalidad, disponibilidad',
-        why: 'Mejora la coincidencia con vacantes',
-        status: basicComplete ? 'pending' : 'locked',
-        progress: basicComplete ? 0.2 : 0,
-        route: '/perfil/preferencias',
-        actionLabel: 'Configurar',
-        icon: Target,
-        level: 'recomendado',
+        id: 'datos-personales',
+        title: 'Datos personales',
+        summary: 'Contacto y domicilio',
+        why: 'Sincronizado desde el sistema academico.',
+        status: 'sync',
+        progress: 1,
+        route: '/perfil/datos-personales',
+        actionLabel: 'Ver detalle',
+        icon: MapPin,
+        level: 'basico',
       },
       {
         id: 'experiencia',
         title: 'Experiencia',
         summary: 'Puestos, empresa, tiempo',
-        why: 'Aumenta tus posibilidades de ser seleccionado',
-        status: basicComplete ? 'pending' : 'locked',
-        progress: basicComplete ? 0.1 : 0,
+        why: 'Sincronizado desde el sistema academico.',
+        status: 'sync',
+        progress: 1,
         route: '/perfil/experiencia',
-        actionLabel: 'Agregar',
+        actionLabel: 'Ver detalle',
         icon: Briefcase,
         level: 'recomendado',
       },
@@ -60,35 +54,23 @@ export default function CandidateProfile() {
         id: 'formacion',
         title: 'Formacion',
         summary: 'Nivel, institucion, estado',
-        why: 'Ayuda a filtrar vacantes por requisitos',
-        status: basicComplete ? 'optional' : 'locked',
-        progress: basicComplete ? 0.2 : 0,
+        why: 'Sincronizado desde el sistema academico.',
+        status: 'sync',
+        progress: 1,
         route: '/perfil/formacion',
-        actionLabel: 'Agregar',
+        actionLabel: 'Ver detalle',
         icon: GraduationCap,
         level: 'recomendado',
-      },
-      {
-        id: 'idiomas',
-        title: 'Idiomas',
-        summary: 'Nivel de dominio',
-        why: 'Algunas empresas lo solicitan',
-        status: basicComplete ? 'optional' : 'locked',
-        progress: basicComplete ? 0.1 : 0,
-        route: '/perfil/idiomas',
-        actionLabel: 'Agregar',
-        icon: Languages,
-        level: 'opcional',
       },
       {
         id: 'documentos',
         title: 'Documentos',
         summary: 'CV, certificados',
-        why: 'Algunas empresas lo exigen',
-        status: basicComplete ? 'pending' : 'locked',
-        progress: basicComplete ? 0.2 : 0,
+        why: 'Sincronizado desde el sistema academico.',
+        status: 'sync',
+        progress: 1,
         route: '/perfil/documentos',
-        actionLabel: 'Subir',
+        actionLabel: 'Ver detalle',
         icon: FileText,
         level: 'opcional',
       },
@@ -100,55 +82,17 @@ export default function CandidateProfile() {
   )
 
   const nextRoute = useMemo(() => {
-    const firstIncomplete = sections.find((section) =>
-      ['incomplete', 'pending'].includes(section.status)
-    )
-    if (firstIncomplete) return firstIncomplete.route
-    const firstOptional = sections.find((section) => section.status === 'optional')
-    if (firstOptional) return firstOptional.route
     return sections[0]?.route ?? '/perfil/datos-basicos'
   }, [sections])
 
   const statusStyles = {
-    incomplete: {
-      label: 'Incompleto',
-      border: 'border-slate-200',
-      bg: 'bg-slate-50',
-      badge: 'bg-slate-100 text-slate-700',
-      icon: CircleX,
-      iconColor: 'text-slate-500',
-    },
-    optional: {
-      label: 'Opcional recomendado',
-      border: 'border-amber-200',
-      bg: 'bg-amber-50',
-      badge: 'bg-amber-100 text-amber-700',
-      icon: AlertTriangle,
-      iconColor: 'text-amber-500',
-    },
-    pending: {
-      label: 'Pendiente',
-      border: 'border-slate-200',
-      bg: 'bg-slate-50',
-      badge: 'bg-slate-100 text-slate-700',
-      icon: CircleX,
-      iconColor: 'text-slate-500',
-    },
-    complete: {
-      label: 'Completo',
+    sync: {
+      label: 'Sincronizado',
       border: 'border-emerald-200',
       bg: 'bg-emerald-50',
       badge: 'bg-emerald-100 text-emerald-700',
       icon: CheckCircle2,
       iconColor: 'text-emerald-500',
-    },
-    locked: {
-      label: 'Bloqueado',
-      border: 'border-slate-200',
-      bg: 'bg-white',
-      badge: 'bg-slate-100 text-slate-600',
-      icon: Lock,
-      iconColor: 'text-slate-500',
     },
   }
 
@@ -172,7 +116,7 @@ export default function CandidateProfile() {
                 <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
               </div>
               <p className="text-xs text-foreground/60">
-                Completa tu perfil para postular sin restricciones.
+                Datos y documentos sincronizados desde el sistema academico.
               </p>
             </div>
             <button
@@ -180,11 +124,10 @@ export default function CandidateProfile() {
               onClick={() => navigate(nextRoute)}
               type="button"
             >
-              Completar perfil
+              Ver informacion sincronizada
             </button>
             <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-              Si faltan datos de contacto o tu CV, igual puedes postular, pero veras avisos para
-              completarlos.
+              Si identificas algun dato incorrecto, solicita actualizacion al area administrativa.
             </div>
 
             <div className="rounded-xl border border-border bg-white p-4 space-y-4">
@@ -192,15 +135,15 @@ export default function CandidateProfile() {
                 <h2 className="text-sm font-semibold text-foreground">Tu progreso</h2>
                 <div className="mt-2 space-y-1 text-xs text-foreground/70">
                   <p>Perfil: {progress}% completo</p>
-                  <p>Requerido para postular sin restricciones: Informacion basica</p>
-                  <p>Siguiente paso recomendado: Preferencias laborales</p>
+                  <p>Estado del perfil: sincronizado desde origen academico</p>
+                  <p>Siguiente paso recomendado: revisar experiencia y formacion</p>
                 </div>
               </div>
               <div className="border-t border-border pt-3">
                 <h3 className="text-sm font-semibold text-foreground">Tips rapidos</h3>
                 <ul className="mt-2 space-y-2 text-xs text-foreground/70">
-                  <li>Completar tu experiencia aumenta tus coincidencias.</li>
-                  <li>Los perfiles con formacion reciben mas invitaciones.</li>
+                  <li>Revisa tu experiencia y valida fechas de formacion.</li>
+                  <li>Confirma que tus documentos esten vigentes.</li>
                 </ul>
               </div>
             </div>
@@ -211,7 +154,6 @@ export default function CandidateProfile() {
               const status = statusStyles[section.status]
               const StatusIcon = status.icon
               const SectionIcon = section.icon
-              const isLocked = section.status === 'locked'
               return (
                 <div
                   key={section.id}
@@ -238,14 +180,11 @@ export default function CandidateProfile() {
                       Nivel: {section.level === 'basico' ? 'Obligatorio' : section.level}
                     </p>
                     <button
-                      className={`text-sm font-medium ${isLocked ? 'text-slate-400' : 'text-primary'}`}
-                      onClick={() => {
-                        if (!isLocked) navigate(section.route)
-                      }}
+                      className="text-sm font-medium text-primary"
+                      onClick={() => navigate(section.route)}
                       type="button"
-                      disabled={isLocked}
                     >
-                      {isLocked ? 'Completa lo basico' : section.actionLabel}
+                      {section.actionLabel}
                     </button>
                   </div>
                 </div>

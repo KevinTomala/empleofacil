@@ -93,7 +93,7 @@ export default function ProfileDatosBasicos() {
               <button
                 className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium"
                 type="button"
-                onClick={() => navigate('/perfil/preferencias')}
+                onClick={() => navigate('/perfil/datos-personales')}
               >
                 Guardar y continuar
               </button>
