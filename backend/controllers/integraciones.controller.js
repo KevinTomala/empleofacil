@@ -1,0 +1,401 @@
+const db = require('../db');
+const { fetchAcreditados } = require('../services/ademy.service');
+
+const ORIGEN = 'ademy';
+
+function isPresent(value) {
+  return value !== undefined && value !== null && value !== '';
+}
+
+function buildPatch(source, allowedKeys) {
+  const patch = {};
+  allowedKeys.forEach((key) => {
+    if (isPresent(source[key])) patch[key] = source[key];
+  });
+  return patch;
+}
+
+async function upsertEstudiante(conn, item) {
+  const documento = item.documento_identidad || null;
+  const email = item.email || item?.contacto?.email || null;
+
+  let estudianteId = null;
+  if (documento) {
+    const [rows] = await conn.query(
+      'SELECT id FROM estudiantes WHERE documento_identidad = ? LIMIT 1',
+      [documento]
+    );
+    estudianteId = rows[0]?.id || null;
+  } else if (email) {
+    const [rows] = await conn.query(
+      'SELECT e.id FROM estudiantes e INNER JOIN estudiantes_contacto c ON c.estudiante_id = e.id WHERE c.email = ? LIMIT 1',
+      [email]
+    );
+    estudianteId = rows[0]?.id || null;
+  }
+
+  const allowed = [
+    'nombres',
+    'apellidos',
+    'documento_identidad',
+    'nacionalidad',
+    'fecha_nacimiento',
+    'sexo',
+    'estado_civil',
+    'estado_academico',
+    'activo'
+  ];
+
+  if (estudianteId) {
+    const patch = buildPatch(item, allowed);
+    const keys = Object.keys(patch);
+    if (keys.length) {
+      const setSql = keys.map((k) => `${k} = ?`).join(', ');
+      await conn.query(`UPDATE estudiantes SET ${setSql} WHERE id = ?`, [
+        ...keys.map((k) => patch[k]),
+        estudianteId
+      ]);
+    }
+    return { estudianteId, created: false };
+  }
+
+  const insert = buildPatch(item, allowed);
+  if (!insert.nombres || !insert.apellidos) {
+    throw new Error('Missing nombres/apellidos for estudiante');
+  }
+  const columns = Object.keys(insert);
+  const values = columns.map((k) => insert[k]);
+  const placeholders = columns.map(() => '?').join(', ');
+  const [result] = await conn.query(
+    `INSERT INTO estudiantes (${columns.join(', ')}) VALUES (${placeholders})`,
+    values
+  );
+  return { estudianteId: result.insertId, created: true };
+}
+
+async function upsertContacto(conn, estudianteId, item) {
+  const contacto = item.contacto || {};
+  const payload = {
+    email: item.email || contacto.email || null,
+    telefono_fijo: contacto.telefono_fijo || null,
+    telefono_celular: contacto.telefono_celular || null,
+    contacto_emergencia_nombre: contacto.contacto_emergencia_nombre || null,
+    contacto_emergencia_telefono: contacto.contacto_emergencia_telefono || null
+  };
+
+  if (!Object.values(payload).some(isPresent)) return;
+
+  await conn.query(
+    `INSERT INTO estudiantes_contacto (
+      estudiante_id, email, telefono_fijo, telefono_celular, contacto_emergencia_nombre, contacto_emergencia_telefono
+    ) VALUES (?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      email = COALESCE(VALUES(email), email),
+      telefono_fijo = COALESCE(VALUES(telefono_fijo), telefono_fijo),
+      telefono_celular = COALESCE(VALUES(telefono_celular), telefono_celular),
+      contacto_emergencia_nombre = COALESCE(VALUES(contacto_emergencia_nombre), contacto_emergencia_nombre),
+      contacto_emergencia_telefono = COALESCE(VALUES(contacto_emergencia_telefono), contacto_emergencia_telefono)`,
+    [
+      estudianteId,
+      payload.email,
+      payload.telefono_fijo,
+      payload.telefono_celular,
+      payload.contacto_emergencia_nombre,
+      payload.contacto_emergencia_telefono
+    ]
+  );
+}
+
+async function upsertSimpleByPk(conn, table, estudianteId, data, allowedKeys) {
+  if (!data) return;
+  const payload = buildPatch(data, allowedKeys);
+  if (!Object.keys(payload).length) return;
+
+  const columns = ['estudiante_id', ...Object.keys(payload)];
+  const values = [estudianteId, ...Object.keys(payload).map((k) => payload[k])];
+  const updateSql = Object.keys(payload)
+    .map((key) => `${key} = COALESCE(VALUES(${key}), ${key})`)
+    .join(', ');
+
+  await conn.query(
+    `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})
+     ON DUPLICATE KEY UPDATE ${updateSql}`,
+    values
+  );
+}
+
+async function replaceExperiencias(conn, estudianteId, experiencias) {
+  if (!Array.isArray(experiencias)) return;
+  await conn.query('DELETE FROM estudiantes_experiencia WHERE estudiante_id = ?', [estudianteId]);
+  for (const exp of experiencias) {
+    await conn.query(
+      `INSERT INTO estudiantes_experiencia (
+        estudiante_id, empresa_id, cargo, fecha_inicio, fecha_fin, actualmente_trabaja, tipo_contrato, descripcion
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        estudianteId,
+        exp.empresa_id || null,
+        exp.cargo || null,
+        exp.fecha_inicio || null,
+        exp.fecha_fin || null,
+        exp.actualmente_trabaja ? 1 : 0,
+        exp.tipo_contrato || null,
+        exp.descripcion || null
+      ]
+    );
+  }
+}
+
+async function upsertDocumentos(conn, estudianteId, documentos) {
+  if (!Array.isArray(documentos)) return;
+  for (const doc of documentos) {
+    if (!doc.tipo_documento || !doc.nombre_archivo || !doc.nombre_original || !doc.ruta_archivo || !doc.tipo_mime) {
+      continue;
+    }
+    await conn.query(
+      `INSERT INTO estudiantes_documentos (
+        estudiante_id, tipo_documento, nombre_archivo, nombre_original, ruta_archivo, tipo_mime, tamanio_kb,
+        fecha_emision, fecha_vencimiento, numero_documento, descripcion, estado, observaciones
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        nombre_archivo = VALUES(nombre_archivo),
+        nombre_original = VALUES(nombre_original),
+        ruta_archivo = VALUES(ruta_archivo),
+        tipo_mime = VALUES(tipo_mime),
+        tamanio_kb = VALUES(tamanio_kb),
+        fecha_emision = VALUES(fecha_emision),
+        fecha_vencimiento = VALUES(fecha_vencimiento),
+        numero_documento = VALUES(numero_documento),
+        descripcion = VALUES(descripcion),
+        estado = VALUES(estado),
+        observaciones = VALUES(observaciones)`,
+      [
+        estudianteId,
+        doc.tipo_documento,
+        doc.nombre_archivo,
+        doc.nombre_original,
+        doc.ruta_archivo,
+        doc.tipo_mime,
+        doc.tamanio_kb || 0,
+        doc.fecha_emision || null,
+        doc.fecha_vencimiento || null,
+        doc.numero_documento || null,
+        doc.descripcion || null,
+        doc.estado || 'pendiente',
+        doc.observaciones || null
+      ]
+    );
+  }
+}
+
+async function upsertFormaciones(conn, estudianteId, item) {
+  const formaciones = item.formaciones || (item.formacion ? [item.formacion] : []);
+  for (const formacion of formaciones) {
+    const origenFormacionId = formacion.formacion_id || formacion.id || item.formacion_id;
+    if (!origenFormacionId) continue;
+
+    const [mapping] = await conn.query(
+      'SELECT estudiante_formacion_id FROM formaciones_origen WHERE origen = ? AND origen_formacion_id = ? LIMIT 1',
+      [ORIGEN, origenFormacionId]
+    );
+
+    if (mapping.length) {
+      const localId = mapping[0].estudiante_formacion_id;
+      await conn.query(
+        `UPDATE estudiantes_formaciones SET
+          matricula_id = COALESCE(?, matricula_id),
+          nivel_id = COALESCE(?, nivel_id),
+          curso_id = COALESCE(?, curso_id),
+          estado = COALESCE(?, estado),
+          fecha_inicio = COALESCE(?, fecha_inicio),
+          fecha_fin = COALESCE(?, fecha_fin),
+          fecha_aprobacion = COALESCE(?, fecha_aprobacion),
+          activo = COALESCE(?, activo),
+          updated_at = NOW()
+        WHERE id = ?`,
+        [
+          formacion.matricula_id || null,
+          formacion.nivel_id || null,
+          formacion.curso_id || null,
+          formacion.estado || null,
+          formacion.fecha_inicio || null,
+          formacion.fecha_fin || null,
+          formacion.fecha_aprobacion || null,
+          formacion.activo !== undefined ? (formacion.activo ? 1 : 0) : null,
+          localId
+        ]
+      );
+
+      await conn.query(
+        `UPDATE formaciones_origen SET origen_updated_at = ? WHERE origen = ? AND origen_formacion_id = ?`,
+        [formacion.updated_at || null, ORIGEN, origenFormacionId]
+      );
+      continue;
+    }
+
+    const [insert] = await conn.query(
+      `INSERT INTO estudiantes_formaciones (
+        estudiante_id, matricula_id, nivel_id, curso_id, estado, fecha_inicio, fecha_fin, fecha_aprobacion, activo, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+      [
+        estudianteId,
+        formacion.matricula_id || null,
+        formacion.nivel_id || null,
+        formacion.curso_id || null,
+        formacion.estado || 'acreditado',
+        formacion.fecha_inicio || null,
+        formacion.fecha_fin || null,
+        formacion.fecha_aprobacion || null,
+        formacion.activo !== undefined ? (formacion.activo ? 1 : 0) : 1,
+        formacion.updated_at || null
+      ]
+    );
+
+    await conn.query(
+      `INSERT INTO formaciones_origen (
+        estudiante_formacion_id, origen, origen_formacion_id, origen_estudiante_id, origen_updated_at
+      ) VALUES (?, ?, ?, ?, ?)`,
+      [
+        insert.insertId,
+        ORIGEN,
+        origenFormacionId,
+        item.estudiante_id || null,
+        formacion.updated_at || null
+      ]
+    );
+  }
+}
+
+async function upsertOrigenEstudiante(conn, estudianteId, item) {
+  const origenEstudianteId = item.estudiante_id || null;
+  if (!origenEstudianteId) return;
+
+  await conn.query(
+    `INSERT INTO estudiantes_origen (estudiante_id, origen, origen_estudiante_id, origen_updated_at)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       estudiante_id = VALUES(estudiante_id),
+       origen_updated_at = COALESCE(VALUES(origen_updated_at), origen_updated_at)`,
+    [estudianteId, ORIGEN, origenEstudianteId, item.updated_at || null]
+  );
+}
+
+async function importAcreditados(req, res) {
+  const pageSize = Number(req.body?.page_size || 100);
+  const params = {
+    promocion_id: req.body?.promocion_id,
+    curso_id: req.body?.curso_id,
+    fecha_desde: req.body?.fecha_desde,
+    fecha_hasta: req.body?.fecha_hasta,
+    updated_since: req.body?.updated_since,
+    page_size: pageSize
+  };
+
+  const [logRow] = await db.query(
+    'INSERT INTO integracion_sync_logs (origen, status) VALUES (?, ?) ',
+    [ORIGEN, 'running']
+  );
+  const logId = logRow.insertId;
+
+  let totals = {
+    total: 0,
+    created: 0,
+    updated: 0,
+    skipped: 0,
+    errors: 0
+  };
+
+  try {
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+      const { items, nextPage } = await fetchAcreditados({ ...params, page });
+      if (!items.length) break;
+
+      for (const item of items) {
+        totals.total += 1;
+        const documento = item.documento_identidad || null;
+        const email = item.email || item?.contacto?.email || null;
+        if (!documento && !email) {
+          totals.skipped += 1;
+          continue;
+        }
+
+        const conn = await db.getConnection();
+        try {
+          await conn.beginTransaction();
+
+          const { estudianteId, created } = await upsertEstudiante(conn, item);
+          if (created) totals.created += 1; else totals.updated += 1;
+
+          await upsertOrigenEstudiante(conn, estudianteId, item);
+          await upsertContacto(conn, estudianteId, item);
+
+          await upsertSimpleByPk(conn, 'estudiantes_domicilio', estudianteId, item.domicilio, [
+            'pais', 'provincia', 'canton', 'parroquia', 'direccion', 'codigo_postal'
+          ]);
+
+          await upsertSimpleByPk(conn, 'estudiantes_salud', estudianteId, item.salud, [
+            'tipo_sangre', 'estatura', 'peso', 'tatuaje'
+          ]);
+
+          await upsertSimpleByPk(conn, 'estudiantes_logistica', estudianteId, item.logistica, [
+            'movilizacion', 'tipo_vehiculo', 'licencia', 'disp_viajar', 'disp_turnos', 'disp_fines_semana'
+          ]);
+
+          await upsertSimpleByPk(conn, 'estudiantes_educacion_general', estudianteId, item.educacion_general, [
+            'nivel_estudio', 'institucion', 'titulo_obtenido'
+          ]);
+
+          await replaceExperiencias(conn, estudianteId, item.experiencia);
+          await upsertDocumentos(conn, estudianteId, item.documentos);
+          await upsertFormaciones(conn, estudianteId, item);
+
+          await conn.commit();
+        } catch (err) {
+          await conn.rollback();
+          totals.errors += 1;
+        } finally {
+          conn.release();
+        }
+      }
+
+      if (nextPage) {
+        page = nextPage;
+      } else if (items.length < pageSize) {
+        hasMore = false;
+      } else {
+        page += 1;
+      }
+    }
+
+    const now = new Date();
+    await db.query(
+      `INSERT INTO integracion_sync_state (origen, last_sync_at, last_success_at)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE last_sync_at = VALUES(last_sync_at), last_success_at = VALUES(last_success_at)`,
+      [ORIGEN, now, now]
+    );
+
+    await db.query(
+      `UPDATE integracion_sync_logs
+       SET finished_at = NOW(), status = ?, total = ?, created_count = ?, updated_count = ?, skipped_count = ?, error_count = ?
+       WHERE id = ?`,
+      ['success', totals.total, totals.created, totals.updated, totals.skipped, totals.errors, logId]
+    );
+
+    return res.json({ ok: true, ...totals });
+  } catch (err) {
+    await db.query(
+      `UPDATE integracion_sync_logs
+       SET finished_at = NOW(), status = ?, total = ?, created_count = ?, updated_count = ?, skipped_count = ?, error_count = ?, message = ?
+       WHERE id = ?`,
+      ['failed', totals.total, totals.created, totals.updated, totals.skipped, totals.errors, String(err.message || err), logId]
+    );
+    return res.status(500).json({ error: 'SYNC_FAILED', details: String(err.message || err) });
+  }
+}
+
+module.exports = {
+  importAcreditados
+};

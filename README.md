@@ -14,6 +14,7 @@ empleofacil/
   backend/                 # API Node.js (Express)
   frontend/                # App React (Vite)
   docs/                    # Documentacion
+  init.sql                 # Esquema inicial MySQL para desarrollo
   docker-compose.yml       # Orquestador de servicios
   .env.example             # Variables de entorno de ejemplo
 ```
@@ -33,6 +34,7 @@ cp .env.example .env
 ```bash
 docker compose up -d --build
 ```
+3. MySQL cargara el esquema desde `init.sql` en la raiz del proyecto.
 
 ## Accesos por defecto
 - Frontend: http://localhost:3001
