@@ -1,4 +1,4 @@
-﻿import './admin.css'
+import './admin.css'
 import {
   Activity,
   BadgeCheck,
