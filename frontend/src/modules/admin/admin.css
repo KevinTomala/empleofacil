@@ -1,0 +1,56 @@
+.admin-scope {
+  --background: 220 40% 98%;
+  --foreground: 222 20% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 20% 14%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 20% 14%;
+  --primary: 222 55% 45%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 220 30% 94%;
+  --secondary-foreground: 222 20% 14%;
+  --muted: 220 20% 92%;
+  --muted-foreground: 222 10% 40%;
+  --accent: 220 30% 92%;
+  --accent-foreground: 222 20% 14%;
+  --destructive: 0 72% 50%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 220 20% 88%;
+  --input: 220 20% 88%;
+  --ring: 222 55% 45%;
+  --radius: 0.75rem;
+}
+
+.admin-scope .admin-title {
+  letter-spacing: -0.02em;
+}
+
+.admin-scope .admin-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) + 0.25rem);
+  box-shadow: 0 6px 20px rgba(20, 20, 20, 0.06);
+}
+
+.admin-scope header {
+  border-bottom-color: transparent;
+}
+
+.admin-scope .admin-list {
+  max-height: 560px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.admin-scope .admin-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.admin-scope .admin-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-scope .admin-list::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+}
