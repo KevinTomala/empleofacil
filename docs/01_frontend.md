@@ -1,4 +1,4 @@
-﻿# Documentación frontend (React + Vite + Tailwind)
+# Documentación frontend (React + Vite + Tailwind)
 
 ## Requisitos
 - Node.js LTS y npm.

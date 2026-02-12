@@ -1,4 +1,4 @@
-﻿# Arquitectura
+# Arquitectura
 
 ## Resumen
 EmpleoFacil es un monorepo full-stack orientado a conectar talento y empresas en Ecuador. La arquitectura separa frontend (React + Vite) y backend (Node.js + Express) orquestados con Docker.
