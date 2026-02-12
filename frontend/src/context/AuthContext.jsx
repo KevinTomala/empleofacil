@@ -7,13 +7,21 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState('')
   const [loading, setLoading] = useState(false)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     const storedUser = sessionStorage.getItem('auth_user')
     const storedToken = sessionStorage.getItem('auth_token')
     if (storedUser) {
       try {
-        setUser(JSON.parse(storedUser))
+        const parsed = JSON.parse(storedUser)
+        const normalized = {
+          ...parsed,
+          rol: parsed.rol || parsed.role || null,
+          nombre_completo: parsed.nombre_completo || parsed.name || null
+        }
+        setUser(normalized)
+        sessionStorage.setItem('auth_user', JSON.stringify(normalized))
       } catch {
         sessionStorage.removeItem('auth_user')
       }
@@ -21,6 +29,7 @@ export function AuthProvider({ children }) {
     if (storedToken) {
       setToken(storedToken)
     }
+    setReady(true)
   }, [])
 
   const login = async (email, password) => {
@@ -42,11 +51,16 @@ export function AuthProvider({ children }) {
         return { ok: false, message: 'Respuesta invalida del servidor.' }
       }
 
-      setUser(nextUser)
+      const normalizedUser = {
+        ...nextUser,
+        rol: nextUser.rol || nextUser.role || null,
+        nombre_completo: nextUser.nombre_completo || nextUser.name || null
+      }
+      setUser(normalizedUser)
       setToken(nextToken)
-      sessionStorage.setItem('auth_user', JSON.stringify(nextUser))
+      sessionStorage.setItem('auth_user', JSON.stringify(normalizedUser))
       sessionStorage.setItem('auth_token', nextToken)
-      return { ok: true, user: nextUser }
+      return { ok: true, user: normalizedUser }
     } catch (error) {
       return { ok: false, message: error.message || 'No se pudo iniciar sesion.' }
     } finally {
@@ -62,8 +76,8 @@ export function AuthProvider({ children }) {
   }
 
   const value = useMemo(
-    () => ({ user, token, login, logout, loading }),
-    [user, token, loading]
+    () => ({ user, token, login, logout, loading, ready }),
+    [user, token, loading, ready]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
