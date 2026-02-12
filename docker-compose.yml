@@ -1,4 +1,62 @@
 services:
+  mysql:
+    container_name: mysql
+    image: mysql:8.0
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-your_password_here}
+      MYSQL_DATABASE: ${DB_NAME:-empleof_db}
+      TZ: America/Guayaquil
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: ["--default-authentication-plugin=mysql_native_password"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - apcontenedor-network
+    restart: on-failure
+
+  backend:
+    container_name: backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      BACKEND_PORT: ${BACKEND_PORT:-3000}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-your_password_here}
+      DB_NAME: ${DB_NAME:-empleof_db}
+      JWT_SECRET: ${JWT_SECRET:-change_me}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
+      ADEMY_API_URL: ${ADEMY_API_URL:-http://localhost:3000}
+      ADEMY_JWT_SECRET: ${ADEMY_JWT_SECRET:-change_me}
+      ADEMY_JWT_ISS: ${ADEMY_JWT_ISS:-empleofacil}
+      ADEMY_JWT_AUD: ${ADEMY_JWT_AUD:-apcontenedor}
+      ADEMY_JWT_SCOPE: ${ADEMY_JWT_SCOPE:-acreditados.read}
+      TZ: America/Guayaquil
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["npm", "run", "dev"]
+    networks:
+      - apcontenedor-network
+    restart: on-failure
+
   frontend:
     container_name: frontend
     build:
@@ -25,3 +83,6 @@ services:
 networks:
   apcontenedor-network:
     driver: bridge
+
+volumes:
+  mysql_data:

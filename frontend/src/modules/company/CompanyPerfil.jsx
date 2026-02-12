@@ -62,7 +62,7 @@ export default function CompanyPerfil() {
             <div className="grid sm:grid-cols-2 gap-4 text-sm">
               <div className="border border-border rounded-xl p-4">
                 <p className="text-foreground/60">Nombre</p>
-                <p className="font-semibold">CENDCAP S.A.S.</p>
+                <p className="font-semibold">ADEMY S.A.S.</p>
               </div>
               <div className="border border-border rounded-xl p-4">
                 <p className="text-foreground/60">Industria</p>
@@ -96,11 +96,11 @@ export default function CompanyPerfil() {
                 <p className="text-foreground/60">Redes / web</p>
                 <a
                   className="inline-flex items-center gap-2 text-primary text-sm font-semibold"
-                  href="https://cendcap.com"
+                  href="https://ademy.com"
                   target="_blank"
                   rel="noreferrer"
                 >
-                  <Globe className="w-4 h-4" /> cendcap.com
+                  <Globe className="w-4 h-4" /> ademy.com
                 </a>
                 <button className="text-xs text-primary font-semibold">Editar enlace</button>
               </div>

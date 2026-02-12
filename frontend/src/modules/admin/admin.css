@@ -1,17 +1,24 @@
 .admin-scope {
-  --background: 210 25% 98%;
-  --foreground: 222 22% 12%;
+  --background: 220 40% 98%;
+  --foreground: 222 20% 14%;
   --card: 0 0% 100%;
-  --card-foreground: 222 22% 12%;
-  --primary: 214 85% 45%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 210 28% 94%;
-  --secondary-foreground: 222 22% 12%;
-  --muted: 210 20% 92%;
+  --card-foreground: 222 20% 14%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 20% 14%;
+  --primary: 222 55% 45%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 220 30% 94%;
+  --secondary-foreground: 222 20% 14%;
+  --muted: 220 20% 92%;
   --muted-foreground: 222 10% 40%;
-  --border: 210 20% 86%;
-  --ring: 214 85% 45%;
-  --radius: 0.8rem;
+  --accent: 220 30% 92%;
+  --accent-foreground: 222 20% 14%;
+  --destructive: 0 72% 50%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 220 20% 88%;
+  --input: 220 20% 88%;
+  --ring: 222 55% 45%;
+  --radius: 0.75rem;
 }
 
 .admin-scope .admin-title {

@@ -1,0 +1,36 @@
+const db = require('../db');
+
+async function listCandidatos(req, res) {
+  const page = Math.max(Number(req.query.page || 1), 1);
+  const pageSize = Math.min(Math.max(Number(req.query.page_size || 20), 1), 100);
+  const offset = (page - 1) * pageSize;
+  const q = (req.query.q || '').trim();
+
+  let where = 'WHERE e.activo = 1 AND EXISTS (SELECT 1 FROM estudiantes_formaciones f WHERE f.estudiante_id = e.id AND f.estado = "acreditado")';
+  const params = [];
+  if (q) {
+    where += ' AND (e.nombres LIKE ? OR e.apellidos LIKE ? OR e.documento_identidad LIKE ? OR c.email LIKE ?)';
+    params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+  }
+
+  const [rows] = await db.query(
+    `SELECT e.id, e.nombres, e.apellidos, e.documento_identidad, e.nacionalidad, e.fecha_nacimiento,
+            c.email, c.telefono_celular
+     FROM estudiantes e
+     LEFT JOIN estudiantes_contacto c ON c.estudiante_id = e.id
+     ${where}
+     ORDER BY e.created_at DESC
+     LIMIT ? OFFSET ?`,
+    [...params, pageSize, offset]
+  );
+
+  return res.json({
+    items: rows,
+    page,
+    page_size: pageSize
+  });
+}
+
+module.exports = {
+  listCandidatos
+};
