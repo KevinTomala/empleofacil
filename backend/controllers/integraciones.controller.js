@@ -1,5 +1,10 @@
 const db = require('../db');
-const { fetchAcreditados } = require('../services/ademy.service');
+const {
+  fetchAcreditados,
+  fetchConvocatorias,
+  fetchCursosPorConvocatoria,
+  fetchPromocionesPorConvocatoriaCurso
+} = require('../services/ademy.service');
 
 const ORIGEN = 'ademy';
 
@@ -397,5 +402,35 @@ async function importAcreditados(req, res) {
 }
 
 module.exports = {
-  importAcreditados
+  importAcreditados,
+  listarConvocatorias: async (_req, res) => {
+    try {
+      const items = await fetchConvocatorias();
+      return res.json({ items });
+    } catch (error) {
+      return res.status(500).json({ error: 'CATALOGO_ERROR', details: error.message });
+    }
+  },
+  listarCursosPorConvocatoria: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const items = await fetchCursosPorConvocatoria(id);
+      return res.json({ items });
+    } catch (error) {
+      return res.status(500).json({ error: 'CATALOGO_ERROR', details: error.message });
+    }
+  },
+  listarPromociones: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const cursoId = req.query.curso_id;
+      if (!cursoId) {
+        return res.status(400).json({ error: 'CURSO_ID_REQUIRED' });
+      }
+      const items = await fetchPromocionesPorConvocatoriaCurso(id, cursoId);
+      return res.json({ items });
+    } catch (error) {
+      return res.status(500).json({ error: 'CATALOGO_ERROR', details: error.message });
+    }
+  }
 };
