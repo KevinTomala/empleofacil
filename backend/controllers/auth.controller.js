@@ -30,7 +30,7 @@ async function login(req, res) {
     return res.status(400).json({ error: 'MISSING_FIELDS' });
   }
 
-  const [rows] = await db.query('SELECT id, email, password_hash, rol, estado FROM usuarios WHERE email = ? LIMIT 1', [email]);
+  const [rows] = await db.query('SELECT id, email, password_hash, rol, estado, nombre_completo FROM usuarios WHERE email = ? LIMIT 1', [email]);
   if (!rows.length) {
     return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
   }
@@ -51,7 +51,15 @@ async function login(req, res) {
     { expiresIn: JWT_EXPIRES_IN }
   );
 
-  return res.json({ token });
+  return res.json({
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      rol: user.rol,
+      nombre_completo: user.nombre_completo
+    }
+  });
 }
 
 module.exports = {

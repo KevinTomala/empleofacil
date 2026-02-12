@@ -24,6 +24,7 @@ import AdminRolesPermisos from './modules/admin/AdminRolesPermisos'
 import AdminCuentas from './modules/admin/AdminCuentas'
 import AdminAuditoria from './modules/admin/AdminAuditoria'
 import { AuthProvider } from './context/AuthContext'
+import ProtectedRoute from './components/ProtectedRoute'
 
 function ScrollToHash() {
   const location = useLocation()
@@ -50,25 +51,158 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/request-password" element={<RequestPassword />} />
-          <Route path="/app/candidate/vacantes" element={<CandidateVacantes />} />
-          <Route path="/app/candidate/postulaciones" element={<CandidatePostulaciones />} />
-          <Route path="/app/candidate/perfil" element={<CandidateProfile />} />
-          <Route path="/perfil/datos-basicos" element={<ProfileDatosBasicos />} />
-          <Route path="/perfil/preferencias" element={<ProfilePreferencias />} />
-          <Route path="/perfil/experiencia" element={<ProfileExperiencia />} />
-          <Route path="/perfil/formacion" element={<ProfileFormacion />} />
-          <Route path="/perfil/idiomas" element={<ProfileIdiomas />} />
-          <Route path="/perfil/documentos" element={<ProfileDocumentos />} />
-          <Route path="/perfil/datos-personales" element={<ProfileDatosPersonales />} />
-          <Route path="/app/company" element={<CompanyHome />} />
-          <Route path="/app/company/vacantes" element={<CompanyVacantes />} />
-          <Route path="/app/company/candidatos" element={<CompanyCandidatos />} />
-          <Route path="/app/company/mensajes" element={<CompanyMensajes />} />
-          <Route path="/app/company/empresa" element={<CompanyPerfil />} />
-          <Route path="/app/admin" element={<AdminHome />} />
-          <Route path="/app/admin/roles" element={<AdminRolesPermisos />} />
-          <Route path="/app/admin/cuentas" element={<AdminCuentas />} />
-          <Route path="/app/admin/auditoria" element={<AdminAuditoria />} />
+          <Route
+            path="/app/candidate/vacantes"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <CandidateVacantes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/candidate/postulaciones"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <CandidatePostulaciones />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/candidate/perfil"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <CandidateProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/perfil/datos-basicos"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <ProfileDatosBasicos />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/perfil/preferencias"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <ProfilePreferencias />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/perfil/experiencia"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <ProfileExperiencia />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/perfil/formacion"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <ProfileFormacion />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/perfil/idiomas"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <ProfileIdiomas />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/perfil/documentos"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <ProfileDocumentos />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/perfil/datos-personales"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <ProfileDatosPersonales />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/company"
+            element={
+              <ProtectedRoute roles={['empresa', 'superadmin']}>
+                <CompanyHome />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/company/vacantes"
+            element={
+              <ProtectedRoute roles={['empresa', 'superadmin']}>
+                <CompanyVacantes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/company/candidatos"
+            element={
+              <ProtectedRoute roles={['empresa', 'superadmin']}>
+                <CompanyCandidatos />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/company/mensajes"
+            element={
+              <ProtectedRoute roles={['empresa', 'superadmin']}>
+                <CompanyMensajes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/company/empresa"
+            element={
+              <ProtectedRoute roles={['empresa', 'superadmin']}>
+                <CompanyPerfil />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/admin"
+            element={
+              <ProtectedRoute roles={['administrador', 'superadmin']}>
+                <AdminHome />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/admin/roles"
+            element={
+              <ProtectedRoute roles={['administrador', 'superadmin']}>
+                <AdminRolesPermisos />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/admin/cuentas"
+            element={
+              <ProtectedRoute roles={['administrador', 'superadmin']}>
+                <AdminCuentas />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/admin/auditoria"
+            element={
+              <ProtectedRoute roles={['administrador', 'superadmin']}>
+                <AdminAuditoria />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

@@ -7,22 +7,27 @@ import './auth.css'
 
 export default function Login() {
   const navigate = useNavigate()
-  const { login } = useAuth()
+  const { login, loading } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
-    const result = login(email.trim(), password)
+    const result = await login(email.trim(), password)
     if (!result.ok) {
       setError(result.message)
       return
     }
 
     setError('')
+    const role = result.user?.rol
     const nextPath =
-      result.user.role === 'company' ? '/app/company' : '/app/candidate/vacantes'
+      role === 'empresa'
+        ? '/app/company'
+        : role === 'administrador' || role === 'superadmin'
+        ? '/app/admin'
+        : '/app/candidate/vacantes'
     navigate(nextPath)
   }
 
@@ -86,8 +91,8 @@ export default function Login() {
 
             {error && <p className="auth-error">{error}</p>}
 
-            <button className="auth-submit" type="submit">
-              Iniciar sesion
+            <button className="auth-submit" type="submit" disabled={loading}>
+              {loading ? 'Ingresando...' : 'Iniciar sesion'}
             </button>
           </form>
 

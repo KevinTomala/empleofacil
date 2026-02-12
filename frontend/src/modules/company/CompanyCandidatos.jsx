@@ -1,53 +1,73 @@
-import './company.css';
-import { Briefcase, Crown, Eye, FileText, Mail, Users } from 'lucide-react';
-import Header from '../../components/Header';
+import { useEffect, useMemo, useState } from 'react'
+import './company.css'
+import { Briefcase, Crown, Eye, FileText, Mail, Users } from 'lucide-react'
+import Header from '../../components/Header'
+import { apiRequest } from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
 
 export default function CompanyCandidatos() {
-  const candidatos = [
-    {
-      name: 'Mariana Gomez',
-      role: 'Supervisor de Operaciones',
-      status: 'Nuevo',
-      appliedAt: 'Postulo hace 2 semanas',
-      lastActivity: 'Ultima actividad hace 3 dias',
-      city: 'Barranquilla',
-      experience: '5 años',
-      education: 'Tecnólogo',
-      availability: 'Inmediata',
-      match: 82,
-      featured: true,
-    },
-    {
-      name: 'Carlos Perez',
-      role: 'Auxiliar Administrativo',
-      status: 'En revisión',
-      appliedAt: 'Postulo hace 6 dias',
-      lastActivity: 'Ultima actividad hace 2 dias',
-      city: 'Bogotá',
-      experience: '2 años',
-      education: 'Técnico',
-      availability: '2 semanas',
-      match: 64,
-      featured: false,
-    },
-    {
-      name: 'Daniela Rojas',
-      role: 'Analista de Logística',
-      status: 'Entrevista',
-      appliedAt: 'Postulo hace 3 semanas',
-      lastActivity: 'Ultima actividad ayer',
-      city: 'Medellín',
-      experience: '4 años',
-      education: 'Profesional',
-      availability: '1 semana',
-      match: 76,
-      featured: false,
-    },
-  ]
+  const { token } = useAuth()
+  const [candidatos, setCandidatos] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let alive = true
+
+    async function load() {
+      if (!token) {
+        setLoading(false)
+        return
+      }
+      try {
+        setLoading(true)
+        const data = await apiRequest('/api/candidatos?page=1&page_size=50')
+        if (!alive) return
+        setCandidatos(data.items || [])
+        setError('')
+      } catch (err) {
+        if (!alive) return
+        setError(err.message || 'No se pudieron cargar los candidatos.')
+      } finally {
+        if (alive) setLoading(false)
+      }
+    }
+
+    load()
+
+    return () => {
+      alive = false
+    }
+  }, [token])
+
+  const candidatosUi = useMemo(
+    () =>
+      candidatos.map((item) => ({
+        id: item.id,
+        name: `${item.nombres || ''} ${item.apellidos || ''}`.trim() || 'Candidato',
+        role: 'Candidato acreditado',
+        status: 'Acreditado',
+        appliedAt: item.documento_identidad
+          ? `Documento: ${item.documento_identidad}`
+          : 'Documento: N/D',
+        lastActivity: item.email ? `Email: ${item.email}` : 'Email: N/D',
+        city: item.nacionalidad ? `Nacionalidad: ${item.nacionalidad}` : 'Nacionalidad: N/D',
+        experience: item.fecha_nacimiento
+          ? `Nacimiento: ${item.fecha_nacimiento}`
+          : 'Nacimiento: N/D',
+        education: item.telefono_celular
+          ? `Telefono: ${item.telefono_celular}`
+          : 'Telefono: N/D',
+        availability: 'Acreditado',
+        match: 100,
+        featured: false,
+      })),
+    [candidatos]
+  )
 
   const estados = [
     { label: 'Nuevo', count: 4 },
-    { label: 'En revisión', count: 3 },
+    { label: 'En revision', count: 3 },
     { label: 'Contactado', count: 2 },
     { label: 'Entrevista', count: 1 },
     { label: 'Seleccionado', count: 1 },
@@ -56,9 +76,11 @@ export default function CompanyCandidatos() {
 
   const estadoClass = (status) => {
     switch (status) {
+      case 'Acreditado':
+        return 'bg-emerald-100 text-emerald-700'
       case 'Nuevo':
         return 'bg-slate-100 text-slate-600'
-      case 'En revisión':
+      case 'En revision':
         return 'bg-amber-100 text-amber-700'
       case 'Contactado':
         return 'bg-blue-100 text-blue-700'
@@ -113,7 +135,7 @@ export default function CompanyCandidatos() {
               {[
                 'Ciudad / provincia',
                 'Experiencia',
-                'Educación',
+                'Educacion',
                 'Disponibilidad',
                 'Coincidencia (%)',
               ].map((label) => (
@@ -131,9 +153,29 @@ export default function CompanyCandidatos() {
 
         <section className="grid lg:grid-cols-[1.1fr_0.9fr] gap-6">
           <div className="company-list space-y-2">
-            {candidatos.map((candidato) => (
+            {!token && (
+              <div className="company-card p-4 text-sm text-foreground/70">
+                Inicia sesion para ver candidatos acreditados.
+              </div>
+            )}
+            {token && loading && (
+              <div className="company-card p-4 text-sm text-foreground/70">
+                Cargando candidatos acreditados...
+              </div>
+            )}
+            {token && !loading && error && (
+              <div className="company-card p-4 text-sm text-rose-600">
+                {error}
+              </div>
+            )}
+            {token && !loading && !error && candidatosUi.length === 0 && (
+              <div className="company-card p-4 text-sm text-foreground/70">
+                No hay candidatos acreditados disponibles.
+              </div>
+            )}
+            {token && candidatosUi.map((candidato) => (
               <article
-                key={candidato.name}
+                key={candidato.id}
                 className="company-card p-3"
               >
                 <div className="flex items-start justify-between gap-4">
@@ -151,13 +193,13 @@ export default function CompanyCandidatos() {
                     <h3 className="font-heading text-sm font-semibold">{candidato.name}</h3>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/60">
                       <span>
-                        {candidato.city} · {candidato.experience} · {candidato.education}
+                        {candidato.city} ? {candidato.experience} ? {candidato.education}
                       </span>
-                      <span>Disponibilidad: {candidato.availability}</span>
+                      <span>{candidato.appliedAt}</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-3 text-xs text-foreground/50">
-                      <span>{candidato.appliedAt}</span>
                       <span>{candidato.lastActivity}</span>
+                      <span>{candidato.availability}</span>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -200,7 +242,7 @@ export default function CompanyCandidatos() {
                 {[
                   { label: 'Supervisor de Operaciones', value: '5 candidatos' },
                   { label: 'Auxiliar Administrativo', value: '3 candidatos' },
-                  { label: 'Analista de Logística', value: '4 candidatos' },
+                  { label: 'Analista de Logistica', value: '4 candidatos' },
                 ].map((item) => (
                   <div key={item.label} className="flex items-center justify-between text-sm">
                     <span className="text-foreground/70">{item.label}</span>
@@ -215,7 +257,7 @@ export default function CompanyCandidatos() {
               <div className="mt-4 space-y-3 text-sm text-foreground/70">
                 {[
                   'Nuevo (4)',
-                  'En revisión (3)',
+                  'En revision (3)',
                   'Contactado (2)',
                   'Entrevista (1)',
                   'Seleccionado (1)',
