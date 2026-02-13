@@ -6,7 +6,18 @@ async function listCandidatos(req, res) {
   const offset = (page - 1) * pageSize;
   const q = (req.query.q || '').trim();
 
-  let where = 'WHERE e.activo = 1 AND EXISTS (SELECT 1 FROM estudiantes_formaciones f WHERE f.estudiante_id = e.id AND f.estado = "acreditado")';
+  let where = `WHERE e.activo = 1 AND EXISTS (
+    SELECT 1
+    FROM estudiantes_formaciones f
+    WHERE f.estudiante_id = e.id
+      AND f.estado = "acreditado"
+      AND f.activo = 1
+      AND f.deleted_at IS NULL
+      AND (
+        f.fecha_aprobacion IS NOT NULL
+        OR (f.fecha_fin IS NOT NULL AND f.fecha_fin <= CURDATE())
+      )
+  )`;
   const params = [];
   if (q) {
     where += ' AND (e.nombres LIKE ? OR e.apellidos LIKE ? OR e.documento_identidad LIKE ? OR c.email LIKE ?)';

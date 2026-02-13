@@ -1,62 +1,84 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { apiRequest } from '../services/api'
 
 const AuthContext = createContext(null)
 
-const MOCK_USERS = [
-  {
-    email: 'candidato@gmail.com',
-    password: 'candidato',
-    role: 'candidate',
-    name: 'Candidato',
-  },
-  {
-    email: 'empresa@gmail.com',
-    password: 'empresa',
-    role: 'company',
-    name: 'Empresa',
-  },
-  {
-    email: 'root@gmail.com',
-    password: 'root',
-    role: 'root',
-    name: 'Root Admin',
-  },
-]
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
+  const [token, setToken] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    const stored = sessionStorage.getItem('auth_user')
-    if (stored) {
+    const storedUser = sessionStorage.getItem('auth_user')
+    const storedToken = sessionStorage.getItem('auth_token')
+    if (storedUser) {
       try {
-        setUser(JSON.parse(stored))
+        const parsed = JSON.parse(storedUser)
+        const normalized = {
+          ...parsed,
+          rol: parsed.rol || parsed.role || null,
+          nombre_completo: parsed.nombre_completo || parsed.name || null
+        }
+        setUser(normalized)
+        sessionStorage.setItem('auth_user', JSON.stringify(normalized))
       } catch {
         sessionStorage.removeItem('auth_user')
       }
     }
+    if (storedToken) {
+      setToken(storedToken)
+    }
+    setReady(true)
   }, [])
 
-  const login = (email, password) => {
-    const match = MOCK_USERS.find(
-      (item) => item.email === email && item.password === password
-    )
+  const login = async (email, password) => {
+    try {
+      setLoading(true)
+      const payload = await apiRequest(
+        '/auth/login',
+        {
+          method: 'POST',
+          body: JSON.stringify({ email, password })
+        },
+        false
+      )
 
-    if (!match) {
-      return { ok: false, message: 'Credenciales invalidas.' }
+      const nextUser = payload?.user || null
+      const nextToken = payload?.token || ''
+
+      if (!nextUser || !nextToken) {
+        return { ok: false, message: 'Respuesta invalida del servidor.' }
+      }
+
+      const normalizedUser = {
+        ...nextUser,
+        rol: nextUser.rol || nextUser.role || null,
+        nombre_completo: nextUser.nombre_completo || nextUser.name || null
+      }
+      setUser(normalizedUser)
+      setToken(nextToken)
+      sessionStorage.setItem('auth_user', JSON.stringify(normalizedUser))
+      sessionStorage.setItem('auth_token', nextToken)
+      return { ok: true, user: normalizedUser }
+    } catch (error) {
+      return { ok: false, message: error.message || 'No se pudo iniciar sesion.' }
+    } finally {
+      setLoading(false)
     }
-
-    setUser(match)
-    sessionStorage.setItem('auth_user', JSON.stringify(match))
-    return { ok: true, user: match }
   }
 
   const logout = () => {
     setUser(null)
+    setToken('')
     sessionStorage.removeItem('auth_user')
+    sessionStorage.removeItem('auth_token')
   }
 
-  const value = useMemo(() => ({ user, login, logout }), [user])
+  const value = useMemo(
+    () => ({ user, token, login, logout, loading, ready }),
+    [user, token, loading, ready]
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

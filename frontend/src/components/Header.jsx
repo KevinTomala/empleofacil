@@ -11,16 +11,17 @@ export default function Header() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const role = user?.rol
 
   const homeLink = useMemo(() => {
-    if (user?.role === 'root') return '/app/admin'
-    if (user?.role === 'company') return '/app/company'
-    if (user?.role === 'candidate') return '/app/candidate/vacantes'
+    if (role === 'superadmin' || role === 'administrador') return '/app/admin'
+    if (role === 'empresa') return '/app/company'
+    if (role === 'candidato') return '/app/candidate/vacantes'
     return '/'
-  }, [user])
+  }, [role])
 
   const navLinks = useMemo(() => {
-    if (user?.role === 'root') {
+    if (role === 'superadmin' || role === 'administrador') {
       return [
         { href: '/app/admin', label: 'Resumen' },
         { href: '/app/admin/roles', label: 'Roles' },
@@ -29,7 +30,7 @@ export default function Header() {
       ]
     }
 
-    if (user?.role === 'company') {
+    if (role === 'empresa') {
       return [
         { href: '/app/company/vacantes', label: 'Vacantes' },
         { href: '/app/company/candidatos', label: 'Candidatos' },
@@ -38,7 +39,7 @@ export default function Header() {
       ]
     }
 
-    if (user?.role === 'candidate') {
+    if (role === 'candidato') {
       return [
         { href: '/app/candidate/vacantes', label: 'Vacantes' },
         { href: '/app/candidate/postulaciones', label: 'Postulaciones' },
@@ -62,8 +63,8 @@ export default function Header() {
     }
   }
 
-  const initials = user?.name
-    ? user.name
+  const initials = user?.nombre_completo
+    ? user.nombre_completo
         .split(' ')
         .map((part) => part[0])
         .join('')
@@ -88,13 +89,23 @@ export default function Header() {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="text-foreground/70 hover:text-foreground transition-colors font-medium text-sm"
-              >
-                {link.label}
-              </a>
+              link.href.startsWith('/app') || link.href.startsWith('/perfil') ? (
+                <Link
+                  key={link.href}
+                  to={link.href}
+                  className="text-foreground/70 hover:text-foreground transition-colors font-medium text-sm"
+                >
+                  {link.label}
+                </Link>
+              ) : (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="text-foreground/70 hover:text-foreground transition-colors font-medium text-sm"
+                >
+                  {link.label}
+                </a>
+              )
             ))}
           </nav>
 
@@ -113,7 +124,9 @@ export default function Header() {
                     <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">
                       {initials}
                     </span>
-                    <span className="text-sm font-medium text-foreground">{user.name}</span>
+                    <span className="text-sm font-medium text-foreground">
+                      {user?.nombre_completo || 'Usuario'}
+                    </span>
                   </button>
                   {isProfileOpen && (
                     <div
@@ -163,14 +176,25 @@ export default function Header() {
           <div className="md:hidden py-4 border-t border-border">
             <nav className="flex flex-col gap-4">
               {navLinks.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  className="text-foreground/70 hover:text-foreground transition-colors font-medium"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  {link.label}
-                </a>
+                link.href.startsWith('/app') || link.href.startsWith('/perfil') ? (
+                  <Link
+                    key={link.href}
+                    to={link.href}
+                    className="text-foreground/70 hover:text-foreground transition-colors font-medium"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    {link.label}
+                  </Link>
+                ) : (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    className="text-foreground/70 hover:text-foreground transition-colors font-medium"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    {link.label}
+                  </a>
+                )
               ))}
               <div className="flex flex-col gap-2 pt-4 border-t border-border">
                 {user ? (
@@ -179,7 +203,9 @@ export default function Header() {
                       <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">
                         {initials}
                       </span>
-                      <span className="text-sm font-medium text-foreground">{user.name}</span>
+                      <span className="text-sm font-medium text-foreground">
+                        {user?.nombre_completo || 'Usuario'}
+                      </span>
                     </div>
                     <button
                       className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-left"

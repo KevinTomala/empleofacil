@@ -21,6 +21,18 @@ CREATE TABLE IF NOT EXISTS usuarios (
   INDEX idx_rol (rol)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Usuario superadmin por defecto (dev)
+INSERT INTO usuarios (email, password_hash, nombre_completo, rol, estado, activo)
+VALUES (
+  'admin@empleofacil.com',
+  '$2b$10$u6NbnZiGxKoTyWf83nQ3Te1TrxbPhc.Edf5Zb9STIVJlenM0MTQaq',
+  'Super Admin',
+  'superadmin',
+  'activo',
+  1
+)
+ON DUPLICATE KEY UPDATE email = email;
+
 -- -------------------------------------------------------------
 -- ESTUDIANTES Y PERFIL (basado en init.sql)
 -- -------------------------------------------------------------
