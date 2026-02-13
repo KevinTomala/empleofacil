@@ -224,6 +224,10 @@ async function generarHojaVidaPdfPorEstudianteId(estudianteId) {
   const educacion = hojaVida.educacion_general || {};
   const experiencias = hojaVida.experiencia_laboral || [];
   const formaciones = hojaVida.formaciones || [];
+  const documentos = hojaVida.documentos || [];
+  const fotoDoc = documentos.find((doc) => doc.tipo_documento === 'foto' && doc.ruta_archivo);
+  const fotoSrc = fotoDoc ? `file://${fotoDoc.ruta_archivo}` : null;
+
   const experienciaHtml = experiencias.length
     ? experiencias
         .map(
@@ -263,6 +267,28 @@ async function generarHojaVidaPdfPorEstudianteId(estudianteId) {
         <style>
           @page { size: A4; margin: 22mm 14mm; }
           body { font-family: Arial, sans-serif; color: #1f2937; font-size: 12px; }
+          header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; gap:16px; }
+          .header-main { flex:1; min-width:0; }
+          .photo-box {
+            width:106px;
+            height:132px;
+            border:1px solid #c8c8c8;
+            border-radius:4px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            color:#777;
+            font-size:10px;
+            text-align:center;
+            overflow:hidden;
+            background:#fafafa;
+            flex-shrink:0;
+          }
+          .photo-box img {
+            width:100%;
+            height:100%;
+            object-fit:cover;
+          }
           h1 { margin: 0; font-size: 24px; color: #111827; }
           h2 { margin: 16px 0 8px; font-size: 14px; border-bottom: 1px solid #d1d5db; padding-bottom: 4px; }
           .name { margin-top: 8px; font-size: 18px; font-weight: 700; }
@@ -273,12 +299,22 @@ async function generarHojaVidaPdfPorEstudianteId(estudianteId) {
         </style>
       </head>
       <body>
-        <h1>Hoja de Vida</h1>
-        <div class="name">${escapeHtml(textOrDash(perfil.nombre_completo))}</div>
-        <div>Documento: ${escapeHtml(textOrDash(perfil.documento_identidad))}</div>
-        <div>Email: ${escapeHtml(textOrDash(contacto.email))}</div>
-        <div>Celular: ${escapeHtml(textOrDash(contacto.telefono_celular))}</div>
-
+        <header>
+          <div class="header-main">
+            <h1>Hoja de Vida</h1>
+            <div class="name">${escapeHtml(textOrDash(perfil.nombre_completo))}</div>
+            <div>Documento: ${escapeHtml(textOrDash(perfil.documento_identidad))}</div>
+            <div>Email: ${escapeHtml(textOrDash(contacto.email))}</div>
+            <div>Celular: ${escapeHtml(textOrDash(contacto.telefono_celular))}</div>
+          </div>
+          <div class="photo-box">
+            ${
+              fotoSrc
+                ? `<img src="${escapeHtml(fotoSrc)}" alt="Foto carnet" />`
+                : 'FOTO<br/>TAMANO CARNET'
+            }
+          </div>
+        </header>
         <h2>Perfil</h2>
         <div class="grid">
           <div>Nombres: ${escapeHtml(textOrDash(perfil.nombres))}</div>
