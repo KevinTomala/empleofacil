@@ -6,6 +6,7 @@ const db = require('./db');
 const authRoutes = require('./routes/auth.routes');
 const integracionesRoutes = require('./routes/integraciones.routes');
 const candidatosRoutes = require('./routes/candidatos.routes');
+const hojaVidaRoutes = require('./routes/hojaVida.routes');
 
 dotenv.config();
 
@@ -29,6 +30,7 @@ app.get('/', (req, res) => {
 app.use('/auth', authRoutes);
 app.use('/api/integraciones', integracionesRoutes);
 app.use('/api/candidatos', candidatosRoutes);
+app.use('/api/hoja-vida', hojaVidaRoutes);
 
 const PORT = process.env.BACKEND_PORT || 3000;
 

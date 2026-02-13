@@ -52,7 +52,12 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-    command: ["npm", "run", "dev"]
+    command:
+      [
+        "sh",
+        "-c",
+        "mkdir -p ${PUPPETEER_CACHE_DIR:-/app/.cache/puppeteer} && npx puppeteer browsers install chrome && npm run dev"
+      ]
     networks:
       - apcontenedor-network
     restart: on-failure
