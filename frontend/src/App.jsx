@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
 import LandingPage from './modules/Landing/LandingPage'
 import Login from './modules/auth/Login'
 import Register from './modules/auth/Register'
@@ -46,6 +47,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <ScrollToHash />
+        <Toaster />
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />

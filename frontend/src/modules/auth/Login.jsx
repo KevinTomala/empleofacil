@@ -3,6 +3,7 @@ import { Briefcase, ShieldCheck, Sparkles } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import Header from '../../components/Header'
 import { useAuth } from '../../context/AuthContext'
+import { showToast } from '../../utils/showToast'
 import './auth.css'
 
 export default function Login() {
@@ -17,10 +18,18 @@ export default function Login() {
     const result = await login(email.trim(), password)
     if (!result.ok) {
       setError(result.message)
+      showToast({
+        type: result.toastType || 'error',
+        message: result.message || 'No se pudo iniciar sesion.',
+      })
       return
     }
 
     setError('')
+    showToast({
+      type: 'success',
+      message: 'Inicio de sesion exitoso.',
+    })
     const role = result.user?.rol
     const nextPath =
       role === 'empresa'

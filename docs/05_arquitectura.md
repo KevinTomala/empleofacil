@@ -16,6 +16,11 @@ EmpleoFacil es un monorepo full-stack orientado a conectar talento y empresas en
   - `src/index.css` y `src/styles/globals.css` (ambos importados en `src/main.jsx`).
   - Contenedor base `.page-container` para alineación y ancho consistente.
   - Header fijo compensado con `padding-top` en `body` usando `--header-height`.
+- **Notificaciones toast:**
+  - `react-hot-toast` con provider global (`Toaster`) en `src/App.jsx`.
+  - Componente visual: `src/components/Toast.jsx`.
+  - Helper de invocacion unificada: `src/utils/showToast.jsx`.
+  - Estilos dedicados: `src/styles/notifications.css`.
 - **Modulo auth:**
   - `src/modules/auth/Login.jsx` (login).
   - `src/modules/auth/Register.jsx` (registro en 2 pasos: tipo de cuenta + credenciales).

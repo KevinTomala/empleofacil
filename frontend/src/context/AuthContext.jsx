@@ -62,7 +62,13 @@ export function AuthProvider({ children }) {
       sessionStorage.setItem('auth_token', nextToken)
       return { ok: true, user: normalizedUser }
     } catch (error) {
-      return { ok: false, message: error.message || 'No se pudo iniciar sesion.' }
+      return {
+        ok: false,
+        message: error.message || 'No se pudo iniciar sesion.',
+        status: error.status || null,
+        code: error.code || null,
+        toastType: error.toastType || 'danger'
+      }
     } finally {
       setLoading(false)
     }

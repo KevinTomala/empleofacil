@@ -1,0 +1,116 @@
+.toast-container {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 1080;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 360px;
+}
+
+.toast-card {
+  border-radius: 1rem;
+  padding: 0.95rem 1.2rem;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.2);
+  animation: toast-slide 0.3s ease-out;
+}
+
+.toast-card.success { background: linear-gradient(135deg, #22c55e, #16a34a); }
+.toast-card.warning { background: linear-gradient(135deg, #f97316, #ea580c); }
+.toast-card.danger { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.toast-card.info { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
+
+.toast-card .toast-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+.toast-card .toast-content {
+  flex: 1;
+}
+
+.toast-card .toast-title {
+  font-weight: 700;
+  margin-bottom: 0.05rem;
+}
+
+.toast-card .toast-message {
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.toast-card button {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.toast-card.inline {
+  position: relative;
+  width: 100%;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+}
+
+.toast-card.inline .toast-icon {
+  align-self: flex-start;
+}
+
+.toast-card.inline button.toast-close {
+  margin-left: 0.5rem;
+}
+
+.toast-inline-wrapper {
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.toast-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-left: auto;
+  z-index: 1;
+}
+
+
+.toast-actions .btn {
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-weight: 600;
+  padding: 0.35rem 0.95rem;
+  border-radius: 999px;
+}
+
+.toast-actions .btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+@keyframes toast-slide {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@media (max-width: 768px) {
+  .toast-container {
+    top: auto;
+    bottom: 1rem;
+    right: 50%;
+    transform: translateX(50%);
+    max-width: calc(100% - 2rem);
+    left: 1rem;
+  }
+}

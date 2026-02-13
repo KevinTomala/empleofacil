@@ -11,7 +11,7 @@
 2. Entrar a la carpeta e instalar dependencias de app (según necesidad):
    ```bash
    cd frontend
-   npm install react-router-dom lucide-react axios socket.io-client
+   npm install react-router-dom lucide-react axios socket.io-client react-hot-toast @heroicons/react
    ```
 3. Instalar Tailwind y herramientas de build:
    ```bash
@@ -55,6 +55,26 @@
    ```
 
 ## Notas
+- Sistema de toast:
+  - Provider global en `src/App.jsx` con `Toaster` de `react-hot-toast`.
+  - Helper de uso en `src/utils/showToast.jsx`.
+  - Componente visual en `src/components/Toast.jsx`.
+  - Estilos en `src/styles/notifications.css`.
+- API de `showToast`:
+  - Firma: `showToast({ type, message, actions, duration, onClose })`.
+  - Tipos soportados: `success`, `warning`, `info`, `danger`, `error` (internamente `error` se normaliza a `danger`).
+  - Duracion por defecto: `3000` ms. Si `actions` es funcion renderer, la duracion pasa a infinita hasta cerrar.
+  - `actions` recibe `dismiss` para cerrar manualmente el toast.
+  - `onClose` se ejecuta al cerrar.
+- Ejemplo:
+  ```jsx
+  import { showToast } from '../../utils/showToast'
+
+  showToast({
+    type: 'success',
+    message: 'Inicio de sesion exitoso',
+  })
+  ```
 - Las rutas se definen en `src/App.jsx` con `react-router-dom`.
 - Modulo `auth` en `src/modules/auth/` con rutas `/login`, `/register` y `/request-password`.
 - Modulo `Landing` en `src/modules/Landing/` con ruta `/`.
