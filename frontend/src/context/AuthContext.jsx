@@ -32,14 +32,14 @@ export function AuthProvider({ children }) {
     setReady(true)
   }, [])
 
-  const login = async (email, password) => {
+  const login = async (identifier, password) => {
     try {
       setLoading(true)
       const payload = await apiRequest(
         '/auth/login',
         {
           method: 'POST',
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({ identifier, email: identifier, password })
         },
         false
       )
@@ -54,7 +54,8 @@ export function AuthProvider({ children }) {
       const normalizedUser = {
         ...nextUser,
         rol: nextUser.rol || nextUser.role || null,
-        nombre_completo: nextUser.nombre_completo || nextUser.name || null
+        nombre_completo: nextUser.nombre_completo || nextUser.name || null,
+        must_change_password: Boolean(nextUser.must_change_password)
       }
       setUser(normalizedUser)
       setToken(nextToken)

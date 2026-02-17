@@ -4,6 +4,6 @@ const { authRequired, requireRole } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-router.get('/', authRequired, requireRole(['administrador', 'superadmin']), listCandidatos);
+router.get('/', authRequired, requireRole(['administrador', 'superadmin', 'empresa']), listCandidatos);
 
 module.exports = router;

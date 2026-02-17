@@ -1,4 +1,4 @@
-const db = require('../db');
+﻿const db = require('../db');
 
 async function listCandidatos(req, res) {
   const page = Math.max(Number(req.query.page || 1), 1);
@@ -8,8 +8,8 @@ async function listCandidatos(req, res) {
 
   let where = `WHERE e.activo = 1 AND EXISTS (
     SELECT 1
-    FROM estudiantes_formaciones f
-    WHERE f.estudiante_id = e.id
+    FROM candidatos_formaciones f
+    WHERE f.candidato_id = e.id
       AND f.estado = "acreditado"
       AND f.activo = 1
       AND f.deleted_at IS NULL
@@ -27,8 +27,8 @@ async function listCandidatos(req, res) {
   const [rows] = await db.query(
     `SELECT e.id, e.nombres, e.apellidos, e.documento_identidad, e.nacionalidad, e.fecha_nacimiento,
             c.email, c.telefono_celular
-     FROM estudiantes e
-     LEFT JOIN estudiantes_contacto c ON c.estudiante_id = e.id
+     FROM candidatos e
+     LEFT JOIN candidatos_contacto c ON c.candidato_id = e.id
      ${where}
      ORDER BY e.created_at DESC
      LIMIT ? OFFSET ?`,

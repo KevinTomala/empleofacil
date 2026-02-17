@@ -10,8 +10,8 @@ const { authRequired, requireRole } = require('../middlewares/auth.middleware');
 const router = express.Router();
 
 router.post('/ademy/acreditados/import', authRequired, requireRole(['administrador', 'superadmin']), importAcreditados);
-router.get('/ademy/convocatorias', authRequired, requireRole(['administrador', 'superadmin', 'empresa']), listarConvocatorias);
-router.get('/ademy/convocatorias/:id/cursos', authRequired, requireRole(['administrador', 'superadmin', 'empresa']), listarCursosPorConvocatoria);
-router.get('/ademy/convocatorias/:id/promociones', authRequired, requireRole(['administrador', 'superadmin', 'empresa']), listarPromociones);
+router.get('/ademy/convocatorias', authRequired, requireRole(['administrador', 'superadmin']), listarConvocatorias);
+router.get('/ademy/convocatorias/:id/cursos', authRequired, requireRole(['administrador', 'superadmin']), listarCursosPorConvocatoria);
+router.get('/ademy/convocatorias/:id/promociones', authRequired, requireRole(['administrador', 'superadmin']), listarPromociones);
 
 module.exports = router;

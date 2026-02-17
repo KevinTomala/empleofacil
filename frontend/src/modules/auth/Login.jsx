@@ -9,13 +9,13 @@ import './auth.css'
 export default function Login() {
   const navigate = useNavigate()
   const { login, loading } = useAuth()
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
 
   const handleSubmit = async (event) => {
     event.preventDefault()
-    const result = await login(email.trim(), password)
+    const result = await login(identifier.trim(), password)
     if (!result.ok) {
       setError(result.message)
       showToast({
@@ -30,6 +30,12 @@ export default function Login() {
       type: 'success',
       message: 'Inicio de sesion exitoso.',
     })
+    if (result.user?.must_change_password) {
+      showToast({
+        type: 'warning',
+        message: 'Tu clave es temporal. Cambiala de inmediato desde tu perfil o soporte.',
+      })
+    }
     const role = result.user?.rol
     const nextPath =
       role === 'empresa'
@@ -66,14 +72,14 @@ export default function Login() {
 
           <form className="auth-form" onSubmit={handleSubmit}>
             <div className="auth-field">
-              <label htmlFor="email">Correo electronico</label>
+              <label htmlFor="identifier">Correo electronico o cedula</label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="nombre@correo.com"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                id="identifier"
+                name="identifier"
+                type="text"
+                placeholder="nombre@correo.com o 1234567890"
+                value={identifier}
+                onChange={(event) => setIdentifier(event.target.value)}
               />
             </div>
             <div className="auth-field">

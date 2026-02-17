@@ -48,6 +48,11 @@ services:
       ADEMY_JWT_ISS: ${ADEMY_JWT_ISS:-empleofacil}
       ADEMY_JWT_AUD: ${ADEMY_JWT_AUD:-apcontenedor}
       ADEMY_JWT_SCOPE: ${ADEMY_JWT_SCOPE:-acreditados.read}
+      ADEMY_SYNC_ENABLED: ${ADEMY_SYNC_ENABLED:-false}
+      ADEMY_SYNC_CRON: ${ADEMY_SYNC_CRON:-*/10 * * * *}
+      ADEMY_SYNC_TZ: ${ADEMY_SYNC_TZ:-America/Guayaquil}
+      ADEMY_SYNC_RUN_ON_START: ${ADEMY_SYNC_RUN_ON_START:-true}
+      ADEMY_SYNC_PAGE_SIZE: ${ADEMY_SYNC_PAGE_SIZE:-100}
       TZ: America/Guayaquil
     depends_on:
       mysql:

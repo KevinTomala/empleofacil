@@ -1,4 +1,5 @@
-const db = require('../db');
+﻿const db = require('../db');
+const bcrypt = require('bcryptjs');
 const {
   fetchAcreditados,
   fetchConvocatorias,
@@ -7,6 +8,7 @@ const {
 } = require('../services/ademy.service');
 
 const ORIGEN = 'ademy';
+const SYNC_LOCK_NAME = `integracion:${ORIGEN}:acreditados`;
 
 function isPresent(value) {
   return value !== undefined && value !== null && value !== '';
@@ -20,6 +22,20 @@ function buildPatch(source, allowedKeys) {
   return patch;
 }
 
+function normalizeDocumento(value) {
+  return String(value || '').trim().replace(/[^0-9A-Za-z]/g, '');
+}
+
+function resolveCandidatoIdentity(item) {
+  const emailRaw = String(item?.email || item?.contacto?.email || '').trim();
+  const documento = normalizeDocumento(item?.documento_identidad);
+  const email = emailRaw
+    ? emailRaw.toLowerCase()
+    : (documento ? `${documento}@candidato.ademy.local` : '');
+  const nombreCompleto = `${String(item?.nombres || '').trim()} ${String(item?.apellidos || '').trim()}`.trim() || 'Candidato';
+  return { email, documento, nombreCompleto };
+}
+
 async function upsertEstudiante(conn, item) {
   const documento = item.documento_identidad || null;
   const email = item.email || item?.contacto?.email || null;
@@ -27,13 +43,13 @@ async function upsertEstudiante(conn, item) {
   let estudianteId = null;
   if (documento) {
     const [rows] = await conn.query(
-      'SELECT id FROM estudiantes WHERE documento_identidad = ? LIMIT 1',
+      'SELECT id FROM candidatos WHERE documento_identidad = ? LIMIT 1',
       [documento]
     );
     estudianteId = rows[0]?.id || null;
   } else if (email) {
     const [rows] = await conn.query(
-      'SELECT e.id FROM estudiantes e INNER JOIN estudiantes_contacto c ON c.estudiante_id = e.id WHERE c.email = ? LIMIT 1',
+      'SELECT e.id FROM candidatos e INNER JOIN candidatos_contacto c ON c.candidato_id = e.id WHERE c.email = ? LIMIT 1',
       [email]
     );
     estudianteId = rows[0]?.id || null;
@@ -56,7 +72,7 @@ async function upsertEstudiante(conn, item) {
     const keys = Object.keys(patch);
     if (keys.length) {
       const setSql = keys.map((k) => `${k} = ?`).join(', ');
-      await conn.query(`UPDATE estudiantes SET ${setSql} WHERE id = ?`, [
+      await conn.query(`UPDATE candidatos SET ${setSql} WHERE id = ?`, [
         ...keys.map((k) => patch[k]),
         estudianteId
       ]);
@@ -72,7 +88,7 @@ async function upsertEstudiante(conn, item) {
   const values = columns.map((k) => insert[k]);
   const placeholders = columns.map(() => '?').join(', ');
   const [result] = await conn.query(
-    `INSERT INTO estudiantes (${columns.join(', ')}) VALUES (${placeholders})`,
+    `INSERT INTO candidatos (${columns.join(', ')}) VALUES (${placeholders})`,
     values
   );
   return { estudianteId: result.insertId, created: true };
@@ -91,8 +107,8 @@ async function upsertContacto(conn, estudianteId, item) {
   if (!Object.values(payload).some(isPresent)) return;
 
   await conn.query(
-    `INSERT INTO estudiantes_contacto (
-      estudiante_id, email, telefono_fijo, telefono_celular, contacto_emergencia_nombre, contacto_emergencia_telefono
+    `INSERT INTO candidatos_contacto (
+      candidato_id, email, telefono_fijo, telefono_celular, contacto_emergencia_nombre, contacto_emergencia_telefono
     ) VALUES (?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
       email = COALESCE(VALUES(email), email),
@@ -111,12 +127,86 @@ async function upsertContacto(conn, estudianteId, item) {
   );
 }
 
+async function ensureCandidateUserForEstudiante(conn, estudianteId, item) {
+  const { email, documento, nombreCompleto } = resolveCandidatoIdentity(item);
+  if (!email && !documento) return;
+
+  const [linkedRows] = await conn.query(
+    `SELECT u.id, u.rol
+     FROM candidatos e
+     INNER JOIN usuarios u ON u.id = e.usuario_id
+     WHERE e.id = ?
+     LIMIT 1`,
+    [estudianteId]
+  );
+  const linkedUser = linkedRows[0] || null;
+
+  let userId = linkedUser?.id || null;
+  let userRol = linkedUser?.rol || null;
+
+  if (!userId && email) {
+    const [userByEmailRows] = await conn.query(
+      'SELECT id, rol FROM usuarios WHERE email = ? LIMIT 1',
+      [email]
+    );
+    if (userByEmailRows.length) {
+      userId = userByEmailRows[0].id;
+      userRol = userByEmailRows[0].rol;
+    }
+  }
+
+  if (!userId && documento) {
+    const [userByDocumentoRows] = await conn.query(
+      `SELECT u.id, u.rol
+       FROM usuarios u
+       INNER JOIN candidatos e ON e.usuario_id = u.id
+       WHERE REPLACE(REPLACE(REPLACE(COALESCE(e.documento_identidad, ''), '.', ''), '-', ''), ' ', '') = ?
+       LIMIT 1`,
+      [documento]
+    );
+    if (userByDocumentoRows.length) {
+      userId = userByDocumentoRows[0].id;
+      userRol = userByDocumentoRows[0].rol;
+    }
+  }
+
+  if (userId && userRol && userRol !== 'candidato') {
+    return;
+  }
+
+  if (!userId) {
+    const defaultPassword = documento || email;
+    const defaultPasswordHash = await bcrypt.hash(defaultPassword, 10);
+
+    const [insertUser] = await conn.query(
+      `INSERT INTO usuarios (
+        email, password_hash, nombre_completo, rol, estado, activo, must_change_password
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [email, defaultPasswordHash, nombreCompleto, 'candidato', 'activo', 1, 1]
+    );
+    userId = insertUser.insertId;
+  } else {
+    await conn.query(
+      `UPDATE usuarios
+       SET nombre_completo = COALESCE(NULLIF(?, ''), nombre_completo),
+           email = COALESCE(NULLIF(?, ''), email)
+       WHERE id = ?`,
+      [nombreCompleto, email, userId]
+    );
+  }
+
+  await conn.query(
+    'UPDATE candidatos SET usuario_id = ? WHERE id = ? AND usuario_id IS NULL',
+    [userId, estudianteId]
+  );
+}
+
 async function upsertSimpleByPk(conn, table, estudianteId, data, allowedKeys) {
   if (!data) return;
   const payload = buildPatch(data, allowedKeys);
   if (!Object.keys(payload).length) return;
 
-  const columns = ['estudiante_id', ...Object.keys(payload)];
+  const columns = ['candidato_id', ...Object.keys(payload)];
   const values = [estudianteId, ...Object.keys(payload).map((k) => payload[k])];
   const updateSql = Object.keys(payload)
     .map((key) => `${key} = COALESCE(VALUES(${key}), ${key})`)
@@ -131,11 +221,11 @@ async function upsertSimpleByPk(conn, table, estudianteId, data, allowedKeys) {
 
 async function replaceExperiencias(conn, estudianteId, experiencias) {
   if (!Array.isArray(experiencias)) return;
-  await conn.query('DELETE FROM estudiantes_experiencia WHERE estudiante_id = ?', [estudianteId]);
+  await conn.query('DELETE FROM candidatos_experiencia WHERE candidato_id = ?', [estudianteId]);
   for (const exp of experiencias) {
     await conn.query(
-      `INSERT INTO estudiantes_experiencia (
-        estudiante_id, empresa_id, cargo, fecha_inicio, fecha_fin, actualmente_trabaja, tipo_contrato, descripcion
+      `INSERT INTO candidatos_experiencia (
+        candidato_id, empresa_id, cargo, fecha_inicio, fecha_fin, actualmente_trabaja, tipo_contrato, descripcion
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         estudianteId,
@@ -158,8 +248,8 @@ async function upsertDocumentos(conn, estudianteId, documentos) {
       continue;
     }
     await conn.query(
-      `INSERT INTO estudiantes_documentos (
-        estudiante_id, tipo_documento, nombre_archivo, nombre_original, ruta_archivo, tipo_mime, tamanio_kb,
+      `INSERT INTO candidatos_documentos (
+        candidato_id, tipo_documento, nombre_archivo, nombre_original, ruta_archivo, tipo_mime, tamanio_kb,
         fecha_emision, fecha_vencimiento, numero_documento, descripcion, estado, observaciones
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
@@ -200,14 +290,14 @@ async function upsertFormaciones(conn, estudianteId, item) {
     if (!origenFormacionId) continue;
 
     const [mapping] = await conn.query(
-      'SELECT estudiante_formacion_id FROM formaciones_origen WHERE origen = ? AND origen_formacion_id = ? LIMIT 1',
+      'SELECT candidato_formacion_id FROM candidatos_formaciones_origen WHERE origen = ? AND origen_formacion_id = ? LIMIT 1',
       [ORIGEN, origenFormacionId]
     );
 
     if (mapping.length) {
-      const localId = mapping[0].estudiante_formacion_id;
+      const localId = mapping[0].candidato_formacion_id;
       await conn.query(
-        `UPDATE estudiantes_formaciones SET
+        `UPDATE candidatos_formaciones SET
           matricula_id = COALESCE(?, matricula_id),
           nivel_id = COALESCE(?, nivel_id),
           curso_id = COALESCE(?, curso_id),
@@ -232,15 +322,15 @@ async function upsertFormaciones(conn, estudianteId, item) {
       );
 
       await conn.query(
-        `UPDATE formaciones_origen SET origen_updated_at = ? WHERE origen = ? AND origen_formacion_id = ?`,
+        `UPDATE candidatos_formaciones_origen SET origen_updated_at = ? WHERE origen = ? AND origen_formacion_id = ?`,
         [formacion.updated_at || null, ORIGEN, origenFormacionId]
       );
       continue;
     }
 
     const [insert] = await conn.query(
-      `INSERT INTO estudiantes_formaciones (
-        estudiante_id, matricula_id, nivel_id, curso_id, estado, fecha_inicio, fecha_fin, fecha_aprobacion, activo, updated_at
+      `INSERT INTO candidatos_formaciones (
+        candidato_id, matricula_id, nivel_id, curso_id, estado, fecha_inicio, fecha_fin, fecha_aprobacion, activo, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
       [
         estudianteId,
@@ -257,8 +347,8 @@ async function upsertFormaciones(conn, estudianteId, item) {
     );
 
     await conn.query(
-      `INSERT INTO formaciones_origen (
-        estudiante_formacion_id, origen, origen_formacion_id, origen_estudiante_id, origen_updated_at
+      `INSERT INTO candidatos_formaciones_origen (
+        candidato_formacion_id, origen, origen_formacion_id, origen_candidato_id, origen_updated_at
       ) VALUES (?, ?, ?, ?, ?)`,
       [
         insert.insertId,
@@ -276,133 +366,179 @@ async function upsertOrigenEstudiante(conn, estudianteId, item) {
   if (!origenEstudianteId) return;
 
   await conn.query(
-    `INSERT INTO estudiantes_origen (estudiante_id, origen, origen_estudiante_id, origen_updated_at)
+    `INSERT INTO candidatos_origen (candidato_id, origen, origen_candidato_id, origen_updated_at)
      VALUES (?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
-       estudiante_id = VALUES(estudiante_id),
+       candidato_id = VALUES(candidato_id),
        origen_updated_at = COALESCE(VALUES(origen_updated_at), origen_updated_at)`,
     [estudianteId, ORIGEN, origenEstudianteId, item.updated_at || null]
   );
 }
 
-async function importAcreditados(req, res) {
-  const pageSize = Number(req.body?.page_size || 100);
+async function withSyncLock(task) {
+  const lockConn = await db.getConnection();
+  let lockAcquired = false;
+  try {
+    const [lockRows] = await lockConn.query('SELECT GET_LOCK(?, 0) AS acquired', [SYNC_LOCK_NAME]);
+    lockAcquired = Number(lockRows?.[0]?.acquired || 0) === 1;
+    if (!lockAcquired) {
+      const err = new Error('SYNC_ALREADY_RUNNING');
+      err.code = 'SYNC_ALREADY_RUNNING';
+      throw err;
+    }
+
+    return await task();
+  } finally {
+    if (lockAcquired) {
+      try {
+        await lockConn.query('SELECT RELEASE_LOCK(?)', [SYNC_LOCK_NAME]);
+      } catch (_releaseErr) {
+        // Ignore release failures to avoid masking the original error.
+      }
+    }
+    lockConn.release();
+  }
+}
+
+function normalizeImportParams(rawParams = {}) {
+  const pageSize = Math.min(Math.max(Number(rawParams.page_size || 100), 1), 500);
   const params = {
-    promocion_id: req.body?.promocion_id,
-    curso_id: req.body?.curso_id,
-    fecha_desde: req.body?.fecha_desde,
-    fecha_hasta: req.body?.fecha_hasta,
-    updated_since: req.body?.updated_since,
+    promocion_id: rawParams.promocion_id,
+    curso_id: rawParams.curso_id,
+    fecha_desde: rawParams.fecha_desde,
+    fecha_hasta: rawParams.fecha_hasta,
+    updated_since: rawParams.updated_since,
     page_size: pageSize
   };
 
-  const [logRow] = await db.query(
-    'INSERT INTO integracion_sync_logs (origen, status) VALUES (?, ?) ',
-    [ORIGEN, 'running']
-  );
-  const logId = logRow.insertId;
+  return { pageSize, params };
+}
 
-  let totals = {
-    total: 0,
-    created: 0,
-    updated: 0,
-    skipped: 0,
-    errors: 0
-  };
+async function runAcreditadosImport(rawParams = {}) {
+  return withSyncLock(async () => {
+    const { pageSize, params } = normalizeImportParams(rawParams);
+    const [logRow] = await db.query(
+      'INSERT INTO integracion_sync_logs (origen, status) VALUES (?, ?) ',
+      [ORIGEN, 'running']
+    );
+    const logId = logRow.insertId;
 
-  try {
-    let page = 1;
-    let hasMore = true;
-    while (hasMore) {
-      const { items, nextPage } = await fetchAcreditados({ ...params, page });
-      if (!items.length) break;
+    let totals = {
+      total: 0,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      errors: 0
+    };
 
-      for (const item of items) {
-        totals.total += 1;
-        const documento = item.documento_identidad || null;
-        const email = item.email || item?.contacto?.email || null;
-        if (!documento && !email) {
-          totals.skipped += 1;
-          continue;
+    try {
+      let page = 1;
+      let hasMore = true;
+      while (hasMore) {
+        const { items, nextPage } = await fetchAcreditados({ ...params, page });
+        if (!items.length) break;
+
+        for (const item of items) {
+          totals.total += 1;
+          const documento = item.documento_identidad || null;
+          const email = item.email || item?.contacto?.email || null;
+          if (!documento && !email) {
+            totals.skipped += 1;
+            continue;
+          }
+
+          const conn = await db.getConnection();
+          try {
+            await conn.beginTransaction();
+
+            const { estudianteId, created } = await upsertEstudiante(conn, item);
+            if (created) totals.created += 1; else totals.updated += 1;
+
+            await upsertOrigenEstudiante(conn, estudianteId, item);
+            await upsertContacto(conn, estudianteId, item);
+            await ensureCandidateUserForEstudiante(conn, estudianteId, item);
+
+            await upsertSimpleByPk(conn, 'candidatos_domicilio', estudianteId, item.domicilio, [
+              'pais', 'provincia', 'canton', 'parroquia', 'direccion', 'codigo_postal'
+            ]);
+
+            await upsertSimpleByPk(conn, 'candidatos_salud', estudianteId, item.salud, [
+              'tipo_sangre', 'estatura', 'peso', 'tatuaje'
+            ]);
+
+            await upsertSimpleByPk(conn, 'candidatos_logistica', estudianteId, item.logistica, [
+              'movilizacion', 'tipo_vehiculo', 'licencia', 'disp_viajar', 'disp_turnos', 'disp_fines_semana'
+            ]);
+
+            await upsertSimpleByPk(conn, 'candidatos_educacion_general', estudianteId, item.educacion_general, [
+              'nivel_estudio', 'institucion', 'titulo_obtenido'
+            ]);
+
+            await replaceExperiencias(conn, estudianteId, item.experiencia);
+            await upsertDocumentos(conn, estudianteId, item.documentos);
+            await upsertFormaciones(conn, estudianteId, item);
+
+            await conn.commit();
+          } catch (err) {
+            await conn.rollback();
+            totals.errors += 1;
+          } finally {
+            conn.release();
+          }
         }
 
-        const conn = await db.getConnection();
-        try {
-          await conn.beginTransaction();
-
-          const { estudianteId, created } = await upsertEstudiante(conn, item);
-          if (created) totals.created += 1; else totals.updated += 1;
-
-          await upsertOrigenEstudiante(conn, estudianteId, item);
-          await upsertContacto(conn, estudianteId, item);
-
-          await upsertSimpleByPk(conn, 'estudiantes_domicilio', estudianteId, item.domicilio, [
-            'pais', 'provincia', 'canton', 'parroquia', 'direccion', 'codigo_postal'
-          ]);
-
-          await upsertSimpleByPk(conn, 'estudiantes_salud', estudianteId, item.salud, [
-            'tipo_sangre', 'estatura', 'peso', 'tatuaje'
-          ]);
-
-          await upsertSimpleByPk(conn, 'estudiantes_logistica', estudianteId, item.logistica, [
-            'movilizacion', 'tipo_vehiculo', 'licencia', 'disp_viajar', 'disp_turnos', 'disp_fines_semana'
-          ]);
-
-          await upsertSimpleByPk(conn, 'estudiantes_educacion_general', estudianteId, item.educacion_general, [
-            'nivel_estudio', 'institucion', 'titulo_obtenido'
-          ]);
-
-          await replaceExperiencias(conn, estudianteId, item.experiencia);
-          await upsertDocumentos(conn, estudianteId, item.documentos);
-          await upsertFormaciones(conn, estudianteId, item);
-
-          await conn.commit();
-        } catch (err) {
-          await conn.rollback();
-          totals.errors += 1;
-        } finally {
-          conn.release();
+        if (nextPage) {
+          page = nextPage;
+        } else if (items.length < pageSize) {
+          hasMore = false;
+        } else {
+          page += 1;
         }
       }
 
-      if (nextPage) {
-        page = nextPage;
-      } else if (items.length < pageSize) {
-        hasMore = false;
-      } else {
-        page += 1;
-      }
+      const now = new Date();
+      await db.query(
+        `INSERT INTO integracion_sync_state (origen, last_sync_at, last_success_at)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE last_sync_at = VALUES(last_sync_at), last_success_at = VALUES(last_success_at)`,
+        [ORIGEN, now, now]
+      );
+
+      await db.query(
+        `UPDATE integracion_sync_logs
+         SET finished_at = NOW(), status = ?, total = ?, created_count = ?, updated_count = ?, skipped_count = ?, error_count = ?
+         WHERE id = ?`,
+        ['success', totals.total, totals.created, totals.updated, totals.skipped, totals.errors, logId]
+      );
+
+      return { ok: true, ...totals };
+    } catch (err) {
+      await db.query(
+        `UPDATE integracion_sync_logs
+         SET finished_at = NOW(), status = ?, total = ?, created_count = ?, updated_count = ?, skipped_count = ?, error_count = ?, message = ?
+         WHERE id = ?`,
+        ['failed', totals.total, totals.created, totals.updated, totals.skipped, totals.errors, String(err.message || err), logId]
+      );
+      throw err;
     }
+  });
+}
 
-    const now = new Date();
-    await db.query(
-      `INSERT INTO integracion_sync_state (origen, last_sync_at, last_success_at)
-       VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE last_sync_at = VALUES(last_sync_at), last_success_at = VALUES(last_success_at)`,
-      [ORIGEN, now, now]
-    );
-
-    await db.query(
-      `UPDATE integracion_sync_logs
-       SET finished_at = NOW(), status = ?, total = ?, created_count = ?, updated_count = ?, skipped_count = ?, error_count = ?
-       WHERE id = ?`,
-      ['success', totals.total, totals.created, totals.updated, totals.skipped, totals.errors, logId]
-    );
-
-    return res.json({ ok: true, ...totals });
+async function importAcreditados(req, res) {
+  try {
+    const result = await runAcreditadosImport(req.body || {});
+    return res.json(result);
   } catch (err) {
-    await db.query(
-      `UPDATE integracion_sync_logs
-       SET finished_at = NOW(), status = ?, total = ?, created_count = ?, updated_count = ?, skipped_count = ?, error_count = ?, message = ?
-       WHERE id = ?`,
-      ['failed', totals.total, totals.created, totals.updated, totals.skipped, totals.errors, String(err.message || err), logId]
-    );
+    if (err?.code === 'SYNC_ALREADY_RUNNING') {
+      return res.status(409).json({ error: 'SYNC_ALREADY_RUNNING' });
+    }
     return res.status(500).json({ error: 'SYNC_FAILED', details: String(err.message || err) });
   }
 }
 
 module.exports = {
   importAcreditados,
+  runAcreditadosImport,
   listarConvocatorias: async (_req, res) => {
     try {
       const items = await fetchConvocatorias();

@@ -205,6 +205,14 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/app/admin/candidatos"
+            element={
+              <ProtectedRoute roles={['administrador', 'superadmin']}>
+                <CompanyCandidatos />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

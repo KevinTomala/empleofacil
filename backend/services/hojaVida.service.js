@@ -1,4 +1,4 @@
-const db = require('../db');
+﻿const db = require('../db');
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
@@ -70,7 +70,7 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId) {
       e.activo,
       e.created_at,
       e.updated_at
-    FROM estudiantes e
+    FROM candidatos e
     WHERE e.id = ? AND e.deleted_at IS NULL
     LIMIT 1`,
     [estudianteId]
@@ -95,56 +95,56 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId) {
     db.query(
       `SELECT
         email, telefono_fijo, telefono_celular, contacto_emergencia_nombre, contacto_emergencia_telefono
-      FROM estudiantes_contacto
-      WHERE estudiante_id = ? AND deleted_at IS NULL
+      FROM candidatos_contacto
+      WHERE candidato_id = ? AND deleted_at IS NULL
       LIMIT 1`,
       [estudianteId]
     ),
     db.query(
       `SELECT
         pais, provincia, canton, parroquia, direccion, codigo_postal
-      FROM estudiantes_domicilio
-      WHERE estudiante_id = ? AND deleted_at IS NULL
+      FROM candidatos_domicilio
+      WHERE candidato_id = ? AND deleted_at IS NULL
       LIMIT 1`,
       [estudianteId]
     ),
     db.query(
       `SELECT
         tipo_sangre, estatura, peso, tatuaje
-      FROM estudiantes_salud
-      WHERE estudiante_id = ? AND deleted_at IS NULL
+      FROM candidatos_salud
+      WHERE candidato_id = ? AND deleted_at IS NULL
       LIMIT 1`,
       [estudianteId]
     ),
     db.query(
       `SELECT
         movilizacion, tipo_vehiculo, licencia, disp_viajar, disp_turnos, disp_fines_semana
-      FROM estudiantes_logistica
-      WHERE estudiante_id = ? AND deleted_at IS NULL
+      FROM candidatos_logistica
+      WHERE candidato_id = ? AND deleted_at IS NULL
       LIMIT 1`,
       [estudianteId]
     ),
     db.query(
       `SELECT
         nivel_estudio, institucion, titulo_obtenido
-      FROM estudiantes_educacion_general
-      WHERE estudiante_id = ? AND deleted_at IS NULL
+      FROM candidatos_educacion_general
+      WHERE candidato_id = ? AND deleted_at IS NULL
       LIMIT 1`,
       [estudianteId]
     ),
     db.query(
       `SELECT
         id, empresa_id, cargo, fecha_inicio, fecha_fin, actualmente_trabaja, tipo_contrato, descripcion
-      FROM estudiantes_experiencia
-      WHERE estudiante_id = ? AND deleted_at IS NULL
+      FROM candidatos_experiencia
+      WHERE candidato_id = ? AND deleted_at IS NULL
       ORDER BY COALESCE(fecha_fin, CURDATE()) DESC, fecha_inicio DESC, id DESC`,
       [estudianteId]
     ),
     db.query(
       `SELECT
         id, matricula_id, nivel_id, curso_id, estado, fecha_inicio, fecha_fin, fecha_aprobacion, activo
-      FROM estudiantes_formaciones
-      WHERE estudiante_id = ? AND deleted_at IS NULL
+      FROM candidatos_formaciones
+      WHERE candidato_id = ? AND deleted_at IS NULL
       ORDER BY COALESCE(fecha_aprobacion, fecha_fin, fecha_inicio) DESC, id DESC`,
       [estudianteId]
     ),
@@ -152,8 +152,8 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId) {
       `SELECT
         id, tipo_documento, nombre_archivo, nombre_original, ruta_archivo, tipo_mime, tamanio_kb,
         fecha_emision, fecha_vencimiento, numero_documento, descripcion, estado, observaciones
-      FROM estudiantes_documentos
-      WHERE estudiante_id = ? AND deleted_at IS NULL
+      FROM candidatos_documentos
+      WHERE candidato_id = ? AND deleted_at IS NULL
       ORDER BY id DESC`,
       [estudianteId]
     )
@@ -183,7 +183,7 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId) {
 
   return {
     perfil: {
-      estudiante_id: estudiante.id,
+      candidato_id: estudiante.id,
       usuario_id: estudiante.usuario_id,
       nombres: estudiante.nombres,
       apellidos: estudiante.apellidos,

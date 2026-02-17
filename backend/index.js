@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const db = require('./db');
+const { startAdemySyncJob } = require('./jobs/ademySync.job');
 
 const authRoutes = require('./routes/auth.routes');
 const integracionesRoutes = require('./routes/integraciones.routes');
@@ -38,6 +39,7 @@ db.waitForConnection()
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Backend EmpleoFacil listo en puerto ${PORT}`);
+      startAdemySyncJob();
     });
   })
   .catch((err) => {

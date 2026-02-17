@@ -6,7 +6,8 @@ import { apiRequest } from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
 
 export default function CompanyCandidatos() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
+  const canImportAcreditados = user?.rol === 'administrador' || user?.rol === 'superadmin'
   const [candidatos, setCandidatos] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -55,7 +56,7 @@ export default function CompanyCandidatos() {
     let alive = true
 
     async function loadConvocatorias() {
-      if (!token) return
+      if (!token || !canImportAcreditados) return
       try {
         setCatalogLoading(true)
         const data = await apiRequest('/api/integraciones/ademy/convocatorias')
@@ -75,13 +76,13 @@ export default function CompanyCandidatos() {
     return () => {
       alive = false
     }
-  }, [token])
+  }, [token, canImportAcreditados])
 
   useEffect(() => {
     let alive = true
 
     async function loadCursos() {
-      if (!token || !convocatoriaId) {
+      if (!token || !canImportAcreditados || !convocatoriaId) {
         setCursos([])
         setCursoId('')
         setPromociones([])
@@ -110,13 +111,13 @@ export default function CompanyCandidatos() {
     return () => {
       alive = false
     }
-  }, [token, convocatoriaId])
+  }, [token, canImportAcreditados, convocatoriaId])
 
   useEffect(() => {
     let alive = true
 
     async function loadPromociones() {
-      if (!token || !convocatoriaId || !cursoId) {
+      if (!token || !canImportAcreditados || !convocatoriaId || !cursoId) {
         setPromociones([])
         setPromocionId('')
         return
@@ -143,7 +144,7 @@ export default function CompanyCandidatos() {
     return () => {
       alive = false
     }
-  }, [token, convocatoriaId, cursoId])
+  }, [token, canImportAcreditados, convocatoriaId, cursoId])
 
   const candidatosUi = useMemo(
     () =>
@@ -253,89 +254,95 @@ export default function CompanyCandidatos() {
             </div>
           </div>
 
-          <div className="company-card p-4">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <FileText className="w-4 h-4 text-primary" />
-                Filtros potentes
-              </div>
-              <button
-                className="text-sm text-primary font-semibold"
-                onClick={() => {
-                  setConvocatoriaId('')
-                  setCursoId('')
-                  setPromocionId('')
-                }}
-              >
-                Limpiar filtros
-              </button>
-            </div>
-            <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-2 mt-3">
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-foreground/60">Convocatoria</span>
-                <select
-                  value={convocatoriaId}
-                  onChange={(event) => setConvocatoriaId(event.target.value)}
-                  className="px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground/70"
-                  disabled={catalogLoading}
-                >
-                  <option value="">Seleccionar</option>
-                  {convocatorias.map((convocatoria) => (
-                    <option key={convocatoria.id} value={convocatoria.id}>
-                      {convocatoria.codigo} - {convocatoria.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-foreground/60">Curso</span>
-                <select
-                  value={cursoId}
-                  onChange={(event) => setCursoId(event.target.value)}
-                  className="px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground/70"
-                  disabled={!convocatoriaId || catalogLoading}
-                >
-                  <option value="">Seleccionar</option>
-                  {cursos.map((curso) => (
-                    <option key={curso.curso_id || curso.id} value={curso.curso_id || curso.id}>
-                      {curso.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-foreground/60">Promocion</span>
-                <select
-                  value={promocionId}
-                  onChange={(event) => setPromocionId(event.target.value)}
-                  className="px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground/70"
-                  disabled={!convocatoriaId || !cursoId || catalogLoading}
-                >
-                  <option value="">Seleccionar</option>
-                  {promociones.filter((promo) => promo.estado === 'finalizado').map((promo) => (
-                    <option key={promo.id} value={promo.id}>
-                      {promo.numero_promocion} ({promo.estado})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-end">
+          {canImportAcreditados ? (
+            <div className="company-card p-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <FileText className="w-4 h-4 text-primary" />
+                  Importacion interna de acreditados
+                </div>
                 <button
-                  className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold disabled:opacity-60"
-                  onClick={handleImport}
-                  disabled={importing || !token}
+                  className="text-sm text-primary font-semibold"
+                  onClick={() => {
+                    setConvocatoriaId('')
+                    setCursoId('')
+                    setPromocionId('')
+                  }}
                 >
-                  {importing ? 'Importando...' : 'Importar acreditados'}
+                  Limpiar filtros
                 </button>
               </div>
+              <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-2 mt-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-foreground/60">Convocatoria</span>
+                  <select
+                    value={convocatoriaId}
+                    onChange={(event) => setConvocatoriaId(event.target.value)}
+                    className="px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground/70"
+                    disabled={catalogLoading}
+                  >
+                    <option value="">Seleccionar</option>
+                    {convocatorias.map((convocatoria) => (
+                      <option key={convocatoria.id} value={convocatoria.id}>
+                        {convocatoria.codigo} - {convocatoria.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-foreground/60">Curso</span>
+                  <select
+                    value={cursoId}
+                    onChange={(event) => setCursoId(event.target.value)}
+                    className="px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground/70"
+                    disabled={!convocatoriaId || catalogLoading}
+                  >
+                    <option value="">Seleccionar</option>
+                    {cursos.map((curso) => (
+                      <option key={curso.curso_id || curso.id} value={curso.curso_id || curso.id}>
+                        {curso.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-foreground/60">Promocion</span>
+                  <select
+                    value={promocionId}
+                    onChange={(event) => setPromocionId(event.target.value)}
+                    className="px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground/70"
+                    disabled={!convocatoriaId || !cursoId || catalogLoading}
+                  >
+                    <option value="">Seleccionar</option>
+                    {promociones.filter((promo) => promo.estado === 'finalizado').map((promo) => (
+                      <option key={promo.id} value={promo.id}>
+                        {promo.numero_promocion} ({promo.estado})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold disabled:opacity-60"
+                    onClick={handleImport}
+                    disabled={importing || !token}
+                  >
+                    {importing ? 'Importando...' : 'Importar acreditados'}
+                  </button>
+                </div>
+              </div>
+              {catalogError && (
+                <p className="mt-2 text-xs text-rose-600">{catalogError}</p>
+              )}
+              {importStatus && (
+                <p className="mt-3 text-xs text-foreground/70">{importStatus}</p>
+              )}
             </div>
-            {catalogError && (
-              <p className="mt-2 text-xs text-rose-600">{catalogError}</p>
-            )}
-            {importStatus && (
-              <p className="mt-3 text-xs text-foreground/70">{importStatus}</p>
-            )}
-          </div>
+          ) : (
+            <div className="company-card p-4 text-sm text-foreground/70">
+              Tu cuenta puede consumir candidatos ya sincronizados.
+            </div>
+          )}
         </section>
 
         <section className="grid lg:grid-cols-[1.1fr_0.9fr] gap-6">
