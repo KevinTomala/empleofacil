@@ -45,6 +45,10 @@ docker compose up -d --build
 ## Documentacion
 - Arquitectura: `docs/05_arquitectura.md`
 - Frontend: `docs/01_frontend.md`
+- API: `docs/06_api.md`
+- Base de datos: `docs/07_bd.md`
+- Runbook: `docs/08_despliegue_runbook.md`
+- Pruebas: `docs/09_pruebas.md`
 
 ## Notas
 - No commitear `.env`.

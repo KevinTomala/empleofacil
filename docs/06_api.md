@@ -1,121 +1,345 @@
 # API EmpleoFacil
 
-## Hoja de vida
+## Base URL
+- Local: `http://localhost:3000`
 
-### GET `/api/hoja-vida/:estudianteId`
+## Autenticacion y permisos
+- El backend usa JWT en header `Authorization: Bearer <token>`.
+- Endpoints publicos: `GET /`, `GET /healthz`, `POST /auth/bootstrap`, `POST /auth/login`.
+- Endpoints protegidos usan `authRequired`.
+- Endpoints con rol usan `requireRole`.
 
-Obtiene el formato consolidado de hoja de vida de un estudiante a partir de las tablas:
+Errores comunes:
+- `401 AUTH_REQUIRED`
+- `401 INVALID_TOKEN`
+- `403 FORBIDDEN`
 
-- `estudiantes`
-- `estudiantes_contacto`
-- `estudiantes_domicilio`
-- `estudiantes_salud`
-- `estudiantes_logistica`
-- `estudiantes_educacion_general`
-- `estudiantes_experiencia`
-- `estudiantes_formaciones`
-- `estudiantes_documentos`
+## Health
 
-Roles permitidos:
+### GET `/healthz`
+- Respuesta `200`:
+```json
+{ "status": "OK" }
+```
 
-- `administrador`
-- `superadmin`
-- `empresa`
+### GET `/`
+- Respuesta `200` (texto plano):
+```txt
+EmpleoFacil API
+```
 
-Headers:
+## Auth
 
-- `Authorization: Bearer <token>`
-
-Respuesta `200` (ejemplo):
-
+### POST `/auth/bootstrap`
+- Descripcion: crea usuario inicial `superadmin` si `usuarios` esta vacia.
+- Body:
 ```json
 {
-  "perfil": {
-    "estudiante_id": 10,
-    "usuario_id": null,
+  "email": "admin@empleofacil.com",
+  "password": "secret123",
+  "nombre_completo": "Super Admin"
+}
+```
+- Respuesta `200`:
+```json
+{ "ok": true }
+```
+- Errores:
+  - `400 MISSING_FIELDS`
+  - `409 BOOTSTRAP_ALREADY_DONE`
+
+### POST `/auth/login`
+- Descripcion: login por `email` o por documento de candidato.
+- Body:
+```json
+{
+  "identifier": "admin@empleofacil.com",
+  "password": "secret123"
+}
+```
+- Respuesta `200`:
+```json
+{
+  "token": "jwt",
+  "user": {
+    "id": 1,
+    "email": "admin@empleofacil.com",
+    "rol": "superadmin",
+    "nombre_completo": "Super Admin",
+    "must_change_password": false
+  }
+}
+```
+- Errores:
+  - `400 MISSING_FIELDS`
+  - `401 INVALID_CREDENTIALS`
+  - `403 USER_INACTIVE`
+
+### POST `/auth/change-password`
+- Auth: requerido.
+- Body:
+```json
+{
+  "current_password": "old123456",
+  "new_password": "new123456"
+}
+```
+- Respuesta `200`:
+```json
+{ "ok": true }
+```
+- Errores:
+  - `400 MISSING_FIELDS`
+  - `400 WEAK_PASSWORD`
+  - `400 PASSWORD_REUSE_NOT_ALLOWED`
+  - `401 INVALID_CURRENT_PASSWORD`
+  - `403 USER_INACTIVE`
+  - `404 USER_NOT_FOUND`
+
+## Candidatos
+
+### GET `/api/candidatos`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`, `empresa`.
+- Query params:
+  - `page` (default `1`)
+  - `page_size` (default `20`, max `100`)
+  - `q` (filtro por nombre, apellido, documento o email)
+- Respuesta `200`:
+```json
+{
+  "items": [
+    {
+      "id": 10,
+      "nombres": "Juan",
+      "apellidos": "Perez",
+      "documento_identidad": "1234567890",
+      "nacionalidad": "Ecuatoriana",
+      "fecha_nacimiento": "2000-01-01",
+      "email": "juan@correo.com",
+      "telefono_celular": "0999999999"
+    }
+  ],
+  "page": 1,
+  "page_size": 20
+}
+```
+
+## Perfil de candidato
+
+Base: `/api/perfil`
+
+Respuesta `GET` exitosa:
+```json
+{
+  "datos_basicos": {
+    "id": 10,
+    "usuario_id": 25,
+    "centro_id": null,
+    "interesado_id": null,
+    "referente_id": null,
     "nombres": "Juan",
     "apellidos": "Perez",
-    "nombre_completo": "Juan Perez",
     "documento_identidad": "1234567890",
     "nacionalidad": "Ecuatoriana",
     "fecha_nacimiento": "2000-01-01",
-    "edad": 26,
     "sexo": "M",
     "estado_civil": "soltero",
-    "estado_academico": "matriculado",
-    "activo": true
+    "estado_academico": "inscrito",
+    "activo": 1
   },
   "contacto": {
     "email": "juan@correo.com",
     "telefono_fijo": null,
     "telefono_celular": "0999999999",
-    "contacto_emergencia_nombre": "Maria Perez",
-    "contacto_emergencia_telefono": "0988888888"
+    "contacto_emergencia_nombre": null,
+    "contacto_emergencia_telefono": null
   },
   "domicilio": {
-    "pais": "Ecuador",
-    "provincia": "Pichincha",
-    "canton": "Quito",
-    "parroquia": "Centro",
-    "direccion": "Av. Ejemplo 123",
-    "codigo_postal": "170101"
+    "pais": null,
+    "provincia": null,
+    "canton": null,
+    "parroquia": null,
+    "direccion": null,
+    "codigo_postal": null
   },
   "salud": {
-    "tipo_sangre": "O+",
-    "estatura": "1.75",
-    "peso": "72.00",
-    "tatuaje": "no"
+    "tipo_sangre": null,
+    "estatura": null,
+    "peso": null,
+    "tatuaje": null
   },
   "logistica": {
-    "movilizacion": true,
-    "tipo_vehiculo": "motocicleta",
-    "licencia": "A",
-    "disp_viajar": true,
-    "disp_turnos": true,
-    "disp_fines_semana": false
+    "movilizacion": null,
+    "tipo_vehiculo": null,
+    "licencia": null,
+    "disp_viajar": null,
+    "disp_turnos": null,
+    "disp_fines_semana": null
   },
-  "educacion_general": {
-    "nivel_estudio": "Bachillerato",
-    "institucion": "Unidad Educativa X",
-    "titulo_obtenido": "Bachiller Tecnico"
-  },
-  "experiencia_laboral": [],
-  "formaciones": [],
-  "documentos": [],
-  "metadata": {
-    "created_at": "2026-01-20 08:00:00",
-    "updated_at": "2026-02-01 12:30:00"
+  "educacion": {
+    "nivel_estudio": null,
+    "institucion": null,
+    "titulo_obtenido": null
   }
 }
 ```
 
-Errores:
+Respuesta `PUT` exitosa:
+```json
+{ "ok": true }
+```
 
-- `400 INVALID_ESTUDIANTE_ID`
-- `404 ESTUDIANTE_NOT_FOUND`
-- `500 HOJA_VIDA_FETCH_FAILED`
+Errores esperados:
+- `400 INVALID_PAYLOAD`
+- `400 INVALID_CANDIDATO_ID`
+- `404 CANDIDATO_NOT_FOUND`
+- `403 FORBIDDEN`
+- `500 PROFILE_FETCH_FAILED`
+- `500 PROFILE_UPDATE_FAILED`
+
+### GET `/api/perfil/me`
+- Auth: requerido.
+- Roles: `candidato`.
+
+### PUT `/api/perfil/me/datos-basicos`
+- Auth: requerido.
+- Roles: `candidato`.
+- Body permitido (parcial):
+  - `centro_id`, `interesado_id`, `referente_id`
+  - `nombres`, `apellidos`, `documento_identidad`, `nacionalidad`, `fecha_nacimiento`
+  - `sexo` (`M|F|O`)
+  - `estado_civil` (`soltero|casado|viudo|divorciado|union_libre`)
+  - `estado_academico` (`preinscrito|inscrito|matriculado|rechazado`)
+  - `activo` (`0|1|false|true`)
+
+### PUT `/api/perfil/me/contacto`
+- Auth: requerido.
+- Roles: `candidato`.
+- Body permitido (parcial):
+  - `email`, `telefono_fijo`, `telefono_celular`
+  - `contacto_emergencia_nombre`, `contacto_emergencia_telefono`
+
+### PUT `/api/perfil/me/domicilio`
+- Auth: requerido.
+- Roles: `candidato`.
+- Body permitido (parcial):
+  - `pais`, `provincia`, `canton`, `parroquia`, `direccion`, `codigo_postal`
+
+### PUT `/api/perfil/me/salud`
+- Auth: requerido.
+- Roles: `candidato`.
+- Body permitido (parcial):
+  - `tipo_sangre` (`A+|A-|B+|B-|AB+|AB-|O+|O-`)
+  - `estatura`, `peso`
+  - `tatuaje` (`no|si_visible|si_no_visible`)
+
+### PUT `/api/perfil/me/logistica`
+- Auth: requerido.
+- Roles: `candidato`.
+- Body permitido (parcial):
+  - `movilizacion`, `disp_viajar`, `disp_turnos`, `disp_fines_semana` (`0|1|false|true`)
+  - `tipo_vehiculo` (`automovil|bus|camion|camioneta|furgoneta|motocicleta|trailer|tricimoto`)
+  - `licencia` (`A|A1|B|C1|C|D1|D|E1|E|F|G`)
+
+### PUT `/api/perfil/me/educacion`
+- Auth: requerido.
+- Roles: `candidato`.
+- Body permitido (parcial):
+  - `nivel_estudio` (`Educacion Basica|Bachillerato|Educacion Superior`)
+  - `institucion`, `titulo_obtenido`
+
+### GET `/api/perfil/:candidatoId`
+- Auth: requerido.
+- Roles: `empresa`, `administrador`, `superadmin`.
+
+### PUT `/api/perfil/:candidatoId/datos-basicos`
+### PUT `/api/perfil/:candidatoId/contacto`
+### PUT `/api/perfil/:candidatoId/domicilio`
+### PUT `/api/perfil/:candidatoId/salud`
+### PUT `/api/perfil/:candidatoId/logistica`
+### PUT `/api/perfil/:candidatoId/educacion`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+
+## Hoja de vida
+
+### GET `/api/hoja-vida/:estudianteId`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`, `empresa`.
+- Respuesta `200`: consolidado de perfil, contacto, domicilio, salud, logistica, educacion, experiencia, formaciones, documentos.
+- Errores:
+  - `400 INVALID_ESTUDIANTE_ID`
+  - `404 ESTUDIANTE_NOT_FOUND`
+  - `500 HOJA_VIDA_FETCH_FAILED`
 
 ### GET `/api/hoja-vida/:estudianteId/pdf`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`, `empresa`.
+- Respuesta `200`:
+  - `Content-Type: application/pdf`
+  - `Content-Disposition: inline; filename="hoja_vida_<nombre>.pdf"`
+- Errores:
+  - `400 INVALID_ESTUDIANTE_ID`
+  - `404 ESTUDIANTE_NOT_FOUND`
+  - `500 HOJA_VIDA_PDF_FAILED`
 
-Genera y retorna la hoja de vida en formato PDF (contenido generado en backend service).
+## Integraciones (Ademy)
 
-Roles permitidos:
+### POST `/api/integraciones/ademy/acreditados/import`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Body opcional:
+```json
+{
+  "promocion_id": 123,
+  "curso_id": 45,
+  "fecha_desde": "2026-01-01",
+  "fecha_hasta": "2026-01-31",
+  "updated_since": "2026-02-01T00:00:00.000Z",
+  "page_size": 100
+}
+```
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "total": 120,
+  "created": 10,
+  "updated": 95,
+  "skipped": 10,
+  "errors": 5
+}
+```
+- Errores:
+  - `409 SYNC_ALREADY_RUNNING`
+  - `500 SYNC_FAILED`
 
-- `administrador`
-- `superadmin`
-- `empresa`
+### GET `/api/integraciones/ademy/convocatorias`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Respuesta `200`:
+```json
+{ "items": [] }
+```
+- Error `500 CATALOGO_ERROR`.
 
-Headers:
+### GET `/api/integraciones/ademy/convocatorias/:id/cursos`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Respuesta `200`:
+```json
+{ "items": [] }
+```
+- Error `500 CATALOGO_ERROR`.
 
-- `Authorization: Bearer <token>`
-
-Respuesta `200`:
-
-- `Content-Type: application/pdf`
-- `Content-Disposition: inline; filename="hoja_vida_<nombre>.pdf"`
-
-Errores:
-
-- `400 INVALID_ESTUDIANTE_ID`
-- `404 ESTUDIANTE_NOT_FOUND`
-- `500 HOJA_VIDA_PDF_FAILED`
+### GET `/api/integraciones/ademy/convocatorias/:id/promociones?curso_id=<id>`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Respuesta `200`:
+```json
+{ "items": [] }
+```
+- Errores:
+  - `400 CURSO_ID_REQUIRED`
+  - `500 CATALOGO_ERROR`

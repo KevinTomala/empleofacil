@@ -1,52 +1,68 @@
 # Arquitectura
 
 ## Resumen
-EmpleoFacil es un monorepo full-stack orientado a conectar talento y empresas en Ecuador. La arquitectura separa frontend (React + Vite) y backend (Node.js + Express) orquestados con Docker.
+EmpleoFacil es un monorepo full-stack con frontend React/Vite, backend Node/Express y MySQL. El desarrollo local corre con Docker Compose.
+
+## Estructura del monorepo
+```text
+empleofacil/
+  backend/
+  frontend/
+  docs/
+  docker-compose.yml
+  .env.example
+  init.sql
+```
+
+## Backend (estado actual)
+- Stack: Node.js 20 + Express + MySQL (`mysql2/promise`).
+- Seguridad: JWT (`jsonwebtoken`) + hash de passwords con `bcryptjs`.
+- Documentos: generacion PDF con `puppeteer`.
+- Jobs internos: `node-cron` para sincronizacion automatica con Ademy.
+
+Estructura real en `backend/`:
+- `index.js`: arranque HTTP, CORS, rutas y scheduler.
+- `db.js`: pool MySQL, retries de conexion (`waitForConnection`).
+- `routes/`: `auth`, `candidatos`, `hojaVida`, `integraciones`.
+- `controllers/`: logica HTTP por modulo.
+- `services/`: integracion Ademy y armado/PDF de hoja de vida.
+- `middlewares/`: autenticacion y control de rol.
+- `jobs/ademySync.job.js`: cron de importacion incremental.
+
+## Flujo backend
+1. `index.js` levanta Express y valida conexion a DB antes de escuchar puerto.
+2. La API expone auth, candidatos, hoja de vida e integraciones.
+3. `auth.middleware` valida JWT y `requireRole` bloquea accesos por rol.
+4. Integraciones usa un lock MySQL (`GET_LOCK`) para evitar sync concurrentes.
+5. Si `ADEMY_SYNC_ENABLED=true`, corre cron y opcionalmente un sync al iniciar.
 
 ## Frontend
-- **Stack:** React + Vite + Tailwind CSS v4.
-- **Routing:** `react-router-dom` en `src/App.jsx`.
-- **Estructura:**
-  - `src/components/` componentes reutilizables.
-  - `src/modules/` vistas por módulo.
-  - `src/services/` llamadas a API.
-  - `src/utils/` helpers.
-  - `src/styles/` estilos globales.
-- **Estilos globales:**
-  - `src/index.css` y `src/styles/globals.css` (ambos importados en `src/main.jsx`).
-  - Contenedor base `.page-container` para alineación y ancho consistente.
-  - Header fijo compensado con `padding-top` en `body` usando `--header-height`.
-- **Notificaciones toast:**
-  - `react-hot-toast` con provider global (`Toaster`) en `src/App.jsx`.
-  - Componente visual: `src/components/Toast.jsx`.
-  - Helper de invocacion unificada: `src/utils/showToast.jsx`.
-  - Estilos dedicados: `src/styles/notifications.css`.
-- **Modulo auth:**
-  - `src/modules/auth/Login.jsx` (login).
-  - `src/modules/auth/Register.jsx` (registro en 2 pasos: tipo de cuenta + credenciales).
-  - `src/modules/auth/RequestPassword.jsx` (recuperacion por correo).
-  - Estilos locales en `src/modules/auth/auth.css` para evitar afectar otras vistas.
-- **Modulos post-login (mockup):**
-  - `src/modules/candidate/CandidateVacantes.jsx` (candidato: vacantes).
-  - `src/modules/candidate/CandidatePostulaciones.jsx` (candidato: postulaciones).
-  - `src/modules/candidate/CandidateProfile.jsx` (candidato: perfil).
-  - `src/modules/company/CompanyHome.jsx` (inicio empresa).
-  - `src/modules/admin/AdminHome.jsx` (root: consola de admin).
-  - `src/modules/admin/AdminRolesPermisos.jsx` (root: roles y permisos).
-  - `src/modules/admin/AdminCuentas.jsx` (root: empresas y candidatos).
-  - `src/modules/admin/AdminAuditoria.jsx` (root: auditoria y logs).
-- **Variables de entorno:** `VITE_API_URL`, `VITE_WS_URL` (opcional).
-
-## Backend
-- **Stack:** Node.js + Express + MySQL (`mysql2`).
-- **Estructura:** `routes/`, `controllers/`, `services/`, `models/`, `middlewares/`, `utils/`.
-- **Auth y utilidades:** JWT, `bcryptjs`, `multer`.
+- Stack: React + Vite + Tailwind CSS v4.
+- Routing: `react-router-dom` en `frontend/src/App.jsx`.
+- Estructura:
+  - `frontend/src/components/`: componentes reutilizables.
+  - `frontend/src/modules/`: vistas por modulo (`auth`, `candidate`, `company`, `admin`, `Landing`).
+  - `frontend/src/services/`: llamadas a API.
+  - `frontend/src/utils/`: helpers.
+  - `frontend/src/styles/`: estilos globales/tematicos.
+- Estilos globales:
+  - `frontend/src/index.css` y `frontend/src/styles/globals.css`.
+  - Contenedor base `.page-container`.
+  - Header fijo compensado con `--header-height`.
+- Notificaciones:
+  - `react-hot-toast` con provider global.
+  - Helper unificado en `frontend/src/utils/showToast.jsx`.
+  - Estilos dedicados en `frontend/src/styles/notifications.css`.
+- Variables principales: `VITE_API_URL`, `VITE_WS_URL` (opcional).
+- El frontend consume la API REST del backend.
 
 ## Infraestructura
-- **Docker Compose** para `mysql`, `backend`, `frontend`, `phpmyadmin` (opcional).
-- **Puertos por defecto:** Frontend `3001`, Backend `3000`, MySQL `3306`.
+- `docker-compose.yml` (dev): `mysql`, `backend`, `frontend`.
+- `docker compose --profile tools ...`: agrega `phpmyadmin` si esta definido en tu compose.
+- Puertos por defecto: backend `3000`, frontend `3001`, mysql `3306`.
 
-## Flujo general
-1. El frontend consume el backend vía `VITE_API_URL`.
-2. El backend consulta MySQL y expone API REST.
-3. Docker Compose orquesta los servicios en desarrollo.
+## Variables importantes
+- DB: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`.
+- Auth: `JWT_SECRET`, `JWT_EXPIRES_IN`.
+- Ademy: `ADEMY_API_URL`, `ADEMY_JWT_SECRET`, `ADEMY_JWT_ISS`, `ADEMY_JWT_AUD`, `ADEMY_JWT_SCOPE`.
+- Scheduler: `ADEMY_SYNC_ENABLED`, `ADEMY_SYNC_CRON`, `ADEMY_SYNC_TZ`, `ADEMY_SYNC_RUN_ON_START`, `ADEMY_SYNC_PAGE_SIZE`.
