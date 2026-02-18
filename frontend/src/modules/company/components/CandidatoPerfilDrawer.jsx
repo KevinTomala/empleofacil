@@ -6,6 +6,29 @@ function renderValue(value) {
 }
 
 function Section({ title, data }) {
+  if (Array.isArray(data)) {
+    return (
+      <section className="border border-border rounded-xl p-3 bg-white">
+        <h3 className="text-sm font-semibold mb-2">{title}</h3>
+        {!data.length && <p className="text-xs text-foreground/60">Sin registros</p>}
+        {data.length > 0 && (
+          <div className="space-y-2">
+            {data.map((item) => (
+              <div key={item.id || JSON.stringify(item)} className="border border-border/70 rounded-lg px-2 py-1.5">
+                {Object.entries(item).map(([key, value]) => (
+                  <p key={key} className="text-xs text-foreground/80">
+                    <span className="text-foreground/50">{key}: </span>
+                    {renderValue(value)}
+                  </p>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    )
+  }
+
   const entries = Object.entries(data || {})
   return (
     <section className="border border-border rounded-xl p-3 bg-white">

@@ -1,17 +1,65 @@
-'use client';
+'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Menu, X, Briefcase } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { getMyPerfil } from '../services/perfilCandidato.api'
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState('')
+  const [photoError, setPhotoError] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const role = user?.rol
+
+  useEffect(() => {
+    let active = true
+
+    async function loadPhoto() {
+      if (role !== 'candidato') {
+        if (active) {
+          setProfilePhotoUrl('')
+          setPhotoError(false)
+        }
+        return
+      }
+
+      try {
+        const perfil = await getMyPerfil()
+        if (!active) return
+        const documentos = Array.isArray(perfil?.documentos) ? perfil.documentos : []
+        const foto = documentos.find((doc) => doc?.tipo_documento === 'foto' && doc?.ruta_archivo)
+        if (!foto?.ruta_archivo) {
+          setProfilePhotoUrl('')
+          setPhotoError(false)
+          return
+        }
+
+        const rawPath = String(foto.ruta_archivo)
+        if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
+          setProfilePhotoUrl(rawPath)
+        } else {
+          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+          setProfilePhotoUrl(rawPath.startsWith('/') ? `${apiBase}${rawPath}` : `${apiBase}/${rawPath}`)
+        }
+        setPhotoError(false)
+      } catch (_error) {
+        if (!active) return
+        setProfilePhotoUrl('')
+        setPhotoError(false)
+      }
+    }
+
+    loadPhoto()
+
+    return () => {
+      active = false
+    }
+  }, [role, user?.id])
 
   const homeLink = useMemo(() => {
     if (role === 'superadmin' || role === 'administrador') return '/app/admin'
@@ -73,6 +121,8 @@ export default function Header() {
         .toUpperCase()
     : 'US'
 
+  const showPhoto = Boolean(profilePhotoUrl) && !photoError
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
       <div className="page-container">
@@ -122,9 +172,18 @@ export default function Header() {
                     aria-haspopup="menu"
                     aria-expanded={isProfileOpen}
                   >
-                    <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">
-                      {initials}
-                    </span>
+                    {showPhoto ? (
+                      <img
+                        src={profilePhotoUrl}
+                        alt={`Foto de ${user?.nombre_completo || 'Usuario'}`}
+                        className="w-8 h-8 rounded-full object-cover border border-border"
+                        onError={() => setPhotoError(true)}
+                      />
+                    ) : (
+                      <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">
+                        {initials}
+                      </span>
+                    )}
                     <span className="text-sm font-medium text-foreground">
                       {user?.nombre_completo || 'Usuario'}
                     </span>
@@ -201,9 +260,18 @@ export default function Header() {
                 {user ? (
                   <>
                     <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-muted/60">
-                      <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">
-                        {initials}
-                      </span>
+                      {showPhoto ? (
+                        <img
+                          src={profilePhotoUrl}
+                          alt={`Foto de ${user?.nombre_completo || 'Usuario'}`}
+                          className="w-8 h-8 rounded-full object-cover border border-border"
+                          onError={() => setPhotoError(true)}
+                        />
+                      ) : (
+                        <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">
+                          {initials}
+                        </span>
+                      )}
                       <span className="text-sm font-medium text-foreground">
                         {user?.nombre_completo || 'Usuario'}
                       </span>

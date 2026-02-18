@@ -10,6 +10,7 @@ export default function CandidateProfile() {
   const [perfil, setPerfil] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [photoError, setPhotoError] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -42,6 +43,7 @@ export default function CandidateProfile() {
     recommendedSections,
     phase2Sections,
     progressFase1,
+    progressGeneral,
     completedRequired,
     completedRecommended,
     pendingRequired,
@@ -59,6 +61,37 @@ export default function CandidateProfile() {
       : pendingRecommended > 0
       ? 'Agrega secciones recomendadas para aumentar tu nivel de coincidencia.'
       : 'Tu perfil basico ya esta optimizado. Puedes preparar el perfil avanzado.'
+
+  const fotoPerfilUrl = useMemo(() => {
+    const documentos = Array.isArray(perfil?.documentos) ? perfil.documentos : []
+    const foto = documentos.find((doc) => doc?.tipo_documento === 'foto' && doc?.ruta_archivo)
+    if (!foto?.ruta_archivo) return ''
+    const rawPath = String(foto.ruta_archivo)
+    if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) return rawPath
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+    if (rawPath.startsWith('/')) return `${apiBase}${rawPath}`
+    return `${apiBase}/${rawPath}`
+  }, [perfil])
+
+  useEffect(() => {
+    setPhotoError(false)
+  }, [fotoPerfilUrl])
+
+  const candidatoNombre = useMemo(() => {
+    const nombres = perfil?.datos_basicos?.nombres || ''
+    const apellidos = perfil?.datos_basicos?.apellidos || ''
+    const fullName = `${nombres} ${apellidos}`.trim()
+    return fullName || 'Candidato Activo'
+  }, [perfil])
+
+  const candidatoIniciales = useMemo(() => {
+    const parts = candidatoNombre
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+    if (!parts.length) return 'CA'
+    return parts.map((part) => part[0].toUpperCase()).join('')
+  }, [candidatoNombre])
 
   const statusStyles = {
     complete: {
@@ -132,17 +165,26 @@ export default function CandidateProfile() {
         <section className="flex flex-col lg:flex-row gap-6 items-start">
           <div className="bg-white border border-border rounded-2xl p-6 w-full lg:w-1/3 space-y-5">
             <div className="flex items-center gap-3">
-              <span className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-bold">
-                CA
-              </span>
+              {fotoPerfilUrl && !photoError ? (
+                <img
+                  src={fotoPerfilUrl}
+                  alt={`Foto de ${candidatoNombre}`}
+                  className="w-12 h-12 rounded-full object-cover border border-border"
+                  onError={() => setPhotoError(true)}
+                />
+              ) : (
+                <span className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-bold">
+                  {candidatoIniciales}
+                </span>
+              )}
               <div>
-                <h1 className="font-heading text-xl font-semibold">Candidato Activo</h1>
-                <p className="text-sm text-foreground/70">Perfil basico {progressFase1}% completo</p>
+                <h1 className="font-heading text-xl font-semibold">{candidatoNombre}</h1>
+                <p className="text-sm text-foreground/70">Perfil total {progressGeneral}% completo</p>
               </div>
             </div>
             <div className="space-y-2">
               <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full bg-primary" style={{ width: `${progressFase1}%` }} />
+                <div className="h-full bg-primary" style={{ width: `${progressGeneral}%` }} />
               </div>
               <p className="text-xs text-foreground/60">
                 Tu informacion de perfil es editable y se usa para filtros de empresas.
@@ -167,7 +209,7 @@ export default function CandidateProfile() {
                 <p>Visibilidad del perfil: {visibilityLabel}</p>
                 <p>Coincidencia promedio estimada: {matchScore}%</p>
                 <p>Verificaciones pendientes: {pendingRequired}</p>
-                <p>Perfil avanzado (fase 2): {phase2Sections.length} secciones por activar</p>
+                <p>Perfil fase 1: {progressFase1}% | Perfil total: {progressGeneral}%</p>
               </div>
               <p className="text-xs text-foreground/70 pt-1">{recommendationText}</p>
             </div>

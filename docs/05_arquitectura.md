@@ -64,7 +64,7 @@ Estructura real en `backend/`:
   - Sidebar contextual sticky en desktop (`ProfileSidebarStatus`) y debajo del formulario en mobile.
 - Las secciones y estados del perfil se centralizan en `frontend/src/modules/candidate/profileSections.js`.
   - Fase 1: `datos-basicos`, `datos-personales`, `preferencias`, `formacion`.
-  - Fase 2 visual: `idiomas`, `experiencia`, `documentos` (sin persistencia de backend de perfil en esta iteracion).
+  - Fase 2: `idiomas`, `experiencia`, `documentos` con persistencia en backend `/api/perfil/*`.
 - Micro-UX implementada:
   - Sidebar compacto (evita repetir mensajes cuando Fase 1 esta completa).
   - Resaltado de seccion actual en checklist.

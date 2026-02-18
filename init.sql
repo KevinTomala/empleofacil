@@ -152,6 +152,18 @@ CREATE TABLE candidatos_educacion_general (
   CONSTRAINT fk_candidatos_educacion_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE candidatos_idiomas (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  candidato_id BIGINT NOT NULL,
+  idioma VARCHAR(100) NOT NULL,
+  nivel ENUM('Basico','Intermedio','Avanzado','Nativo') NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME NULL,
+  CONSTRAINT fk_candidatos_idiomas_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
+  INDEX idx_candidato_idiomas_candidato_id (candidato_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE candidatos_experiencia (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   candidato_id BIGINT NOT NULL,

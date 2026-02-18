@@ -60,7 +60,7 @@ export const PROFILE_SECTION_DEFS = [
   {
     id: 'idiomas',
     title: 'Idiomas',
-    summary: 'Pendiente de integracion (fase 2)',
+    summary: 'Idiomas y nivel de dominio',
     route: '/perfil/idiomas',
     level: 'fase 2',
     phase: 'fase2',
@@ -69,7 +69,7 @@ export const PROFILE_SECTION_DEFS = [
   {
     id: 'experiencia',
     title: 'Experiencia',
-    summary: 'Pendiente de integracion (fase 2)',
+    summary: 'Historial laboral y trayectoria',
     route: '/perfil/experiencia',
     level: 'fase 2',
     phase: 'fase2',
@@ -78,7 +78,7 @@ export const PROFILE_SECTION_DEFS = [
   {
     id: 'documentos',
     title: 'Documentos',
-    summary: 'Pendiente de integracion (fase 2)',
+    summary: 'Archivos de soporte del perfil',
     route: '/perfil/documentos',
     level: 'fase 2',
     phase: 'fase2',
@@ -92,6 +92,9 @@ function getSectionStatus(id, perfil) {
   const domicilio = perfil?.domicilio || {}
   const logistica = perfil?.logistica || {}
   const educacion = perfil?.educacion || {}
+  const idiomas = Array.isArray(perfil?.idiomas) ? perfil.idiomas : []
+  const experiencia = Array.isArray(perfil?.experiencia) ? perfil.experiencia : []
+  const documentos = Array.isArray(perfil?.documentos) ? perfil.documentos : []
 
   if (id === 'datos-basicos') {
     const complete =
@@ -124,7 +127,19 @@ function getSectionStatus(id, perfil) {
     return sectionStatus(complete)
   }
 
-  return 'pending_phase2'
+  if (id === 'idiomas') {
+    return sectionStatus(idiomas.length > 0)
+  }
+
+  if (id === 'experiencia') {
+    return sectionStatus(experiencia.length > 0)
+  }
+
+  if (id === 'documentos') {
+    return sectionStatus(documentos.length > 0)
+  }
+
+  return 'pending'
 }
 
 export function buildProfileSections(perfil) {
@@ -152,27 +167,33 @@ export function getNextPendingRoute(sections, currentRoute) {
 
 export function getProfileProgressMetrics(sections) {
   const fase1Sections = sections.filter((section) => section.phase === 'fase1')
+  const allSections = sections.filter((section) => section.status !== 'pending_phase2')
   const requiredSections = fase1Sections.filter((section) => section.level === 'obligatorio')
   const recommendedSections = fase1Sections.filter((section) => section.level === 'recomendado')
   const phase2Sections = sections.filter((section) => section.phase === 'fase2')
 
   const completedFase1 = fase1Sections.filter((section) => section.status === 'complete').length
+  const completedAll = allSections.filter((section) => section.status === 'complete').length
   const completedRequired = requiredSections.filter((section) => section.status === 'complete').length
   const completedRecommended = recommendedSections.filter((section) => section.status === 'complete').length
 
   const progressFase1 = fase1Sections.length ? Math.round((completedFase1 / fase1Sections.length) * 100) : 0
+  const progressGeneral = allSections.length ? Math.round((completedAll / allSections.length) * 100) : 0
 
   return {
     fase1Sections,
+    allSections,
     requiredSections,
     recommendedSections,
     phase2Sections,
     completedFase1,
+    completedAll,
     completedRequired,
     completedRecommended,
     pendingRequired: requiredSections.length - completedRequired,
     pendingRecommended: recommendedSections.length - completedRecommended,
-    progressFase1
+    progressFase1,
+    progressGeneral
   }
 }
 

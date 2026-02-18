@@ -25,6 +25,18 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `POST /api/integraciones/ademy/acreditados/import` con token admin debe devolver resumen `{ ok, total, created, updated, skipped, errors }`.
 - Lanzar dos imports simultaneos debe provocar `409 SYNC_ALREADY_RUNNING` en uno de ellos.
 
+### 6) Perfil candidato Fase 2 (backend)
+- `GET /api/perfil/me/idiomas` responde `200` con `{ items: [] }`.
+- `POST /api/perfil/me/idiomas` crea idioma y devuelve `201`.
+- `PUT/DELETE /api/perfil/me/idiomas/:idiomaId` validan ownership y responden `404` si no existe.
+- `GET /api/perfil/me/experiencia` responde `200` con `{ items: [] }`.
+- `POST /api/perfil/me/experiencia` crea experiencia y devuelve `201`.
+- `PUT/DELETE /api/perfil/me/experiencia/:experienciaId` validan ownership y responden `404` si no existe.
+- `POST /api/perfil/me/documentos` (multipart) crea metadata + archivo.
+- `POST /api/perfil/me/documentos` sin archivo devuelve `400 FILE_REQUIRED`.
+- `POST /api/perfil/me/documentos` con mime invalido devuelve `400 INVALID_FILE_TYPE`.
+- `POST /api/perfil/me/documentos` con archivo grande devuelve `400 FILE_TOO_LARGE`.
+
 ## Checklist de regresion rapida
 - Login funciona por email.
 - Login funciona por documento de candidato.
@@ -57,6 +69,13 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `Guardar` mantiene comportamiento de persistencia actual.
 - `Guardar y continuar` mantiene navegacion esperada entre tabs.
 - Ejecutar build frontend sin errores.
+
+### 6) Perfil candidato Fase 2 (frontend)
+- `ProfileIdiomas` permite crear, editar y eliminar items.
+- `ProfileExperiencia` permite crear, editar y eliminar items.
+- `ProfileDocumentos` permite subir archivo y actualizar metadatos.
+- El dashboard de perfil actualiza progreso total al completar secciones de Fase 2.
+- El drawer de empresa muestra `idiomas`, `experiencia` y `documentos` del candidato.
 
 ## Recomendacion de automatizacion
 1. Backend: incorporar `jest` + `supertest` para rutas criticas (`auth`, `candidatos`, `hoja-vida`, `integraciones`).

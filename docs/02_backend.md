@@ -51,6 +51,13 @@ Rutas registradas actualmente:
 
 ### Perfil candidato
 - Lectura/escritura por secciones (`datos_basicos`, `contacto`, `domicilio`, `salud`, `logistica`, `educacion`).
+- Fase 2 activa en el mismo modulo:
+  - `idiomas` (CRUD)
+  - `experiencia` (CRUD)
+  - `documentos` (CRUD + upload multipart con `multer`)
+- Archivos de documentos:
+  - destino local: `backend/uploads/candidatos/`
+  - acceso publico interno: `/uploads/*` (servido por Express)
 - `GET/PUT /api/perfil/me/*` para rol `candidato`.
 - `GET /api/perfil/:candidatoId` para `empresa|administrador|superadmin`.
 - `PUT /api/perfil/:candidatoId/*` para `administrador|superadmin`.
@@ -84,6 +91,7 @@ Rutas registradas actualmente:
 - Usar transacciones en operaciones multi-tabla.
 - Respetar `deleted_at` cuando aplique.
 - Para tablas 1:1, usar upsert con PK `candidato_id`.
+- Para tablas 1:N de perfil (`idiomas`, `experiencia`, `documentos`), usar CRUD por item con soft delete.
 
 ## Jobs y operacion
 - Job actual: `jobs/ademySync.job.js`.

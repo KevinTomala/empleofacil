@@ -3,10 +3,41 @@ const {
   existsCandidato,
   getPerfilByCandidatoId,
   updateDatosBasicos,
-  upsertByCandidatoIdPk
+  upsertByCandidatoIdPk,
+  listIdiomas,
+  createIdioma,
+  updateIdioma,
+  deleteIdioma,
+  listExperiencias,
+  createExperiencia,
+  updateExperiencia,
+  deleteExperiencia,
+  listDocumentos,
+  createDocumento,
+  updateDocumento,
+  deleteDocumento
 } = require('../services/perfilCandidato.service');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const IDIOMA_NIVELES = ['Basico', 'Intermedio', 'Avanzado', 'Nativo'];
+const CONTRATO_TIPOS = ['temporal', 'indefinido', 'practicante', 'otro'];
+const DOCUMENTO_TIPOS = [
+  'documento_identidad',
+  'carnet_tipo_sangre',
+  'libreta_militar',
+  'certificado_antecedentes',
+  'certificado_consejo_judicatura',
+  'examen_toxicologico',
+  'examen_psicologico',
+  'registro_biometrico',
+  'licencia_conducir',
+  'certificado_estudios',
+  'foto',
+  'carta_compromiso',
+  'otro'
+];
+const DOCUMENTO_ESTADOS = ['pendiente', 'aprobado', 'rechazado', 'vencido'];
 
 function isPlainObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
@@ -212,16 +243,140 @@ function validateAndNormalize(section, payload) {
   return null;
 }
 
-function parseCandidatoId(value) {
-  const candidateId = Number(value);
-  if (!Number.isInteger(candidateId) || candidateId <= 0) return null;
-  return candidateId;
+function validateIdiomaPayload(payload, { partial = false } = {}) {
+  const allowed = ['idioma', 'nivel'];
+  if (!validatePayloadShape(payload, allowed)) return null;
+
+  const normalized = {};
+  for (const [key, raw] of Object.entries(payload)) {
+    const value = toNullIfEmptyString(raw);
+    if (key === 'idioma') {
+      if (typeof value !== 'string' || !value.trim()) return null;
+      normalized.idioma = value.trim();
+    }
+    if (key === 'nivel') {
+      if (!isEnum(value, IDIOMA_NIVELES)) return null;
+      normalized.nivel = value;
+    }
+  }
+
+  if (!partial) {
+    if (!normalized.idioma || !normalized.nivel) return null;
+  }
+
+  return normalized;
+}
+
+function validateExperienciaPayload(payload, { partial = false } = {}) {
+  const allowed = ['empresa_id', 'cargo', 'fecha_inicio', 'fecha_fin', 'actualmente_trabaja', 'tipo_contrato', 'descripcion'];
+  if (!validatePayloadShape(payload, allowed)) return null;
+
+  const normalized = {};
+  for (const [key, raw] of Object.entries(payload)) {
+    const value = toNullIfEmptyString(raw);
+
+    if (key === 'empresa_id') {
+      if (!(value === null || Number.isInteger(value))) return null;
+      normalized.empresa_id = value;
+    } else if (key === 'cargo') {
+      if (!isNullableString(value)) return null;
+      normalized.cargo = normalizeString(value);
+    } else if (key === 'fecha_inicio' || key === 'fecha_fin') {
+      if (!isNullableDate(value)) return null;
+      normalized[key] = value;
+    } else if (key === 'actualmente_trabaja') {
+      if (!isTinyIntLike(value)) return null;
+      normalized.actualmente_trabaja = normalizeTinyInt(value);
+    } else if (key === 'tipo_contrato') {
+      if (!isEnum(value, CONTRATO_TIPOS)) return null;
+      normalized.tipo_contrato = value;
+    } else if (key === 'descripcion') {
+      if (!isNullableString(value)) return null;
+      normalized.descripcion = normalizeString(value);
+    }
+  }
+
+  if (!partial) {
+    if (!normalized.cargo) return null;
+  }
+
+  return normalized;
+}
+
+function validateDocumentoMetaPayload(payload, { allowEstado = false } = {}) {
+  const allowed = ['tipo_documento', 'fecha_emision', 'fecha_vencimiento', 'numero_documento', 'descripcion', 'observaciones'];
+  if (allowEstado) allowed.push('estado');
+  if (!validatePayloadShape(payload, allowed)) return null;
+
+  const normalized = {};
+  for (const [key, raw] of Object.entries(payload)) {
+    const value = toNullIfEmptyString(raw);
+    if (key === 'tipo_documento') {
+      if (!isEnum(value, DOCUMENTO_TIPOS)) return null;
+      normalized.tipo_documento = value;
+    } else if (key === 'estado') {
+      if (!isEnum(value, DOCUMENTO_ESTADOS)) return null;
+      normalized.estado = value;
+    } else if (key === 'fecha_emision' || key === 'fecha_vencimiento') {
+      if (!isNullableDate(value)) return null;
+      normalized[key] = value;
+    } else {
+      if (!isNullableString(value)) return null;
+      normalized[key] = normalizeString(value);
+    }
+  }
+
+  return normalized;
+}
+
+function parsePositiveInt(value) {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  return n;
+}
+
+function resolveErrorCodeByAction(action) {
+  return action === 'fetch' ? 'PROFILE_FETCH_FAILED' : 'PROFILE_UPDATE_FAILED';
 }
 
 async function resolveMyCandidatoId(req) {
   const userId = req.user?.id;
   if (!userId) return null;
   return findCandidatoIdByUserId(userId);
+}
+
+async function withResolvedCandidate(req, res, mode, action, callback) {
+  try {
+    let candidatoId;
+    if (mode === 'me') {
+      candidatoId = await resolveMyCandidatoId(req);
+      if (!candidatoId) {
+        return res.status(404).json({ error: 'CANDIDATO_NOT_FOUND' });
+      }
+    } else {
+      candidatoId = parsePositiveInt(req.params.candidatoId);
+      if (!candidatoId) {
+        return res.status(400).json({ error: 'INVALID_CANDIDATO_ID' });
+      }
+    }
+
+    req.candidatoId = candidatoId;
+    return await callback(candidatoId);
+  } catch (error) {
+    return res.status(500).json({
+      error: resolveErrorCodeByAction(action),
+      details: String(error.message || error)
+    });
+  }
+}
+
+async function ensureCandidateExistsOr404(res, candidatoId) {
+  const exists = await existsCandidato(candidatoId);
+  if (!exists) {
+    res.status(404).json({ error: 'CANDIDATO_NOT_FOUND' });
+    return false;
+  }
+  return true;
 }
 
 async function getPerfil(req, res) {
@@ -238,9 +393,7 @@ async function updateSection(req, res, section) {
     return res.status(400).json({ error: 'INVALID_PAYLOAD' });
   }
 
-  if (!(await existsCandidato(req.candidatoId))) {
-    return res.status(404).json({ error: 'CANDIDATO_NOT_FOUND' });
-  }
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
 
   if (section === 'datos_basicos') {
     await updateDatosBasicos(req.candidatoId, patch);
@@ -259,67 +412,177 @@ async function updateSection(req, res, section) {
   return res.json({ ok: true });
 }
 
-async function withMyCandidate(req, res, action) {
-  try {
-    const candidatoId = await resolveMyCandidatoId(req);
-    if (!candidatoId) {
-      return res.status(404).json({ error: 'CANDIDATO_NOT_FOUND' });
-    }
-    req.candidatoId = candidatoId;
-    return await action();
-  } catch (error) {
-    return res.status(500).json({
-      error: action.name === 'runGet' ? 'PROFILE_FETCH_FAILED' : 'PROFILE_UPDATE_FAILED',
-      details: String(error.message || error)
-    });
-  }
+async function listIdiomasHandler(req, res) {
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const items = await listIdiomas(req.candidatoId);
+  return res.json({ items });
 }
 
-async function withParamCandidate(req, res, action) {
-  try {
-    const candidatoId = parseCandidatoId(req.params.candidatoId);
-    if (!candidatoId) {
-      return res.status(400).json({ error: 'INVALID_CANDIDATO_ID' });
-    }
-    req.candidatoId = candidatoId;
-    return await action();
-  } catch (error) {
-    return res.status(500).json({
-      error: action.name === 'runGet' ? 'PROFILE_FETCH_FAILED' : 'PROFILE_UPDATE_FAILED',
-      details: String(error.message || error)
-    });
+async function createIdiomaHandler(req, res) {
+  const payload = validateIdiomaPayload(req.body || {}, { partial: false });
+  if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const created = await createIdioma(req.candidatoId, payload);
+  return res.status(201).json({ ok: true, id: created.id });
+}
+
+async function updateIdiomaHandler(req, res) {
+  const idiomaId = parsePositiveInt(req.params.idiomaId);
+  if (!idiomaId) return res.status(400).json({ error: 'INVALID_IDIOMA_ID' });
+
+  const payload = validateIdiomaPayload(req.body || {}, { partial: true });
+  if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const affected = await updateIdioma(req.candidatoId, idiomaId, payload);
+  if (!affected) return res.status(404).json({ error: 'IDIOMA_NOT_FOUND' });
+  return res.json({ ok: true });
+}
+
+async function deleteIdiomaHandler(req, res) {
+  const idiomaId = parsePositiveInt(req.params.idiomaId);
+  if (!idiomaId) return res.status(400).json({ error: 'INVALID_IDIOMA_ID' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const affected = await deleteIdioma(req.candidatoId, idiomaId);
+  if (!affected) return res.status(404).json({ error: 'IDIOMA_NOT_FOUND' });
+  return res.json({ ok: true });
+}
+
+async function listExperienciaHandler(req, res) {
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const items = await listExperiencias(req.candidatoId);
+  return res.json({ items });
+}
+
+async function createExperienciaHandler(req, res) {
+  const payload = validateExperienciaPayload(req.body || {}, { partial: false });
+  if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const created = await createExperiencia(req.candidatoId, payload);
+  return res.status(201).json({ ok: true, id: created.id });
+}
+
+async function updateExperienciaHandler(req, res) {
+  const experienciaId = parsePositiveInt(req.params.experienciaId);
+  if (!experienciaId) return res.status(400).json({ error: 'INVALID_EXPERIENCIA_ID' });
+
+  const payload = validateExperienciaPayload(req.body || {}, { partial: true });
+  if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const affected = await updateExperiencia(req.candidatoId, experienciaId, payload);
+  if (!affected) return res.status(404).json({ error: 'EXPERIENCIA_NOT_FOUND' });
+  return res.json({ ok: true });
+}
+
+async function deleteExperienciaHandler(req, res) {
+  const experienciaId = parsePositiveInt(req.params.experienciaId);
+  if (!experienciaId) return res.status(400).json({ error: 'INVALID_EXPERIENCIA_ID' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const affected = await deleteExperiencia(req.candidatoId, experienciaId);
+  if (!affected) return res.status(404).json({ error: 'EXPERIENCIA_NOT_FOUND' });
+  return res.json({ ok: true });
+}
+
+async function listDocumentosHandler(req, res) {
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const items = await listDocumentos(req.candidatoId);
+  return res.json({ items });
+}
+
+async function createDocumentoHandler(req, res) {
+  const tipoDocumento = req.body?.tipo_documento;
+  if (!DOCUMENTO_TIPOS.includes(tipoDocumento)) {
+    return res.status(400).json({ error: 'INVALID_TIPO_DOCUMENTO' });
   }
+  if (req.body?.fecha_emision && !DATE_RE.test(String(req.body.fecha_emision))) {
+    return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+  }
+  if (req.body?.fecha_vencimiento && !DATE_RE.test(String(req.body.fecha_vencimiento))) {
+    return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'FILE_REQUIRED' });
+  }
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+
+  const payload = {
+    tipo_documento: tipoDocumento,
+    nombre_archivo: req.file.filename,
+    nombre_original: req.file.originalname,
+    ruta_archivo: `/uploads/candidatos/${req.file.filename}`,
+    tipo_mime: req.file.mimetype,
+    tamanio_kb: Math.max(1, Math.round(req.file.size / 1024)),
+    fecha_emision: req.body?.fecha_emision || null,
+    fecha_vencimiento: req.body?.fecha_vencimiento || null,
+    numero_documento: req.body?.numero_documento || null,
+    descripcion: req.body?.descripcion || null,
+    observaciones: req.body?.observaciones || null,
+    subido_por: req.user?.id || null,
+    estado: 'pendiente'
+  };
+
+  const created = await createDocumento(req.candidatoId, payload);
+  return res.status(201).json({ ok: true, id: created.id });
+}
+
+async function updateDocumentoHandler(req, res, { allowEstado }) {
+  const documentoId = parsePositiveInt(req.params.documentoId);
+  if (!documentoId) return res.status(400).json({ error: 'INVALID_DOCUMENTO_ID' });
+
+  const patch = validateDocumentoMetaPayload(req.body || {}, { allowEstado });
+  if (!patch) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  if (allowEstado && patch.estado) {
+    patch.verificado_por = req.user?.id || null;
+    patch.fecha_verificacion = new Date();
+  }
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const affected = await updateDocumento(req.candidatoId, documentoId, patch);
+  if (!affected) return res.status(404).json({ error: 'DOCUMENTO_NOT_FOUND' });
+  return res.json({ ok: true });
+}
+
+async function deleteDocumentoHandler(req, res) {
+  const documentoId = parsePositiveInt(req.params.documentoId);
+  if (!documentoId) return res.status(400).json({ error: 'INVALID_DOCUMENTO_ID' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const affected = await deleteDocumento(req.candidatoId, documentoId);
+  if (!affected) return res.status(404).json({ error: 'DOCUMENTO_NOT_FOUND' });
+  return res.json({ ok: true });
 }
 
 async function getMyPerfil(req, res) {
-  async function runGet() {
-    return getPerfil(req, res);
-  }
-  return withMyCandidate(req, res, runGet);
+  return withResolvedCandidate(req, res, 'me', 'fetch', async () => getPerfil(req, res));
 }
 
 async function getPerfilById(req, res) {
-  async function runGet() {
-    return getPerfil(req, res);
-  }
-  return withParamCandidate(req, res, runGet);
+  return withResolvedCandidate(req, res, 'id', 'fetch', async () => getPerfil(req, res));
 }
 
 function makeMyUpdateHandler(section) {
   return async function handler(req, res) {
-    async function runUpdate() {
-      return updateSection(req, res, section);
-    }
-    return withMyCandidate(req, res, runUpdate);
+    return withResolvedCandidate(req, res, 'me', 'update', async () => updateSection(req, res, section));
   };
 }
 
 function makeIdUpdateHandler(section) {
   return async function handler(req, res) {
-    async function runUpdate() {
-      return updateSection(req, res, section);
-    }
-    return withParamCandidate(req, res, runUpdate);
+    return withResolvedCandidate(req, res, 'id', 'update', async () => updateSection(req, res, section));
+  };
+}
+
+function makeCandidateScopeHandler(mode, handler, action = 'fetch') {
+  return async function wrapped(req, res) {
+    return withResolvedCandidate(req, res, mode, action, async () => handler(req, res));
   };
 }
 
@@ -337,5 +600,33 @@ module.exports = {
   updateDomicilioById: makeIdUpdateHandler('domicilio'),
   updateSaludById: makeIdUpdateHandler('salud'),
   updateLogisticaById: makeIdUpdateHandler('logistica'),
-  updateEducacionById: makeIdUpdateHandler('educacion')
+  updateEducacionById: makeIdUpdateHandler('educacion'),
+
+  listMyIdiomas: makeCandidateScopeHandler('me', listIdiomasHandler, 'fetch'),
+  createMyIdioma: makeCandidateScopeHandler('me', createIdiomaHandler, 'update'),
+  updateMyIdioma: makeCandidateScopeHandler('me', updateIdiomaHandler, 'update'),
+  deleteMyIdioma: makeCandidateScopeHandler('me', deleteIdiomaHandler, 'update'),
+  listIdiomasById: makeCandidateScopeHandler('id', listIdiomasHandler, 'fetch'),
+  createIdiomaById: makeCandidateScopeHandler('id', createIdiomaHandler, 'update'),
+  updateIdiomaById: makeCandidateScopeHandler('id', updateIdiomaHandler, 'update'),
+  deleteIdiomaById: makeCandidateScopeHandler('id', deleteIdiomaHandler, 'update'),
+
+  listMyExperiencia: makeCandidateScopeHandler('me', listExperienciaHandler, 'fetch'),
+  createMyExperiencia: makeCandidateScopeHandler('me', createExperienciaHandler, 'update'),
+  updateMyExperiencia: makeCandidateScopeHandler('me', updateExperienciaHandler, 'update'),
+  deleteMyExperiencia: makeCandidateScopeHandler('me', deleteExperienciaHandler, 'update'),
+  listExperienciaById: makeCandidateScopeHandler('id', listExperienciaHandler, 'fetch'),
+  createExperienciaById: makeCandidateScopeHandler('id', createExperienciaHandler, 'update'),
+  updateExperienciaById: makeCandidateScopeHandler('id', updateExperienciaHandler, 'update'),
+  deleteExperienciaById: makeCandidateScopeHandler('id', deleteExperienciaHandler, 'update'),
+
+  listMyDocumentos: makeCandidateScopeHandler('me', listDocumentosHandler, 'fetch'),
+  createMyDocumento: makeCandidateScopeHandler('me', createDocumentoHandler, 'update'),
+  updateMyDocumento: makeCandidateScopeHandler('me', (req, res) => updateDocumentoHandler(req, res, { allowEstado: false }), 'update'),
+  deleteMyDocumento: makeCandidateScopeHandler('me', deleteDocumentoHandler, 'update'),
+
+  listDocumentosById: makeCandidateScopeHandler('id', listDocumentosHandler, 'fetch'),
+  createDocumentoById: makeCandidateScopeHandler('id', createDocumentoHandler, 'update'),
+  updateDocumentoById: makeCandidateScopeHandler('id', (req, res) => updateDocumentoHandler(req, res, { allowEstado: true }), 'update'),
+  deleteDocumentoById: makeCandidateScopeHandler('id', deleteDocumentoHandler, 'update')
 };

@@ -249,9 +249,100 @@ Errores esperados:
   - `nivel_estudio` (`Educacion Basica|Bachillerato|Educacion Superior`)
   - `institucion`, `titulo_obtenido`
 
-Nota de estado funcional (frontend):
-- En el wizard de perfil candidato, `idiomas`, `experiencia` y `documentos` se muestran como Fase 2.
-- En esta iteracion no se agregaron endpoints nuevos para esas secciones dentro de `/api/perfil/*`.
+### GET `/api/perfil/me/idiomas`
+- Auth: requerido.
+- Roles: `candidato`.
+- Respuesta `200`:
+```json
+{ "items": [] }
+```
+
+### POST `/api/perfil/me/idiomas`
+- Auth: requerido.
+- Roles: `candidato`.
+- Body:
+```json
+{ "idioma": "Ingles", "nivel": "Intermedio" }
+```
+- Respuesta `201`:
+```json
+{ "ok": true, "id": 1 }
+```
+- Errores:
+  - `400 INVALID_PAYLOAD`
+
+### PUT `/api/perfil/me/idiomas/:idiomaId`
+### DELETE `/api/perfil/me/idiomas/:idiomaId`
+- Auth: requerido.
+- Roles: `candidato`.
+- Errores:
+  - `400 INVALID_IDIOMA_ID`
+  - `404 IDIOMA_NOT_FOUND`
+
+### GET `/api/perfil/me/experiencia`
+- Auth: requerido.
+- Roles: `candidato`.
+- Respuesta `200`:
+```json
+{ "items": [] }
+```
+
+### POST `/api/perfil/me/experiencia`
+- Auth: requerido.
+- Roles: `candidato`.
+- Body ejemplo:
+```json
+{
+  "cargo": "Supervisor",
+  "fecha_inicio": "2022-01-01",
+  "fecha_fin": "2024-01-31",
+  "actualmente_trabaja": 0,
+  "tipo_contrato": "indefinido",
+  "descripcion": "Gestion de equipos"
+}
+```
+- Respuesta `201`:
+```json
+{ "ok": true, "id": 10 }
+```
+
+### PUT `/api/perfil/me/experiencia/:experienciaId`
+### DELETE `/api/perfil/me/experiencia/:experienciaId`
+- Auth: requerido.
+- Roles: `candidato`.
+- Errores:
+  - `400 INVALID_EXPERIENCIA_ID`
+  - `404 EXPERIENCIA_NOT_FOUND`
+
+### GET `/api/perfil/me/documentos`
+- Auth: requerido.
+- Roles: `candidato`.
+- Respuesta `200`:
+```json
+{ "items": [] }
+```
+
+### POST `/api/perfil/me/documentos`
+- Auth: requerido.
+- Roles: `candidato`.
+- Tipo: `multipart/form-data`.
+- Campos:
+  - `archivo` (requerido)
+  - `tipo_documento` (requerido)
+  - `fecha_emision`, `fecha_vencimiento`, `numero_documento`, `descripcion`, `observaciones` (opcionales)
+- Errores:
+  - `400 FILE_REQUIRED`
+  - `400 INVALID_TIPO_DOCUMENTO`
+  - `400 INVALID_FILE_TYPE`
+  - `400 FILE_TOO_LARGE`
+
+### PUT `/api/perfil/me/documentos/:documentoId`
+### DELETE `/api/perfil/me/documentos/:documentoId`
+- Auth: requerido.
+- Roles: `candidato`.
+- Errores:
+  - `400 INVALID_DOCUMENTO_ID`
+  - `404 DOCUMENTO_NOT_FOUND`
 
 ### GET `/api/perfil/:candidatoId`
 - Auth: requerido.
@@ -263,6 +354,18 @@ Nota de estado funcional (frontend):
 ### PUT `/api/perfil/:candidatoId/salud`
 ### PUT `/api/perfil/:candidatoId/logistica`
 ### PUT `/api/perfil/:candidatoId/educacion`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+
+### GET `/api/perfil/:candidatoId/idiomas`
+### GET `/api/perfil/:candidatoId/experiencia`
+### GET `/api/perfil/:candidatoId/documentos`
+- Auth: requerido.
+- Roles: `empresa`, `administrador`, `superadmin`.
+
+### POST|PUT|DELETE `/api/perfil/:candidatoId/idiomas*`
+### POST|PUT|DELETE `/api/perfil/:candidatoId/experiencia*`
+### POST|PUT|DELETE `/api/perfil/:candidatoId/documentos*`
 - Auth: requerido.
 - Roles: `administrador`, `superadmin`.
 
