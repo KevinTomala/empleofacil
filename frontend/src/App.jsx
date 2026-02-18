@@ -72,7 +72,7 @@ function App() {
           <Route
             path="/app/candidate/perfil"
             element={
-              <ProtectedRoute roles={['candidato', 'superadmin']}>
+              <ProtectedRoute roles={['candidato']}>
                 <CandidateProfile />
               </ProtectedRoute>
             }
@@ -80,7 +80,7 @@ function App() {
           <Route
             path="/perfil/datos-basicos"
             element={
-              <ProtectedRoute roles={['candidato', 'superadmin']}>
+              <ProtectedRoute roles={['candidato']}>
                 <ProfileDatosBasicos />
               </ProtectedRoute>
             }
@@ -88,7 +88,7 @@ function App() {
           <Route
             path="/perfil/preferencias"
             element={
-              <ProtectedRoute roles={['candidato', 'superadmin']}>
+              <ProtectedRoute roles={['candidato']}>
                 <ProfilePreferencias />
               </ProtectedRoute>
             }
@@ -96,7 +96,7 @@ function App() {
           <Route
             path="/perfil/experiencia"
             element={
-              <ProtectedRoute roles={['candidato', 'superadmin']}>
+              <ProtectedRoute roles={['candidato']}>
                 <ProfileExperiencia />
               </ProtectedRoute>
             }
@@ -104,7 +104,7 @@ function App() {
           <Route
             path="/perfil/formacion"
             element={
-              <ProtectedRoute roles={['candidato', 'superadmin']}>
+              <ProtectedRoute roles={['candidato']}>
                 <ProfileFormacion />
               </ProtectedRoute>
             }
@@ -112,7 +112,7 @@ function App() {
           <Route
             path="/perfil/idiomas"
             element={
-              <ProtectedRoute roles={['candidato', 'superadmin']}>
+              <ProtectedRoute roles={['candidato']}>
                 <ProfileIdiomas />
               </ProtectedRoute>
             }
@@ -120,7 +120,7 @@ function App() {
           <Route
             path="/perfil/documentos"
             element={
-              <ProtectedRoute roles={['candidato', 'superadmin']}>
+              <ProtectedRoute roles={['candidato']}>
                 <ProfileDocumentos />
               </ProtectedRoute>
             }
@@ -128,7 +128,7 @@ function App() {
           <Route
             path="/perfil/datos-personales"
             element={
-              <ProtectedRoute roles={['candidato', 'superadmin']}>
+              <ProtectedRoute roles={['candidato']}>
                 <ProfileDatosPersonales />
               </ProtectedRoute>
             }

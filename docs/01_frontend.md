@@ -90,10 +90,20 @@
 - Modulo `dashboard` reservado en `src/modules/dashboard/` (pendiente de contenido).
 - Perfil candidato (frontend):
 - Ruta principal: `/app/candidate/perfil`.
-- Secciones con tabs (navegacion libre, no secuencial): `/perfil/datos-basicos`, `/perfil/preferencias`, `/perfil/experiencia`, `/perfil/formacion`, `/perfil/idiomas`, `/perfil/documentos`.
-- Ruta adicional: `/perfil/datos-personales` usa la vista `ProfileDatosPersonales`.
-- Las tabs viven en `frontend/src/modules/candidate/ProfileTabs.jsx` y se incluyen en cada pantalla del perfil.
-- El panel izquierdo del perfil muestra progreso, siguiente paso recomendado y tips rapidos.
+- Secciones con tabs: `/perfil/datos-basicos`, `/perfil/datos-personales`, `/perfil/preferencias`, `/perfil/formacion`, `/perfil/idiomas`, `/perfil/experiencia`, `/perfil/documentos`.
+- Las tabs viven en `frontend/src/modules/candidate/ProfileTabs.jsx`.
+- Las pantallas `/perfil/*` usan layout reusable en `frontend/src/modules/candidate/ProfileWizardLayout.jsx`.
+- El sidebar de estado vive en `frontend/src/modules/candidate/ProfileSidebarStatus.jsx`:
+  - sticky en desktop y debajo del formulario en mobile.
+  - progreso de fase 1, checklist por estado y verificacion visual.
+  - modo compacto cuando fase 1 esta completa.
+  - resaltado de seccion actual en checklist.
+- Las secciones y su estado se centralizan en `frontend/src/modules/candidate/profileSections.js`.
+- Reglas de CTA en formularios:
+  - seccion completa: `Actualizar informacion` + `Cancelar`.
+  - seccion pendiente: `Guardar` + `Guardar y continuar`.
+- Alertas contextuales no bloqueantes en sidebar:
+  - aplican a cambios sensibles (email, telefono celular, documento) cuando corresponde.
 - Los servicios de API van en `src/services/`.
 - Helpers y utilidades van en `src/utils/`.
 - No commitear `.env`. Usar `.env.example` como referencia.

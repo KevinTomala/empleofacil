@@ -1,0 +1,126 @@
+# Documentacion backend (Node.js + Express + MySQL)
+
+## Objetivo
+Este documento explica como esta construido el backend hoy y como mantener consistencia al agregar o modificar modulos.
+No reemplaza:
+- `docs/05_arquitectura.md` (vista macro del sistema).
+- `docs/06_api.md` (contratos HTTP).
+- `docs/07_bd.md` (modelo de datos).
+
+## Requisitos
+- Node.js LTS (si ejecutas fuera de Docker).
+- MySQL 8.
+- Variables de entorno definidas en `.env` (partiendo de `.env.example`).
+
+## Estructura real en `backend/`
+- `index.js`: bootstrap de Express, CORS, parseo JSON/form-data y registro de rutas.
+- `db.js`: pool `mysql2/promise` + `waitForConnection`.
+- `routes/`: endpoints por modulo.
+- `controllers/`: validacion de request, manejo `req/res`, mapeo de errores HTTP.
+- `services/`: logica de negocio e integraciones externas.
+- `middlewares/auth.middleware.js`: JWT y control de rol.
+- `jobs/ademySync.job.js`: job cron para sincronizacion incremental.
+
+Rutas registradas actualmente:
+- `/auth`
+- `/api/candidatos`
+- `/api/perfil`
+- `/api/hoja-vida`
+- `/api/integraciones`
+
+## Flujo backend (request lifecycle)
+1. Request entra a `index.js`.
+2. Middleware global aplica CORS, `express.json` y `express.urlencoded`.
+3. Ruta aplica `authRequired` y `requireRole([...])` cuando corresponde.
+4. Controller valida payload/params y delega a service.
+5. Service ejecuta queries o integra con proveedor externo.
+6. Controller responde con contrato consistente:
+   - exito: `{ ok: true }`, `{ items: [] }` o payload consolidado.
+   - error: `{ error: 'ERROR_CODE', details?: '...' }`.
+
+## Modulos actuales
+
+### Auth
+- Login por email o documento de candidato.
+- Cambio de password con validaciones basicas.
+- JWT con expiracion configurable (`JWT_EXPIRES_IN`).
+
+### Candidatos
+- Listado paginado de candidatos acreditados.
+- Filtros por nombre, apellido, documento o email.
+
+### Perfil candidato
+- Lectura/escritura por secciones (`datos_basicos`, `contacto`, `domicilio`, `salud`, `logistica`, `educacion`).
+- `GET/PUT /api/perfil/me/*` para rol `candidato`.
+- `GET /api/perfil/:candidatoId` para `empresa|administrador|superadmin`.
+- `PUT /api/perfil/:candidatoId/*` para `administrador|superadmin`.
+- Estrategia de persistencia:
+  - `UPDATE` para tabla principal `candidatos`.
+  - `INSERT ... ON DUPLICATE KEY UPDATE` para tablas 1:1.
+
+### Hoja de vida
+- Consolidado de perfil por estudiante.
+- Generacion PDF (Puppeteer).
+
+### Integraciones (Ademy)
+- Catalogos y sync de acreditados.
+- Sync protegido con lock MySQL (`GET_LOCK`) para evitar ejecuciones concurrentes.
+- Registro de estado y logs en tablas de integracion.
+
+## Convenciones de desarrollo backend
+
+### Por capa
+- `routes/`: declarar endpoint + middleware + handler.
+- `controllers/`: validar entrada y mapear errores HTTP.
+- `services/`: logica de negocio, SQL e integraciones.
+
+### Validacion y errores
+- Validar al inicio del controller.
+- Usar codigos de error estables (`INVALID_PAYLOAD`, `FORBIDDEN`, etc).
+- Evitar mensajes ambiguos o cambiar codigos sin actualizar `docs/06_api.md`.
+
+### SQL y datos
+- Preferir queries parametrizadas.
+- Usar transacciones en operaciones multi-tabla.
+- Respetar `deleted_at` cuando aplique.
+- Para tablas 1:1, usar upsert con PK `candidato_id`.
+
+## Jobs y operacion
+- Job actual: `jobs/ademySync.job.js`.
+- Configuracion:
+  - `ADEMY_SYNC_ENABLED`
+  - `ADEMY_SYNC_CRON`
+  - `ADEMY_SYNC_TZ`
+  - `ADEMY_SYNC_RUN_ON_START`
+  - `ADEMY_SYNC_PAGE_SIZE`
+- El job ejecuta import incremental por `updated_since` basado en `integracion_sync_state.last_success_at`.
+
+## Variables de entorno backend (clave)
+- API y servidor:
+  - `BACKEND_PORT`
+  - `FRONTEND_URL`
+- DB:
+  - `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
+- Auth:
+  - `JWT_SECRET`, `JWT_EXPIRES_IN`
+- Integracion Ademy:
+  - `ADEMY_API_URL`
+  - `ADEMY_JWT_SECRET`, `ADEMY_JWT_ISS`, `ADEMY_JWT_AUD`, `ADEMY_JWT_SCOPE`
+- Scheduler:
+  - `ADEMY_SYNC_ENABLED`, `ADEMY_SYNC_CRON`, `ADEMY_SYNC_TZ`, `ADEMY_SYNC_RUN_ON_START`, `ADEMY_SYNC_PAGE_SIZE`
+
+## Checklist para nuevos modulos backend
+1. Crear `routes/<modulo>.routes.js`.
+2. Crear `controllers/<modulo>.controller.js`.
+3. Crear `services/<modulo>.service.js`.
+4. Registrar ruta en `backend/index.js`.
+5. Proteger endpoints con `authRequired`/`requireRole` segun necesidad.
+6. Documentar endpoints en `docs/06_api.md`.
+7. Si cambia estructura de datos, actualizar `docs/07_bd.md`.
+
+## Referencias cruzadas
+- Arquitectura general: `docs/05_arquitectura.md`
+- Contratos HTTP: `docs/06_api.md`
+- Base de datos: `docs/07_bd.md`
+- Operacion/despliegue: `docs/08_despliegue_runbook.md`
+- Pruebas: `docs/09_pruebas.md`

@@ -91,3 +91,60 @@ body {
     color: hsl(var(--foreground));
   }
 }
+
+.ef-control {
+  width: 100%;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  background-color: #fff;
+}
+
+.ef-control:focus {
+  outline: none;
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px color-mix(in oklab, hsl(var(--ring)) 18%, transparent);
+}
+
+.ef-control[readonly],
+.ef-control:disabled {
+  background-color: #f8fafc;
+  color: #64748b;
+}
+
+.ef-dropdown {
+  position: relative;
+}
+
+.ef-dropdown-toggle {
+  text-align: left;
+}
+
+.ef-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 0.25rem;
+  z-index: 20;
+  background-color: #fff;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 20px -8px rgba(15, 23, 42, 0.25);
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.ef-dropdown-option {
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.ef-dropdown-option:hover {
+  background-color: #f1f5f9;
+}

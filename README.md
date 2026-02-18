@@ -44,6 +44,7 @@ docker compose up -d --build
 
 ## Documentacion
 - Arquitectura: `docs/05_arquitectura.md`
+- Backend: `docs/02_backend.md`
 - Frontend: `docs/01_frontend.md`
 - API: `docs/06_api.md`
 - Base de datos: `docs/07_bd.md`

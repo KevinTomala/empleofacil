@@ -4,6 +4,8 @@ import { Briefcase, Crown, Eye, FileText, Mail, Users } from 'lucide-react'
 import Header from '../../components/Header'
 import { apiRequest } from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
+import CandidatoPerfilDrawer from './components/CandidatoPerfilDrawer'
+import { getPerfilById, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
 
 export default function CompanyCandidatos() {
   const { token, user } = useAuth()
@@ -22,6 +24,11 @@ export default function CompanyCandidatos() {
   const [importing, setImporting] = useState(false)
   const [importStatus, setImportStatus] = useState('')
   const [refreshFlag, setRefreshFlag] = useState(0)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerLoading, setDrawerLoading] = useState(false)
+  const [drawerError, setDrawerError] = useState('')
+  const [drawerPerfil, setDrawerPerfil] = useState(null)
+  const [drawerCandidatoName, setDrawerCandidatoName] = useState('')
 
   useEffect(() => {
     let alive = true
@@ -226,6 +233,22 @@ export default function CompanyCandidatos() {
     }
   }
 
+  const handleOpenPerfil = async (candidatoId, candidatoName) => {
+    setDrawerOpen(true)
+    setDrawerLoading(true)
+    setDrawerError('')
+    setDrawerPerfil(null)
+    setDrawerCandidatoName(candidatoName)
+    try {
+      const perfil = await getPerfilById(candidatoId)
+      setDrawerPerfil(perfil)
+    } catch (err) {
+      setDrawerError(getPerfilErrorMessage(err, 'No se pudo cargar el perfil del candidato.'))
+    } finally {
+      setDrawerLoading(false)
+    }
+  }
+
   return (
     <div className="company-scope company-compact min-h-screen bg-secondary">
       <Header />
@@ -397,16 +420,20 @@ export default function CompanyCandidatos() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <button className="px-3 py-1.5 bg-primary text-white rounded-lg flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 bg-primary text-white rounded-lg flex items-center gap-2"
+                      onClick={() => handleOpenPerfil(candidato.id, candidato.name)}
+                    >
                       <Users className="w-4 h-4" /> Ver perfil
                     </button>
-                    <button className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
+                    <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
                       <Briefcase className="w-4 h-4" /> Cambiar estado
                     </button>
-                    <button className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
+                    <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
                       <Mail className="w-4 h-4" /> Enviar mensaje
                     </button>
-                    <button className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
+                    <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
                       <Crown className="w-4 h-4" /> Destacar
                     </button>
                   </div>
@@ -467,6 +494,14 @@ export default function CompanyCandidatos() {
           </aside>
         </section>
       </main>
+      <CandidatoPerfilDrawer
+        open={drawerOpen}
+        candidatoName={drawerCandidatoName}
+        loading={drawerLoading}
+        error={drawerError}
+        perfil={drawerPerfil}
+        onClose={() => setDrawerOpen(false)}
+      />
     </div>
   )
 }

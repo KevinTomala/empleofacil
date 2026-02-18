@@ -1,11 +1,13 @@
-import { Link } from 'react-router-dom'
+﻿import { Link } from 'react-router-dom'
 
 const tabs = [
   { label: 'Informacion basica', to: '/perfil/datos-basicos' },
   { label: 'Datos personales', to: '/perfil/datos-personales' },
-  { label: 'Experiencia', to: '/perfil/experiencia' },
+  { label: 'Preferencias', to: '/perfil/preferencias' },
   { label: 'Formacion', to: '/perfil/formacion' },
-  { label: 'Documentos', to: '/perfil/documentos' },
+  { label: 'Idiomas', to: '/perfil/idiomas' },
+  { label: 'Experiencia', to: '/perfil/experiencia' },
+  { label: 'Documentos', to: '/perfil/documentos' }
 ]
 
 export default function ProfileTabs({ current }) {
@@ -19,9 +21,7 @@ export default function ProfileTabs({ current }) {
               key={tab.to}
               to={tab.to}
               className={`px-3 py-2 rounded-lg text-xs font-medium transition ${
-                isActive
-                  ? 'bg-primary text-white'
-                  : 'bg-slate-50 text-foreground/70 hover:bg-slate-100'
+                isActive ? 'bg-primary text-white' : 'bg-slate-50 text-foreground/70 hover:bg-slate-100'
               }`}
             >
               {tab.label}

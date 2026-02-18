@@ -249,6 +249,10 @@ Errores esperados:
   - `nivel_estudio` (`Educacion Basica|Bachillerato|Educacion Superior`)
   - `institucion`, `titulo_obtenido`
 
+Nota de estado funcional (frontend):
+- En el wizard de perfil candidato, `idiomas`, `experiencia` y `documentos` se muestran como Fase 2.
+- En esta iteracion no se agregaron endpoints nuevos para esas secciones dentro de `/api/perfil/*`.
+
 ### GET `/api/perfil/:candidatoId`
 - Auth: requerido.
 - Roles: `empresa`, `administrador`, `superadmin`.

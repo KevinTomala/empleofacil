@@ -31,6 +31,33 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - Cambio de password limpia `must_change_password`.
 - Cron no corre cuando `ADEMY_SYNC_ENABLED=false`.
 
+## Pruebas manuales frontend (perfil candidato wizard)
+
+### 1) Layout y navegacion
+- Entrar a `/perfil/datos-basicos` y verificar layout 2 columnas en desktop (form + sidebar).
+- Verificar que en mobile el sidebar aparece debajo del formulario.
+- Verificar tabs visibles: `Informacion basica`, `Datos personales`, `Preferencias`, `Formacion`, `Idiomas`, `Experiencia`, `Documentos`.
+
+### 2) Sidebar de estado
+- Confirmar barra de progreso y checklist por estado (`Completo`, `Pendiente`, `Fase 2`).
+- Confirmar que la seccion actual aparece resaltada y marcada como `Actual`.
+- Cuando Fase 1 llegue a 100%, validar mensaje compacto: `Perfil base completo. Puedes avanzar a Fase 2.`
+
+### 3) CTAs contextuales por completitud
+- En seccion completa: botones `Actualizar informacion` (primario) y `Cancelar` (secundario).
+- En seccion pendiente: botones `Guardar` y `Guardar y continuar`.
+- `Cancelar` debe volver a `/app/candidate/perfil` sin guardar cambios.
+
+### 4) Alertas contextuales de edicion
+- En `datos-basicos`, cambiar `email`, `telefono celular` o `documento` y validar alertas en sidebar.
+- En `datos-personales`, cambiar `email` o `telefono celular` y validar alertas en sidebar.
+- Revertir el valor original debe ocultar la alerta correspondiente.
+
+### 5) Integridad de flujo
+- `Guardar` mantiene comportamiento de persistencia actual.
+- `Guardar y continuar` mantiene navegacion esperada entre tabs.
+- Ejecutar build frontend sin errores.
+
 ## Recomendacion de automatizacion
 1. Backend: incorporar `jest` + `supertest` para rutas criticas (`auth`, `candidatos`, `hoja-vida`, `integraciones`).
 2. Frontend: pruebas de UI con `vitest` + `@testing-library/react`.

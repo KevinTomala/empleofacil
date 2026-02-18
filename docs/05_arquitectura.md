@@ -19,13 +19,14 @@ empleofacil/
 - Seguridad: JWT (`jsonwebtoken`) + hash de passwords con `bcryptjs`.
 - Documentos: generacion PDF con `puppeteer`.
 - Jobs internos: `node-cron` para sincronizacion automatica con Ademy.
+- Documentacion tecnica detallada: `docs/02_backend.md`.
 
 Estructura real en `backend/`:
 - `index.js`: arranque HTTP, CORS, rutas y scheduler.
 - `db.js`: pool MySQL, retries de conexion (`waitForConnection`).
-- `routes/`: `auth`, `candidatos`, `hojaVida`, `integraciones`.
+- `routes/`: `auth`, `candidatos`, `perfilCandidato`, `hojaVida`, `integraciones`.
 - `controllers/`: logica HTTP por modulo.
-- `services/`: integracion Ademy y armado/PDF de hoja de vida.
+- `services/`: perfil candidato, integracion Ademy y armado/PDF de hoja de vida.
 - `middlewares/`: autenticacion y control de rol.
 - `jobs/ademySync.job.js`: cron de importacion incremental.
 
@@ -55,6 +56,20 @@ Estructura real en `backend/`:
   - Estilos dedicados en `frontend/src/styles/notifications.css`.
 - Variables principales: `VITE_API_URL`, `VITE_WS_URL` (opcional).
 - El frontend consume la API REST del backend.
+
+### Perfil candidato (wizard UI)
+- El flujo `/perfil/*` usa layout reusable `ProfileWizardLayout`:
+  - Tabs superiores (`ProfileTabs`).
+  - Columna principal con formulario.
+  - Sidebar contextual sticky en desktop (`ProfileSidebarStatus`) y debajo del formulario en mobile.
+- Las secciones y estados del perfil se centralizan en `frontend/src/modules/candidate/profileSections.js`.
+  - Fase 1: `datos-basicos`, `datos-personales`, `preferencias`, `formacion`.
+  - Fase 2 visual: `idiomas`, `experiencia`, `documentos` (sin persistencia de backend de perfil en esta iteracion).
+- Micro-UX implementada:
+  - Sidebar compacto (evita repetir mensajes cuando Fase 1 esta completa).
+  - Resaltado de seccion actual en checklist.
+  - CTA contextual en formularios: seccion completa -> `Actualizar informacion` + `Cancelar`; seccion pendiente -> `Guardar` + `Guardar y continuar`.
+  - Alertas de edicion no bloqueantes para cambios sensibles (email, telefono celular, documento) cuando aplica.
 
 ## Infraestructura
 - `docker-compose.yml` (dev): `mysql`, `backend`, `frontend`.
