@@ -83,6 +83,16 @@ CREATE TABLE empresas_perfil (
   INDEX idx_empresas_perfil_completitud (porcentaje_completitud)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE empresas_preferencias (
+  empresa_id BIGINT PRIMARY KEY,
+  modalidades_permitidas JSON NULL,
+  niveles_experiencia JSON NULL,
+  observaciones TEXT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_empresas_preferencias_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 INSERT INTO empresas (nombre, email, tipo, activo)
 VALUES ('ADEMY S.A.S.', 'ademy@empleofacil.com', 'externa', 1);

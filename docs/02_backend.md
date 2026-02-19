@@ -27,6 +27,8 @@ Rutas registradas actualmente:
 - `/api/perfil`
 - `/api/hoja-vida`
 - `/api/integraciones`
+- `/api/company`
+- `/api/verificaciones`
 
 ## Flujo backend (request lifecycle)
 1. Request entra a `index.js`.
@@ -71,6 +73,30 @@ Rutas registradas actualmente:
 ### Hoja de vida
 - Consolidado de perfil por estudiante.
 - Generacion PDF (Puppeteer).
+
+### Perfil empresa
+- Perfil general:
+  - `GET /api/company/perfil/me`
+  - `PUT /api/company/perfil/me/datos-generales`
+  - `POST|DELETE /api/company/perfil/me/logo`
+- Usuarios/reclutadores:
+  - `GET|POST /api/company/perfil/me/usuarios`
+  - `PUT|DELETE /api/company/perfil/me/usuarios/:empresaUsuarioId`
+- Preferencias de contratacion:
+  - `GET|PUT /api/company/perfil/me/preferencias`
+- Baja logica de empresa:
+  - `DELETE /api/company/perfil/me`
+
+### Verificaciones
+- Empresa/candidato:
+  - `GET /api/company/perfil/me/verificacion`
+  - `POST /api/company/perfil/me/verificacion/solicitar`
+  - `GET /api/perfil/me/verificacion`
+  - `POST /api/perfil/me/verificacion/solicitar`
+- Admin:
+  - `GET /api/verificaciones/cuentas`
+  - `GET /api/verificaciones/cuentas/:verificacionId`
+  - `PUT /api/verificaciones/cuentas/:verificacionId/estado`
 
 ### Integraciones (Ademy)
 - Catalogos y sync de acreditados.

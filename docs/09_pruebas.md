@@ -44,6 +44,16 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `POST certificado` sin archivo devuelve `400 FILE_REQUIRED`.
 - Empresa solo lectura en `/:candidatoId/formacion*` y `/:candidatoId/experiencia/:experienciaId/certificado`.
 
+### 7) Perfil empresa (backend)
+- `GET /api/company/perfil/me/usuarios` responde `200` con lista de vinculaciones.
+- `POST /api/company/perfil/me/usuarios` con email no existente devuelve `404 USER_NOT_FOUND`.
+- `POST /api/company/perfil/me/usuarios` con email ya vinculado devuelve `409 USER_ALREADY_LINKED`.
+- `PUT /api/company/perfil/me/usuarios/:empresaUsuarioId` permite cambiar `rol_empresa`, `estado`, `principal`.
+- Intentar desactivar o degradar el ultimo admin activo devuelve `400 LAST_ADMIN_REQUIRED`.
+- `GET /api/company/perfil/me/preferencias` responde `200` con preferencias 1:1.
+- `PUT /api/company/perfil/me/preferencias` persiste arrays normalizados.
+- `DELETE /api/company/perfil/me` aplica soft delete y luego `GET /api/company/perfil/me` devuelve `404 EMPRESA_NOT_FOUND`.
+
 ## Checklist de regresion rapida
 - Login funciona por email.
 - Login funciona por documento de candidato.
@@ -90,6 +100,13 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - En `Externa`, registros legacy importados sin categoria se muestran como `Externa (importada)`.
 - El dashboard de perfil actualiza progreso total al completar secciones de Fase 2.
 - El drawer de empresa muestra `idiomas`, `experiencia`, `formacion` y `documentos` del candidato.
+
+### 7) Perfil empresa (frontend)
+- `/app/company/empresa` no muestra bloque de facturacion.
+- El porcentaje y campos pendientes se leen desde `resumen` de backend (sin recalculo local).
+- Bloque de usuarios permite: vincular por email, cambiar rol, marcar principal y activar/desactivar.
+- Bloque de preferencias permite guardar modalidades, niveles y observaciones.
+- Boton `Desactivar empresa` ejecuta baja logica y redirige a login cuando responde `200`.
 
 ## Recomendacion de automatizacion
 1. Backend: incorporar `jest` + `supertest` para rutas criticas (`auth`, `candidatos`, `hoja-vida`, `integraciones`).

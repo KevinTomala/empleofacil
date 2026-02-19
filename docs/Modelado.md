@@ -66,7 +66,7 @@ Campos sugeridos en `permisos`:
 Pantallas:
 - `AdminHome`: contadores y actividad critica (fuente: `usuarios`, `empresas_verificacion`, `log_actividad`).
 - `AdminRolesPermisos`: `roles`, `permisos`, `rol_permiso`.
-- `AdminCuentas`: `empresas`, `empresas_verificacion`, `empresas_facturacion`, `usuarios`/`estudiantes`.
+- `AdminCuentas`: `empresas`, `empresas_verificacion`, `usuarios`/`estudiantes`.
 - `AdminAuditoria`: `log_actividad`, `logs_frontend`.
 
 Pendientes:
@@ -93,7 +93,7 @@ Pantallas:
 - `CompanyVacantes`: `vacantes_publicadas` + métricas (pendiente).
 - `CompanyCandidatos`: `postulaciones` + `estudiantes` + `estudiantes_experiencia` + `estudiantes_formaciones`.
 - `CompanyMensajes`: `conversaciones`, `mensajes`, `mensaje_lecturas`.
-- `CompanyPerfil`: `empresas_perfil`, `empresas_verificacion`, `empresas_facturacion`, `empresas_preferencias`, `empresas_usuarios`.
+- `CompanyPerfil`: `empresas_perfil`, `empresas_verificacion`, `empresas_preferencias`, `empresas_usuarios`.
 
 Pendientes:
 - Métricas de vacantes (vistas) si se requiere en UI.

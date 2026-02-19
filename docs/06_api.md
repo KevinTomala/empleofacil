@@ -495,6 +495,9 @@ Errores esperados:
 
 Base: `/api/company/perfil`
 
+Nota:
+- En el alcance actual no hay modulo de facturacion en frontend ni endpoints publicos de facturacion para empresa.
+
 ### GET `/api/company/perfil/me`
 - Auth: requerido.
 - Roles: `empresa`, `superadmin`.
@@ -577,6 +580,133 @@ Base: `/api/company/perfil`
 - Errores:
   - `404 EMPRESA_NOT_FOUND`
   - `500 PROFILE_UPDATE_FAILED`
+
+### GET `/api/company/perfil/me/usuarios`
+- Auth: requerido.
+- Roles: `empresa`, `superadmin`.
+- Respuesta `200`:
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "empresa_id": 1,
+      "usuario_id": 2,
+      "rol_empresa": "admin",
+      "principal": true,
+      "estado": "activo",
+      "nombre": "Usuario Empresa",
+      "email": "empresa@correo.com"
+    }
+  ]
+}
+```
+- Errores:
+  - `404 EMPRESA_NOT_FOUND`
+  - `500 PROFILE_FETCH_FAILED`
+
+### POST `/api/company/perfil/me/usuarios`
+- Auth: requerido.
+- Roles: `empresa`, `superadmin`.
+- Body:
+```json
+{
+  "email": "reclutador@correo.com",
+  "rol_empresa": "reclutador",
+  "principal": false
+}
+```
+- Respuesta `201`:
+```json
+{
+  "ok": true,
+  "items": []
+}
+```
+- Errores:
+  - `400 INVALID_PAYLOAD`
+  - `404 EMPRESA_NOT_FOUND`
+  - `404 USER_NOT_FOUND`
+  - `409 USER_ALREADY_LINKED`
+  - `500 PROFILE_UPDATE_FAILED`
+
+### PUT `/api/company/perfil/me/usuarios/:empresaUsuarioId`
+### DELETE `/api/company/perfil/me/usuarios/:empresaUsuarioId`
+- Auth: requerido.
+- Roles: `empresa`, `superadmin`.
+- Body (`PUT`) permitido (parcial):
+  - `rol_empresa` (`admin|reclutador|visor`)
+  - `estado` (`activo|inactivo`)
+  - `principal` (`0|1|false|true`)
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "items": []
+}
+```
+- Errores:
+  - `400 INVALID_EMPRESA_USUARIO_ID`
+  - `400 INVALID_PAYLOAD`
+  - `400 LAST_ADMIN_REQUIRED`
+  - `404 EMPRESA_NOT_FOUND`
+  - `404 LINK_NOT_FOUND`
+  - `500 PROFILE_UPDATE_FAILED`
+
+### GET `/api/company/perfil/me/preferencias`
+- Auth: requerido.
+- Roles: `empresa`, `superadmin`.
+- Respuesta `200`:
+```json
+{
+  "preferencias": {
+    "empresa_id": 1,
+    "modalidades_permitidas": ["presencial", "hibrido"],
+    "niveles_experiencia": ["junior", "semi_senior"],
+    "observaciones": null
+  }
+}
+```
+- Errores:
+  - `404 EMPRESA_NOT_FOUND`
+  - `500 PROFILE_FETCH_FAILED`
+
+### PUT `/api/company/perfil/me/preferencias`
+- Auth: requerido.
+- Roles: `empresa`, `superadmin`.
+- Body:
+```json
+{
+  "modalidades_permitidas": ["presencial", "hibrido"],
+  "niveles_experiencia": ["junior", "semi_senior"],
+  "observaciones": "Priorizamos perfil operativo."
+}
+```
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "preferencias": {}
+}
+```
+- Errores:
+  - `400 INVALID_PAYLOAD`
+  - `404 EMPRESA_NOT_FOUND`
+  - `500 PROFILE_UPDATE_FAILED`
+
+### DELETE `/api/company/perfil/me`
+- Auth: requerido.
+- Roles: `empresa`, `superadmin`.
+- Efecto:
+  - soft delete en `empresas` (`activo=0`, `deleted_at=NOW()`),
+  - desactiva (`estado=inactivo`) los registros de `empresas_usuarios`.
+- Respuesta `200`:
+```json
+{ "ok": true }
+```
+- Errores:
+  - `404 EMPRESA_NOT_FOUND`
+  - `500 PROFILE_DELETE_FAILED`
 
 ### GET `/api/company/perfil/me/verificacion`
 - Auth: requerido.

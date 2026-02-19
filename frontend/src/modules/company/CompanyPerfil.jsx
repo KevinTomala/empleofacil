@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './company.css'
 import {
   Building2,
   Facebook,
-  Globe,
   Instagram,
   Linkedin,
-  Link2,
   MoreVertical,
   Pencil,
   ShieldCheck,
@@ -19,11 +17,18 @@ import Header from '../../components/Header'
 import { showToast } from '../../utils/showToast'
 import {
   deleteMyCompanyLogo,
+  deleteMyCompanyProfile,
+  deleteMyCompanyUser,
+  createMyCompanyUser,
   getCompanyPerfilErrorMessage,
+  getMyCompanyPreferences,
   getMyCompanyVerification,
   getMyCompanyPerfil,
+  listMyCompanyUsers,
   requestMyCompanyVerification,
   updateMyCompanyDatosGenerales,
+  updateMyCompanyPreferences,
+  updateMyCompanyUser,
   uploadMyCompanyLogo,
 } from '../../services/companyPerfil.api'
 
@@ -41,6 +46,21 @@ const EMPTY_FORM = {
   instagram_url: '',
   facebook_url: '',
 }
+
+const EMPTY_PREFERENCIAS = {
+  modalidades_permitidas: [],
+  niveles_experiencia: [],
+  observaciones: '',
+}
+
+const USER_FORM_DEFAULT = {
+  email: '',
+  rol_empresa: 'reclutador',
+  principal: false,
+}
+
+const MODALIDADES = ['presencial', 'hibrido', 'remoto']
+const NIVELES = ['junior', 'semi_senior', 'senior']
 
 function mapPayloadToForm(payload) {
   return {
@@ -91,32 +111,6 @@ function toAssetUrl(value) {
   return text.startsWith('/') ? `${apiBase}${text}` : `${apiBase}/${text}`
 }
 
-function buildCompanyResumen(payload) {
-  const empresa = payload?.empresa || {}
-  const perfil = payload?.perfil || {}
-
-  const checks = [
-    { label: 'Nombre', done: Boolean(String(empresa?.nombre || '').trim()) },
-    { label: 'Industria', done: Boolean(String(perfil?.industria || '').trim()) },
-    { label: 'Ubicacion', done: Boolean(String(perfil?.ubicacion_principal || '').trim()) },
-    {
-      label: 'Tamano',
-      done: Number.isInteger(perfil?.tamano_empleados) && perfil?.tamano_empleados > 0,
-    },
-    { label: 'Descripcion', done: Boolean(String(perfil?.descripcion || '').trim()) },
-    { label: 'Sitio web', done: Boolean(String(perfil?.sitio_web || '').trim()) },
-    { label: 'Instagram', done: Boolean(String(perfil?.instagram_url || '').trim()) },
-    { label: 'Facebook', done: Boolean(String(perfil?.facebook_url || '').trim()) },
-    { label: 'Logo', done: Boolean(String(perfil?.logo_url || '').trim()) },
-  ]
-
-  const completados = checks.filter((item) => item.done).length
-  const porcentajeCompletitud = Math.round((completados / checks.length) * 100)
-  const camposPendientes = checks.filter((item) => !item.done).map((item) => item.label)
-
-  return { porcentajeCompletitud, camposPendientes }
-}
-
 export default function CompanyPerfil() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -127,6 +121,15 @@ export default function CompanyPerfil() {
   const [openQuickMenu, setOpenQuickMenu] = useState(null)
   const [perfilData, setPerfilData] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [companyUsers, setCompanyUsers] = useState([])
+  const [loadingUsers, setLoadingUsers] = useState(true)
+  const [savingUser, setSavingUser] = useState(false)
+  const [updatingUserId, setUpdatingUserId] = useState(null)
+  const [userForm, setUserForm] = useState(USER_FORM_DEFAULT)
+  const [preferences, setPreferences] = useState(EMPTY_PREFERENCIAS)
+  const [loadingPreferences, setLoadingPreferences] = useState(true)
+  const [savingPreferences, setSavingPreferences] = useState(false)
+  const [deletingCompany, setDeletingCompany] = useState(false)
   const logoInputRef = useRef(null)
   const logoMenuRef = useRef(null)
   const linksMenuRef = useRef(null)
@@ -141,6 +144,41 @@ export default function CompanyPerfil() {
 
     setPerfilData(normalized)
     setForm(mapPayloadToForm(normalized))
+  }
+
+  const loadUsers = async () => {
+    try {
+      setLoadingUsers(true)
+      const response = await listMyCompanyUsers()
+      setCompanyUsers(Array.isArray(response?.items) ? response.items : [])
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getCompanyPerfilErrorMessage(error, 'No se pudieron cargar los usuarios de la empresa.'),
+      })
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
+
+  const loadPreferences = async () => {
+    try {
+      setLoadingPreferences(true)
+      const response = await getMyCompanyPreferences()
+      const data = response?.preferencias || {}
+      setPreferences({
+        modalidades_permitidas: Array.isArray(data.modalidades_permitidas) ? data.modalidades_permitidas : [],
+        niveles_experiencia: Array.isArray(data.niveles_experiencia) ? data.niveles_experiencia : [],
+        observaciones: data.observaciones || '',
+      })
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getCompanyPerfilErrorMessage(error, 'No se pudieron cargar las preferencias.'),
+      })
+    } finally {
+      setLoadingPreferences(false)
+    }
   }
 
   useEffect(() => {
@@ -175,6 +213,8 @@ export default function CompanyPerfil() {
     }
 
     loadPerfil()
+    loadUsers()
+    loadPreferences()
 
     return () => {
       active = false
@@ -196,12 +236,12 @@ export default function CompanyPerfil() {
     return () => document.removeEventListener('mousedown', onPointerDown)
   }, [openQuickMenu])
 
-  const resumenUi = useMemo(() => {
-    if (!perfilData) return { porcentajeCompletitud: 0, camposPendientes: [] }
-    return buildCompanyResumen(perfilData)
-  }, [perfilData])
-  const porcentajeCompletitud = resumenUi.porcentajeCompletitud
-  const pendientes = resumenUi.camposPendientes
+  const resumen = perfilData?.resumen || { porcentaje_completitud: 0, campos_pendientes: [] }
+  const porcentajeCompletitud =
+    Number.isInteger(resumen?.porcentaje_completitud) && resumen.porcentaje_completitud >= 0
+      ? resumen.porcentaje_completitud
+      : 0
+  const pendientes = Array.isArray(resumen?.campos_pendientes) ? resumen.campos_pendientes : []
 
   const sitioWeb = String(perfilData?.perfil?.sitio_web || '').trim()
   const linkedinUrl = String(perfilData?.perfil?.linkedin_url || '').trim()
@@ -225,7 +265,7 @@ export default function CompanyPerfil() {
   const verificationBadge = verificationStatusUi[verificationStatus] || verificationStatusUi.pendiente
   const canRequestVerification = ['pendiente', 'rechazada', 'vencida'].includes(verificationStatus)
   const socialLinks = [
-    { key: 'sitio_web', label: sitioWeb, icon: Globe, href: toExternalUrl(sitioWeb) },
+    { key: 'sitio_web', label: sitioWeb, icon: Building2, href: toExternalUrl(sitioWeb) },
     { key: 'linkedin_url', label: linkedinUrl, icon: Linkedin, href: toExternalUrl(linkedinUrl) },
     { key: 'instagram_url', label: instagramUrl, icon: Instagram, href: toExternalUrl(instagramUrl) },
     { key: 'facebook_url', label: facebookUrl, icon: Facebook, href: toExternalUrl(facebookUrl) },
@@ -234,6 +274,8 @@ export default function CompanyPerfil() {
     Number.isInteger(perfilData?.perfil?.tamano_empleados) && perfilData?.perfil?.tamano_empleados >= 0
       ? `${perfilData.perfil.tamano_empleados} personas`
       : 'No definido'
+  const activeUsersCount = companyUsers.filter((item) => item.estado === 'activo').length
+  const principalUser = companyUsers.find((item) => item.principal)
 
   const setField = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }))
@@ -357,6 +399,142 @@ export default function CompanyPerfil() {
       })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleCreateUser = async (event) => {
+    event.preventDefault()
+    if (savingUser) return
+
+    try {
+      setSavingUser(true)
+      const response = await createMyCompanyUser({
+        email: userForm.email.trim(),
+        rol_empresa: userForm.rol_empresa,
+        principal: userForm.principal,
+      })
+      setCompanyUsers(Array.isArray(response?.items) ? response.items : [])
+      setUserForm(USER_FORM_DEFAULT)
+      showToast({ type: 'success', message: 'Usuario vinculado a la empresa.' })
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getCompanyPerfilErrorMessage(error, 'No se pudo vincular el usuario.'),
+      })
+    } finally {
+      setSavingUser(false)
+    }
+  }
+
+  const handleUpdateUserRole = async (user, rolEmpresa) => {
+    if (updatingUserId) return
+    try {
+      setUpdatingUserId(user.id)
+      const response = await updateMyCompanyUser(user.id, { rol_empresa: rolEmpresa })
+      setCompanyUsers(Array.isArray(response?.items) ? response.items : [])
+      showToast({ type: 'success', message: 'Rol actualizado.' })
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getCompanyPerfilErrorMessage(error, 'No se pudo actualizar el rol.'),
+      })
+    } finally {
+      setUpdatingUserId(null)
+    }
+  }
+
+  const handleSetPrincipalUser = async (user) => {
+    if (updatingUserId) return
+    try {
+      setUpdatingUserId(user.id)
+      const response = await updateMyCompanyUser(user.id, { principal: true })
+      setCompanyUsers(Array.isArray(response?.items) ? response.items : [])
+      showToast({ type: 'success', message: 'Usuario principal actualizado.' })
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getCompanyPerfilErrorMessage(error, 'No se pudo actualizar el usuario principal.'),
+      })
+    } finally {
+      setUpdatingUserId(null)
+    }
+  }
+
+  const handleToggleUserState = async (user) => {
+    if (updatingUserId) return
+    try {
+      setUpdatingUserId(user.id)
+      const response =
+        user.estado === 'activo'
+          ? await deleteMyCompanyUser(user.id)
+          : await updateMyCompanyUser(user.id, { estado: 'activo' })
+      setCompanyUsers(Array.isArray(response?.items) ? response.items : [])
+      showToast({ type: 'success', message: 'Estado de usuario actualizado.' })
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getCompanyPerfilErrorMessage(error, 'No se pudo actualizar el estado del usuario.'),
+      })
+    } finally {
+      setUpdatingUserId(null)
+    }
+  }
+
+  const toggleArrayValue = (field, value) => {
+    setPreferences((prev) => {
+      const current = Array.isArray(prev[field]) ? prev[field] : []
+      const exists = current.includes(value)
+      return {
+        ...prev,
+        [field]: exists ? current.filter((item) => item !== value) : [...current, value],
+      }
+    })
+  }
+
+  const handleSavePreferences = async () => {
+    if (savingPreferences) return
+    try {
+      setSavingPreferences(true)
+      const response = await updateMyCompanyPreferences({
+        modalidades_permitidas: preferences.modalidades_permitidas,
+        niveles_experiencia: preferences.niveles_experiencia,
+        observaciones: preferences.observaciones.trim() || null,
+      })
+      const data = response?.preferencias || EMPTY_PREFERENCIAS
+      setPreferences({
+        modalidades_permitidas: Array.isArray(data.modalidades_permitidas) ? data.modalidades_permitidas : [],
+        niveles_experiencia: Array.isArray(data.niveles_experiencia) ? data.niveles_experiencia : [],
+        observaciones: data.observaciones || '',
+      })
+      showToast({ type: 'success', message: 'Preferencias guardadas.' })
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getCompanyPerfilErrorMessage(error, 'No se pudieron guardar las preferencias.'),
+      })
+    } finally {
+      setSavingPreferences(false)
+    }
+  }
+
+  const handleDeleteCompany = async () => {
+    if (deletingCompany) return
+    const confirmed = window.confirm(
+      'Esta accion desactiva la empresa y marca inactivos los usuarios vinculados. ¿Deseas continuar?'
+    )
+    if (!confirmed) return
+
+    try {
+      setDeletingCompany(true)
+      await deleteMyCompanyProfile()
+      showToast({ type: 'success', message: 'Empresa desactivada correctamente.' })
+      window.location.assign('/login')
+    } catch (error) {
+      setDeletingCompany(false)
+      showToast({
+        type: 'error',
+        message: getCompanyPerfilErrorMessage(error, 'No se pudo desactivar la empresa.'),
+      })
     }
   }
 
@@ -797,39 +975,163 @@ export default function CompanyPerfil() {
                 <Users className="w-5 h-5 text-primary" />
                 Usuarios / reclutadores
               </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span>Recruiter principal</span>
-                  <span className="font-semibold">2 activos</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Roles asignados</span>
-                  <span className="font-semibold">Admin / Reclutador</span>
-                </div>
-              </div>
-              <button type="button" className="text-xs text-primary font-semibold">
-                Gestionar usuarios
-              </button>
+              {loadingUsers ? (
+                <p className="text-sm text-foreground/70">Cargando usuarios...</p>
+              ) : (
+                <>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span>Activos</span>
+                      <span className="font-semibold">{activeUsersCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Principal</span>
+                      <span className="font-semibold">{principalUser?.nombre || 'No asignado'}</span>
+                    </div>
+                  </div>
+                  <form className="space-y-2" onSubmit={handleCreateUser}>
+                    <input
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm"
+                      type="email"
+                      placeholder="correo@empresa.com"
+                      value={userForm.email}
+                      onChange={(event) => setUserForm((prev) => ({ ...prev, email: event.target.value }))}
+                      required
+                    />
+                    <div className="flex items-center gap-2">
+                      <select
+                        className="flex-1 border border-border rounded-lg px-3 py-2 text-sm"
+                        value={userForm.rol_empresa}
+                        onChange={(event) =>
+                          setUserForm((prev) => ({ ...prev, rol_empresa: event.target.value }))
+                        }
+                      >
+                        <option value="admin">Admin</option>
+                        <option value="reclutador">Reclutador</option>
+                        <option value="visor">Visor</option>
+                      </select>
+                      <label className="text-xs inline-flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={userForm.principal}
+                          onChange={(event) =>
+                            setUserForm((prev) => ({ ...prev, principal: event.target.checked }))
+                          }
+                        />
+                        Principal
+                      </label>
+                    </div>
+                    <button
+                      type="submit"
+                      className="px-3 py-2 bg-primary text-white rounded-lg text-xs font-semibold"
+                      disabled={savingUser}
+                    >
+                      {savingUser ? 'Guardando...' : 'Agregar usuario'}
+                    </button>
+                  </form>
+                  <div className="space-y-2">
+                    {companyUsers.map((user) => (
+                      <div key={user.id} className="border border-border rounded-lg p-2 text-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-semibold">{user.nombre}</p>
+                            <p className="text-foreground/60">{user.email}</p>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full bg-secondary">{user.estado}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            className="border border-border rounded px-2 py-1"
+                            value={user.rol_empresa}
+                            onChange={(event) => handleUpdateUserRole(user, event.target.value)}
+                            disabled={Boolean(updatingUserId)}
+                          >
+                            <option value="admin">Admin</option>
+                            <option value="reclutador">Reclutador</option>
+                            <option value="visor">Visor</option>
+                          </select>
+                          <button
+                            type="button"
+                            className="px-2 py-1 border border-border rounded"
+                            onClick={() => handleSetPrincipalUser(user)}
+                            disabled={Boolean(updatingUserId) || user.principal}
+                          >
+                            {user.principal ? 'Principal' : 'Hacer principal'}
+                          </button>
+                          <button
+                            type="button"
+                            className="px-2 py-1 border border-border rounded"
+                            onClick={() => handleToggleUserState(user)}
+                            disabled={Boolean(updatingUserId)}
+                          >
+                            {user.estado === 'activo' ? 'Desactivar' : 'Activar'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {!companyUsers.length ? (
+                      <p className="text-xs text-foreground/60">No hay usuarios vinculados.</p>
+                    ) : null}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="company-card p-4 bg-secondary/60 shadow-none space-y-3">
               <div className="flex items-center gap-3 text-xs text-foreground/60">
-                <Link2 className="w-5 h-5 text-primary" />
+                <Building2 className="w-5 h-5 text-primary" />
                 Preferencias de contratacion
               </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span>Modalidad</span>
-                  <span className="font-semibold">Hibrido / Presencial</span>
+              {loadingPreferences ? (
+                <p className="text-sm text-foreground/70">Cargando preferencias...</p>
+              ) : (
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <p className="text-xs font-semibold mb-1">Modalidades</p>
+                    <div className="flex flex-wrap gap-2">
+                      {MODALIDADES.map((item) => (
+                        <label key={item} className="inline-flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={preferences.modalidades_permitidas.includes(item)}
+                            onChange={() => toggleArrayValue('modalidades_permitidas', item)}
+                          />
+                          {item}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold mb-1">Niveles</p>
+                    <div className="flex flex-wrap gap-2">
+                      {NIVELES.map((item) => (
+                        <label key={item} className="inline-flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={preferences.niveles_experiencia.includes(item)}
+                            onChange={() => toggleArrayValue('niveles_experiencia', item)}
+                          />
+                          {item}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <textarea
+                    className="w-full border border-border rounded-lg px-3 py-2 text-xs min-h-20"
+                    placeholder="Observaciones"
+                    value={preferences.observaciones}
+                    onChange={(event) => setPreferences((prev) => ({ ...prev, observaciones: event.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    className="px-3 py-2 bg-primary text-white rounded-lg text-xs font-semibold"
+                    onClick={handleSavePreferences}
+                    disabled={savingPreferences}
+                  >
+                    {savingPreferences ? 'Guardando...' : 'Guardar preferencias'}
+                  </button>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span>Nivel de experiencia</span>
-                  <span className="font-semibold">Junior / Semi-senior</span>
-                </div>
-              </div>
-              <button type="button" className="text-xs text-primary font-semibold">
-                Editar preferencias
-              </button>
+              )}
             </div>
 
             <div className="company-card p-4 bg-secondary/60 shadow-none space-y-3">
@@ -868,14 +1170,19 @@ export default function CompanyPerfil() {
 
             <div className="company-card p-4 bg-secondary/60 shadow-none space-y-3">
               <div className="flex items-center gap-3 text-xs text-foreground/60">
-                <Globe className="w-5 h-5 text-primary" />
-                Facturacion
+                <Trash2 className="w-5 h-5 text-rose-600" />
+                Desactivar empresa
               </div>
               <p className="text-sm text-foreground/70">
-                Configura metodos de pago y plan de suscripcion si aplica.
+                Esta accion desactiva la empresa y marca inactivos los usuarios vinculados.
               </p>
-              <button type="button" className="text-xs text-primary font-semibold">
-                Configurar facturacion
+              <button
+                type="button"
+                className="px-3 py-2 rounded-lg border border-rose-300 text-rose-700 text-xs font-semibold"
+                onClick={handleDeleteCompany}
+                disabled={deletingCompany}
+              >
+                {deletingCompany ? 'Desactivando...' : 'Desactivar empresa'}
               </button>
             </div>
           </div>

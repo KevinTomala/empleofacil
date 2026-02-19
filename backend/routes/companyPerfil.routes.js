@@ -7,7 +7,14 @@ const {
   getMyCompanyPerfil,
   updateMyCompanyDatosGenerales,
   uploadMyCompanyLogo,
-  deleteMyCompanyLogo
+  deleteMyCompanyLogo,
+  listMyCompanyUsuarios,
+  createMyCompanyUsuario,
+  updateMyCompanyUsuario,
+  deleteMyCompanyUsuario,
+  getMyCompanyPreferencias,
+  upsertMyCompanyPreferencias,
+  deleteMyCompanyPerfil
 } = require('../controllers/companyPerfil.controller');
 const {
   getMyCompanyVerification,
@@ -56,5 +63,12 @@ router.put('/perfil/me/datos-generales', authRequired, requireRole(['empresa', '
 router.post('/perfil/me/logo/delete', authRequired, requireRole(['empresa', 'superadmin']), deleteMyCompanyLogo);
 router.post('/perfil/me/logo', authRequired, requireRole(['empresa', 'superadmin']), uploadLogo.single('logo'), uploadMyCompanyLogo);
 router.delete('/perfil/me/logo', authRequired, requireRole(['empresa', 'superadmin']), deleteMyCompanyLogo);
+router.get('/perfil/me/usuarios', authRequired, requireRole(['empresa', 'superadmin']), listMyCompanyUsuarios);
+router.post('/perfil/me/usuarios', authRequired, requireRole(['empresa', 'superadmin']), createMyCompanyUsuario);
+router.put('/perfil/me/usuarios/:empresaUsuarioId', authRequired, requireRole(['empresa', 'superadmin']), updateMyCompanyUsuario);
+router.delete('/perfil/me/usuarios/:empresaUsuarioId', authRequired, requireRole(['empresa', 'superadmin']), deleteMyCompanyUsuario);
+router.get('/perfil/me/preferencias', authRequired, requireRole(['empresa', 'superadmin']), getMyCompanyPreferencias);
+router.put('/perfil/me/preferencias', authRequired, requireRole(['empresa', 'superadmin']), upsertMyCompanyPreferencias);
+router.delete('/perfil/me', authRequired, requireRole(['empresa', 'superadmin']), deleteMyCompanyPerfil);
 
 module.exports = router;

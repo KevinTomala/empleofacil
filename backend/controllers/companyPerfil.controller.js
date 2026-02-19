@@ -1,11 +1,22 @@
 const fs = require('fs');
 const path = require('path');
 const {
+  VALID_ROLES_EMPRESA,
+  VALID_ESTADOS_EMPRESA_USUARIO,
+  VALID_MODALIDADES,
+  VALID_NIVELES_EXPERIENCIA,
   resolveEmpresaIdForUser,
   getPerfilByEmpresaId,
   updateEmpresa,
   upsertPerfilEmpresa,
-  saveResumenPerfil
+  saveResumenPerfil,
+  getEmpresaPreferenciasById,
+  upsertEmpresaPreferenciasById,
+  listEmpresaUsuariosByEmpresaId,
+  createEmpresaUsuarioByEmail,
+  updateEmpresaUsuarioById,
+  deactivateEmpresaUsuarioById,
+  softDeleteEmpresaById
 } = require('../services/companyPerfil.service');
 const { ensureVerificacionByScope } = require('../services/verificaciones.service');
 
@@ -33,6 +44,19 @@ function normalizeNullableString(value) {
   if (typeof value !== 'string') return value;
   const trimmed = value.trim();
   return trimmed === '' ? null : trimmed;
+}
+
+function parsePositiveInt(value) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number <= 0) return null;
+  return number;
+}
+
+function parseOptionalBoolean(value) {
+  if (value === undefined) return undefined;
+  if (value === true || value === 1 || value === '1' || value === 'true') return true;
+  if (value === false || value === 0 || value === '0' || value === 'false') return false;
+  return null;
 }
 
 function validateAndNormalizePayload(payload) {
@@ -123,6 +147,21 @@ async function resolveMyEmpresa(req) {
   if (!userId) return null;
 
   return resolveEmpresaIdForUser(userId, { autoCreate: rol === 'empresa' });
+}
+
+function mapServiceErrorToHttp(error, defaultStatus = 500) {
+  const code = String(error?.code || '');
+
+  if (code === 'EMPRESA_NOT_FOUND') return { status: 404, error: code };
+  if (code === 'USER_NOT_FOUND') return { status: 404, error: code };
+  if (code === 'LINK_NOT_FOUND') return { status: 404, error: code };
+  if (code === 'USER_ALREADY_LINKED') return { status: 409, error: code };
+  if (code === 'LAST_ADMIN_REQUIRED') return { status: 400, error: code };
+
+  return {
+    status: defaultStatus,
+    error: defaultStatus >= 500 ? 'PROFILE_UPDATE_FAILED' : code || 'UNKNOWN_ERROR'
+  };
 }
 
 async function getMyCompanyPerfil(req, res) {
@@ -336,9 +375,226 @@ async function deleteMyCompanyLogo(req, res) {
   }
 }
 
+async function listMyCompanyUsuarios(req, res) {
+  try {
+    const empresaId = await resolveMyEmpresa(req);
+    if (!empresaId) return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+
+    const items = await listEmpresaUsuariosByEmpresaId(empresaId);
+    return res.json({ items });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'PROFILE_FETCH_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+function validateCreateCompanyUserPayload(payload) {
+  if (!isPlainObject(payload)) return null;
+  const email = normalizeNullableString(payload.email);
+  if (!email || !EMAIL_RE.test(email)) return null;
+
+  const rolEmpresa = payload.rol_empresa ? String(payload.rol_empresa).trim() : 'reclutador';
+  if (!VALID_ROLES_EMPRESA.includes(rolEmpresa)) return null;
+
+  const principal = parseOptionalBoolean(payload.principal);
+  if (principal === null) return null;
+
+  return {
+    email,
+    rol_empresa: rolEmpresa,
+    principal: principal === undefined ? false : principal
+  };
+}
+
+async function createMyCompanyUsuario(req, res) {
+  const payload = validateCreateCompanyUserPayload(req.body || {});
+  if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  try {
+    const empresaId = await resolveMyEmpresa(req);
+    if (!empresaId) return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+
+    const items = await createEmpresaUsuarioByEmail(empresaId, {
+      email: payload.email,
+      rolEmpresa: payload.rol_empresa,
+      principal: payload.principal
+    });
+    return res.status(201).json({ ok: true, items });
+  } catch (error) {
+    const mapped = mapServiceErrorToHttp(error);
+    return res.status(mapped.status).json({
+      error: mapped.error,
+      details: mapped.status >= 500 ? String(error.message || error) : undefined
+    });
+  }
+}
+
+function validateUpdateCompanyUserPayload(payload) {
+  if (!isPlainObject(payload)) return null;
+  const keys = Object.keys(payload);
+  if (!keys.length) return null;
+
+  const patch = {};
+
+  if ('rol_empresa' in payload) {
+    const rolEmpresa = String(payload.rol_empresa || '').trim();
+    if (!VALID_ROLES_EMPRESA.includes(rolEmpresa)) return null;
+    patch.rol_empresa = rolEmpresa;
+  }
+
+  if ('estado' in payload) {
+    const estado = String(payload.estado || '').trim();
+    if (!VALID_ESTADOS_EMPRESA_USUARIO.includes(estado)) return null;
+    patch.estado = estado;
+  }
+
+  if ('principal' in payload) {
+    const principal = parseOptionalBoolean(payload.principal);
+    if (principal === null || principal === undefined) return null;
+    patch.principal = principal;
+  }
+
+  if (!Object.keys(patch).length) return null;
+  return patch;
+}
+
+async function updateMyCompanyUsuario(req, res) {
+  const empresaUsuarioId = parsePositiveInt(req.params.empresaUsuarioId);
+  if (!empresaUsuarioId) return res.status(400).json({ error: 'INVALID_EMPRESA_USUARIO_ID' });
+
+  const patch = validateUpdateCompanyUserPayload(req.body || {});
+  if (!patch) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  try {
+    const empresaId = await resolveMyEmpresa(req);
+    if (!empresaId) return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+
+    const items = await updateEmpresaUsuarioById(empresaId, empresaUsuarioId, patch);
+    return res.json({ ok: true, items });
+  } catch (error) {
+    const mapped = mapServiceErrorToHttp(error);
+    return res.status(mapped.status).json({
+      error: mapped.error,
+      details: mapped.status >= 500 ? String(error.message || error) : undefined
+    });
+  }
+}
+
+async function deleteMyCompanyUsuario(req, res) {
+  const empresaUsuarioId = parsePositiveInt(req.params.empresaUsuarioId);
+  if (!empresaUsuarioId) return res.status(400).json({ error: 'INVALID_EMPRESA_USUARIO_ID' });
+
+  try {
+    const empresaId = await resolveMyEmpresa(req);
+    if (!empresaId) return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+
+    const items = await deactivateEmpresaUsuarioById(empresaId, empresaUsuarioId);
+    return res.json({ ok: true, items });
+  } catch (error) {
+    const mapped = mapServiceErrorToHttp(error);
+    return res.status(mapped.status).json({
+      error: mapped.error,
+      details: mapped.status >= 500 ? String(error.message || error) : undefined
+    });
+  }
+}
+
+async function getMyCompanyPreferencias(req, res) {
+  try {
+    const empresaId = await resolveMyEmpresa(req);
+    if (!empresaId) return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+
+    const preferencias = await getEmpresaPreferenciasById(empresaId);
+    return res.json({ preferencias });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'PROFILE_FETCH_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+function validatePreferenciasPayload(payload) {
+  if (!isPlainObject(payload)) return null;
+  const keys = Object.keys(payload);
+  if (!keys.length) return null;
+
+  const allowed = ['modalidades_permitidas', 'niveles_experiencia', 'observaciones'];
+  if (!keys.every((key) => allowed.includes(key))) return null;
+
+  const modalidadesRaw = payload.modalidades_permitidas;
+  const nivelesRaw = payload.niveles_experiencia;
+  const observacionesRaw = payload.observaciones;
+
+  if (!Array.isArray(modalidadesRaw) || !Array.isArray(nivelesRaw)) return null;
+
+  const modalidades = Array.from(
+    new Set(modalidadesRaw.map((item) => String(item || '').trim()).filter((item) => VALID_MODALIDADES.includes(item)))
+  );
+  const niveles = Array.from(
+    new Set(nivelesRaw.map((item) => String(item || '').trim()).filter((item) => VALID_NIVELES_EXPERIENCIA.includes(item)))
+  );
+
+  if (modalidades.length !== modalidadesRaw.length) return null;
+  if (niveles.length !== nivelesRaw.length) return null;
+
+  const observaciones = normalizeNullableString(observacionesRaw);
+  if (!(observaciones === null || typeof observaciones === 'string')) return null;
+
+  return {
+    modalidades_permitidas: modalidades,
+    niveles_experiencia: niveles,
+    observaciones
+  };
+}
+
+async function upsertMyCompanyPreferencias(req, res) {
+  const payload = validatePreferenciasPayload(req.body || {});
+  if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  try {
+    const empresaId = await resolveMyEmpresa(req);
+    if (!empresaId) return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+
+    const preferencias = await upsertEmpresaPreferenciasById(empresaId, payload);
+    return res.json({ ok: true, preferencias });
+  } catch (error) {
+    const mapped = mapServiceErrorToHttp(error);
+    return res.status(mapped.status).json({
+      error: mapped.error,
+      details: mapped.status >= 500 ? String(error.message || error) : undefined
+    });
+  }
+}
+
+async function deleteMyCompanyPerfil(req, res) {
+  try {
+    const empresaId = await resolveMyEmpresa(req);
+    if (!empresaId) return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+
+    await softDeleteEmpresaById(empresaId);
+    return res.json({ ok: true });
+  } catch (error) {
+    const mapped = mapServiceErrorToHttp(error);
+    return res.status(mapped.status).json({
+      error: mapped.status >= 500 ? 'PROFILE_DELETE_FAILED' : mapped.error,
+      details: mapped.status >= 500 ? String(error.message || error) : undefined
+    });
+  }
+}
+
 module.exports = {
   getMyCompanyPerfil,
   updateMyCompanyDatosGenerales,
   uploadMyCompanyLogo,
-  deleteMyCompanyLogo
+  deleteMyCompanyLogo,
+  listMyCompanyUsuarios,
+  createMyCompanyUsuario,
+  updateMyCompanyUsuario,
+  deleteMyCompanyUsuario,
+  getMyCompanyPreferencias,
+  upsertMyCompanyPreferencias,
+  deleteMyCompanyPerfil
 };
