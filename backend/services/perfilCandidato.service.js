@@ -1,5 +1,12 @@
 const db = require('../db');
 
+function isSchemaDriftError(error) {
+  if (!error) return false;
+  const code = String(error.code || '');
+  const errno = Number(error.errno || 0);
+  return code === 'ER_BAD_FIELD_ERROR' || code === 'ER_NO_SUCH_TABLE' || errno === 1054 || errno === 1146;
+}
+
 function isExternalLikeFormacion(row) {
   if (row?.categoria_formacion === 'externa') return true;
   if (row?.categoria_formacion) return false;
@@ -87,12 +94,15 @@ async function getPerfilByCandidatoId(candidatoId) {
      LEFT JOIN (
        SELECT ce1.candidato_id, ce1.nivel_estudio, ce1.institucion, ce1.titulo_obtenido
        FROM candidatos_educacion_general ce1
-       INNER JOIN (
-         SELECT candidato_id, MAX(id) AS max_id
-         FROM candidatos_educacion_general
-         WHERE deleted_at IS NULL
-         GROUP BY candidato_id
-       ) cem ON cem.max_id = ce1.id
+       LEFT JOIN candidatos_educacion_general ce2
+         ON ce2.candidato_id = ce1.candidato_id
+        AND ce2.deleted_at IS NULL
+        AND (
+          ce2.updated_at > ce1.updated_at
+          OR (ce2.updated_at = ce1.updated_at AND ce2.created_at > ce1.created_at)
+        )
+       WHERE ce1.deleted_at IS NULL
+         AND ce2.candidato_id IS NULL
      ) ce
        ON ce.candidato_id = c.id
      WHERE c.id = ?
@@ -211,15 +221,40 @@ async function upsertByCandidatoIdPk(table, candidatoId, patch) {
 }
 
 async function listEducacionGeneralItems(candidatoId) {
-  const [rows] = await db.query(
-    `SELECT id, candidato_id, nivel_estudio, institucion, titulo_obtenido, created_at, updated_at
-     FROM candidatos_educacion_general
-     WHERE candidato_id = ?
-       AND deleted_at IS NULL
-     ORDER BY created_at DESC, id DESC`,
-    [candidatoId]
-  );
-  return rows;
+  try {
+    const [rows] = await db.query(
+      `SELECT id, candidato_id, nivel_estudio, institucion, titulo_obtenido, created_at, updated_at
+       FROM candidatos_educacion_general
+       WHERE candidato_id = ?
+         AND deleted_at IS NULL
+       ORDER BY created_at DESC, id DESC`,
+      [candidatoId]
+    );
+    return rows;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    try {
+      const [rows] = await db.query(
+        `SELECT
+           candidato_id AS id,
+           candidato_id,
+           nivel_estudio,
+           institucion,
+           titulo_obtenido,
+           created_at,
+           updated_at
+         FROM candidatos_educacion_general
+         WHERE candidato_id = ?
+           AND deleted_at IS NULL
+         ORDER BY created_at DESC`,
+        [candidatoId]
+      );
+      return rows;
+    } catch (fallbackError) {
+      if (!isSchemaDriftError(fallbackError)) throw fallbackError;
+      return [];
+    }
+  }
 }
 
 async function createEducacionGeneralItem(candidatoId, payload) {
@@ -344,68 +379,100 @@ async function deleteIdioma(candidatoId, idiomaId) {
 }
 
 async function listExperiencias(candidatoId) {
-  const [rows] = await db.query(
-    `SELECT
-      e.id,
-      e.candidato_id,
-      e.empresa_id,
-      e.cargo,
-      e.fecha_inicio,
-      e.fecha_fin,
-      e.actualmente_trabaja,
-      e.tipo_contrato,
-      e.descripcion,
-      e.created_at,
-      e.updated_at,
-      ec.id AS cert_id,
-      ec.nombre_archivo AS cert_nombre_archivo,
-      ec.nombre_original AS cert_nombre_original,
-      ec.ruta_archivo AS cert_ruta_archivo,
-      ec.tipo_mime AS cert_tipo_mime,
-      ec.tamanio_kb AS cert_tamanio_kb,
-      ec.fecha_emision AS cert_fecha_emision,
-      ec.descripcion AS cert_descripcion,
-      ec.estado AS cert_estado,
-      ec.created_at AS cert_created_at,
-      ec.updated_at AS cert_updated_at
-     FROM candidatos_experiencia e
-     LEFT JOIN candidatos_experiencia_certificados ec
-       ON ec.experiencia_id = e.id
-      AND ec.deleted_at IS NULL
-     WHERE e.candidato_id = ?
-       AND e.deleted_at IS NULL
-     ORDER BY e.created_at DESC`,
-    [candidatoId]
-  );
+  try {
+    const [rows] = await db.query(
+      `SELECT
+        e.id,
+        e.candidato_id,
+        e.empresa_id,
+        e.cargo,
+        e.fecha_inicio,
+        e.fecha_fin,
+        e.actualmente_trabaja,
+        e.tipo_contrato,
+        e.descripcion,
+        e.created_at,
+        e.updated_at,
+        ec.id AS cert_id,
+        ec.nombre_archivo AS cert_nombre_archivo,
+        ec.nombre_original AS cert_nombre_original,
+        ec.ruta_archivo AS cert_ruta_archivo,
+        ec.tipo_mime AS cert_tipo_mime,
+        ec.tamanio_kb AS cert_tamanio_kb,
+        ec.fecha_emision AS cert_fecha_emision,
+        ec.descripcion AS cert_descripcion,
+        ec.estado AS cert_estado,
+        ec.created_at AS cert_created_at,
+        ec.updated_at AS cert_updated_at
+       FROM candidatos_experiencia e
+       LEFT JOIN candidatos_experiencia_certificados ec
+         ON ec.experiencia_id = e.id
+        AND ec.deleted_at IS NULL
+       WHERE e.candidato_id = ?
+         AND e.deleted_at IS NULL
+       ORDER BY e.created_at DESC`,
+      [candidatoId]
+    );
 
-  return rows.map((row) => ({
-    id: row.id,
-    candidato_id: row.candidato_id,
-    empresa_id: row.empresa_id,
-    cargo: row.cargo,
-    fecha_inicio: row.fecha_inicio,
-    fecha_fin: row.fecha_fin,
-    actualmente_trabaja: row.actualmente_trabaja,
-    tipo_contrato: row.tipo_contrato,
-    descripcion: row.descripcion,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-    certificado_laboral: row.cert_id
-      ? {
-          id: row.cert_id,
-          nombre_archivo: row.cert_nombre_archivo,
-          nombre_original: row.cert_nombre_original,
-          ruta_archivo: row.cert_ruta_archivo,
-          tipo_mime: row.cert_tipo_mime,
-          tamanio_kb: row.cert_tamanio_kb,
-          fecha_emision: row.cert_fecha_emision,
-          descripcion: row.cert_descripcion,
-          estado: row.cert_estado,
-          created_at: row.cert_created_at,
-          updated_at: row.cert_updated_at
-        }
-      : null
-  }));
+    return rows.map((row) => ({
+      id: row.id,
+      candidato_id: row.candidato_id,
+      empresa_id: row.empresa_id,
+      cargo: row.cargo,
+      fecha_inicio: row.fecha_inicio,
+      fecha_fin: row.fecha_fin,
+      actualmente_trabaja: row.actualmente_trabaja,
+      tipo_contrato: row.tipo_contrato,
+      descripcion: row.descripcion,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      certificado_laboral: row.cert_id
+        ? {
+            id: row.cert_id,
+            nombre_archivo: row.cert_nombre_archivo,
+            nombre_original: row.cert_nombre_original,
+            ruta_archivo: row.cert_ruta_archivo,
+            tipo_mime: row.cert_tipo_mime,
+            tamanio_kb: row.cert_tamanio_kb,
+            fecha_emision: row.cert_fecha_emision,
+            descripcion: row.cert_descripcion,
+            estado: row.cert_estado,
+            created_at: row.cert_created_at,
+            updated_at: row.cert_updated_at
+          }
+        : null
+    }));
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    try {
+      const [rows] = await db.query(
+        `SELECT
+          e.id,
+          e.candidato_id,
+          e.empresa_id,
+          e.cargo,
+          e.fecha_inicio,
+          e.fecha_fin,
+          e.actualmente_trabaja,
+          e.tipo_contrato,
+          e.descripcion,
+          e.created_at,
+          e.updated_at
+         FROM candidatos_experiencia e
+         WHERE e.candidato_id = ?
+           AND e.deleted_at IS NULL
+         ORDER BY e.created_at DESC`,
+        [candidatoId]
+      );
+      return rows.map((row) => ({
+        ...row,
+        certificado_laboral: null
+      }));
+    } catch (fallbackError) {
+      if (!isSchemaDriftError(fallbackError)) throw fallbackError;
+      return [];
+    }
+  }
 }
 
 async function createExperiencia(candidatoId, payload) {
@@ -600,51 +667,105 @@ async function deleteExperienciaCertificado(candidatoId, experienciaId) {
 }
 
 async function listFormacion(candidatoId) {
-  const [rows] = await db.query(
-    `SELECT
-      f.id,
-      f.candidato_id,
-      f.matricula_id,
-      f.nivel_id,
-      f.curso_id,
-      f.formacion_origen_id,
-      f.estado,
-      f.fecha_inicio,
-      f.fecha_fin,
-      f.fecha_aprobacion,
-      f.activo,
-      f.categoria_formacion,
-      f.subtipo_formacion,
-      f.institucion,
-      f.nombre_programa,
-      f.titulo_obtenido,
-      f.entidad_emisora,
-      f.numero_registro,
-      f.fecha_emision,
-      f.fecha_vencimiento,
-      f.created_at,
-      f.updated_at,
-      fr.id AS fr_id,
-      fr.resultado_curso AS fr_resultado_curso,
-      fr.nota_curso AS fr_nota_curso,
-      fr.fuente_curso AS fr_fuente_curso,
-      fr.fecha_cierre_curso AS fr_fecha_cierre_curso,
-      fr.examen_estado AS fr_examen_estado,
-      fr.nota_examen AS fr_nota_examen,
-      fr.acreditado AS fr_acreditado,
-      fr.fecha_examen AS fr_fecha_examen,
-      fr.documento_url AS fr_documento_url,
-      fr.created_at AS fr_created_at,
-      fr.updated_at AS fr_updated_at
-     FROM candidatos_formaciones f
-     LEFT JOIN candidatos_formacion_resultados fr
-       ON fr.candidato_formacion_id = f.id
-      AND fr.deleted_at IS NULL
-     WHERE f.candidato_id = ?
-       AND f.deleted_at IS NULL
-     ORDER BY f.created_at DESC`,
-    [candidatoId]
-  );
+  let rows = [];
+  try {
+    const [rowsFull] = await db.query(
+      `SELECT
+        f.id,
+        f.candidato_id,
+        f.matricula_id,
+        f.nivel_id,
+        f.curso_id,
+        f.formacion_origen_id,
+        f.estado,
+        f.fecha_inicio,
+        f.fecha_fin,
+        f.fecha_aprobacion,
+        f.activo,
+        f.categoria_formacion,
+        f.subtipo_formacion,
+        f.institucion,
+        f.nombre_programa,
+        f.titulo_obtenido,
+        f.entidad_emisora,
+        f.numero_registro,
+        f.fecha_emision,
+        f.fecha_vencimiento,
+        f.created_at,
+        f.updated_at,
+        fr.id AS fr_id,
+        fr.resultado_curso AS fr_resultado_curso,
+        fr.nota_curso AS fr_nota_curso,
+        fr.fuente_curso AS fr_fuente_curso,
+        fr.fecha_cierre_curso AS fr_fecha_cierre_curso,
+        fr.examen_estado AS fr_examen_estado,
+        fr.nota_examen AS fr_nota_examen,
+        fr.acreditado AS fr_acreditado,
+        fr.fecha_examen AS fr_fecha_examen,
+        fr.documento_url AS fr_documento_url,
+        fr.created_at AS fr_created_at,
+        fr.updated_at AS fr_updated_at
+       FROM candidatos_formaciones f
+       LEFT JOIN candidatos_formacion_resultados fr
+         ON fr.candidato_formacion_id = f.id
+        AND fr.deleted_at IS NULL
+       WHERE f.candidato_id = ?
+         AND f.deleted_at IS NULL
+       ORDER BY f.created_at DESC`,
+      [candidatoId]
+    );
+    rows = rowsFull;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    try {
+      const [rowsLegacy] = await db.query(
+        `SELECT
+          f.id,
+          f.candidato_id,
+          f.matricula_id,
+          f.nivel_id,
+          f.curso_id,
+          f.formacion_origen_id,
+          f.estado,
+          f.fecha_inicio,
+          f.fecha_fin,
+          f.fecha_aprobacion,
+          f.activo,
+          NULL AS categoria_formacion,
+          NULL AS subtipo_formacion,
+          NULL AS institucion,
+          NULL AS nombre_programa,
+          NULL AS titulo_obtenido,
+          NULL AS entidad_emisora,
+          NULL AS numero_registro,
+          NULL AS fecha_emision,
+          NULL AS fecha_vencimiento,
+          f.created_at,
+          f.updated_at,
+          NULL AS fr_id,
+          NULL AS fr_resultado_curso,
+          NULL AS fr_nota_curso,
+          NULL AS fr_fuente_curso,
+          NULL AS fr_fecha_cierre_curso,
+          NULL AS fr_examen_estado,
+          NULL AS fr_nota_examen,
+          NULL AS fr_acreditado,
+          NULL AS fr_fecha_examen,
+          NULL AS fr_documento_url,
+          NULL AS fr_created_at,
+          NULL AS fr_updated_at
+         FROM candidatos_formaciones f
+         WHERE f.candidato_id = ?
+           AND f.deleted_at IS NULL
+         ORDER BY f.created_at DESC`,
+        [candidatoId]
+      );
+      rows = rowsLegacy;
+    } catch (fallbackError) {
+      if (!isSchemaDriftError(fallbackError)) throw fallbackError;
+      rows = [];
+    }
+  }
 
   return rows.map((row) => {
     const externalLike = isExternalLikeFormacion(row);
