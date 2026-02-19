@@ -4,6 +4,7 @@ const VALID_VERIFICACION_TIPOS = ['empresa', 'candidato'];
 const VALID_VERIFICACION_ESTADOS = ['pendiente', 'en_revision', 'aprobada', 'rechazada', 'vencida', 'suspendida'];
 const VALID_VERIFICACION_NIVELES = ['basico', 'completo'];
 const VALID_EVENTO_ACCIONES = ['solicitada', 'en_revision', 'aprobada', 'rechazada', 'suspendida', 'reabierta', 'vencida'];
+let verificationSchemaReadyPromise = null;
 
 function toMysqlDateTime(value = new Date()) {
   return new Date(value).toISOString().slice(0, 19).replace('T', ' ');
@@ -14,6 +15,68 @@ function parseDateToMysqlOrNull(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return toMysqlDateTime(date);
+}
+
+async function ensureVerificationSchema() {
+  if (verificationSchemaReadyPromise) {
+    return verificationSchemaReadyPromise;
+  }
+
+  verificationSchemaReadyPromise = (async () => {
+    await db.query(
+      `CREATE TABLE IF NOT EXISTS verificaciones_cuenta (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        cuenta_tipo ENUM('empresa','candidato') NOT NULL,
+        empresa_id BIGINT NULL,
+        candidato_id BIGINT NULL,
+        estado ENUM('pendiente','en_revision','aprobada','rechazada','vencida','suspendida') NOT NULL DEFAULT 'pendiente',
+        nivel ENUM('basico','completo') NOT NULL DEFAULT 'basico',
+        motivo_rechazo TEXT NULL,
+        notas_admin TEXT NULL,
+        fecha_solicitud DATETIME DEFAULT CURRENT_TIMESTAMP,
+        reviewed_by BIGINT NULL,
+        reviewed_at DATETIME NULL,
+        expires_at DATETIME NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT fk_verificaciones_cuenta_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+        CONSTRAINT fk_verificaciones_cuenta_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
+        CONSTRAINT fk_verificaciones_cuenta_reviewed_by FOREIGN KEY (reviewed_by) REFERENCES usuarios(id) ON DELETE SET NULL,
+        UNIQUE KEY uq_verificacion_empresa (empresa_id),
+        UNIQUE KEY uq_verificacion_candidato (candidato_id),
+        INDEX idx_verificaciones_tipo_estado (cuenta_tipo, estado),
+        INDEX idx_verificaciones_reviewed_at (reviewed_at),
+        INDEX idx_verificaciones_expires_at (expires_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    );
+
+    await db.query(
+      `CREATE TABLE IF NOT EXISTS verificaciones_cuenta_eventos (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        verificacion_id BIGINT NOT NULL,
+        accion ENUM('solicitada','en_revision','aprobada','rechazada','suspendida','reabierta','vencida') NOT NULL,
+        estado_anterior ENUM('pendiente','en_revision','aprobada','rechazada','vencida','suspendida') NULL,
+        estado_nuevo ENUM('pendiente','en_revision','aprobada','rechazada','vencida','suspendida') NULL,
+        actor_usuario_id BIGINT NULL,
+        actor_rol ENUM('candidato','empresa','administrador','superadmin','system') DEFAULT 'system',
+        comentario TEXT NULL,
+        metadata JSON NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_verificaciones_eventos_verificacion FOREIGN KEY (verificacion_id) REFERENCES verificaciones_cuenta(id) ON DELETE CASCADE,
+        CONSTRAINT fk_verificaciones_eventos_actor FOREIGN KEY (actor_usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+        INDEX idx_verificaciones_eventos_verificacion (verificacion_id),
+        INDEX idx_verificaciones_eventos_accion (accion),
+        INDEX idx_verificaciones_eventos_created_at (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    );
+  })();
+
+  try {
+    await verificationSchemaReadyPromise;
+  } catch (error) {
+    verificationSchemaReadyPromise = null;
+    throw error;
+  }
 }
 
 function mapVerificacionRow(row) {
@@ -67,6 +130,8 @@ async function ensureVerificacionDefaults() {
 }
 
 async function selectVerificacionByScope({ tipo, empresaId = null, candidatoId = null }, connection = db) {
+  await ensureVerificationSchema();
+
   if (!VALID_VERIFICACION_TIPOS.includes(tipo)) return null;
   if (tipo === 'empresa' && !empresaId) return null;
   if (tipo === 'candidato' && !candidatoId) return null;
@@ -103,6 +168,8 @@ async function selectVerificacionByScope({ tipo, empresaId = null, candidatoId =
 }
 
 async function ensureVerificacionByScope({ tipo, empresaId = null, candidatoId = null }, connection = db) {
+  await ensureVerificationSchema();
+
   const existing = await selectVerificacionByScope({ tipo, empresaId, candidatoId }, connection);
   if (existing) return existing;
 
@@ -176,6 +243,8 @@ async function requestVerificacionByScope(
     comentario = null
   }
 ) {
+  await ensureVerificationSchema();
+
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
@@ -240,6 +309,8 @@ async function reviewVerificacionById(
     comentario = null
   }
 ) {
+  await ensureVerificationSchema();
+
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
@@ -320,6 +391,8 @@ async function reviewVerificacionById(
 }
 
 async function listVerificacionEventos(verificacionId, { limit = 20 } = {}) {
+  await ensureVerificationSchema();
+
   const safeLimit = Math.max(1, Math.min(Number(limit || 20), 100));
   const [rows] = await db.query(
     `SELECT
@@ -367,6 +440,8 @@ async function listVerificacionEventos(verificacionId, { limit = 20 } = {}) {
 }
 
 async function getVerificacionById(verificacionId) {
+  await ensureVerificationSchema();
+
   const [rows] = await db.query(
     `SELECT
       v.*,
@@ -398,6 +473,7 @@ async function getVerificacionById(verificacionId) {
 }
 
 async function listVerificaciones({ tipo = null, estado = null, q = '', page = 1, pageSize = 20 } = {}) {
+  await ensureVerificationSchema();
   await ensureVerificacionDefaults();
 
   const safePage = Math.max(Number(page || 1), 1);
