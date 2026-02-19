@@ -129,6 +129,7 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId) {
         nivel_estudio, institucion, titulo_obtenido
       FROM candidatos_educacion_general
       WHERE candidato_id = ? AND deleted_at IS NULL
+      ORDER BY updated_at DESC, id DESC
       LIMIT 1`,
       [estudianteId]
     ),

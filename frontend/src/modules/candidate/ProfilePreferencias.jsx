@@ -74,7 +74,7 @@ export default function ProfilePreferencias() {
         if (!active) return
 
         const logistica = data?.logistica || {}
-        setIsSectionComplete(isRouteComplete('/perfil/preferencias', data))
+        setIsSectionComplete(isRouteComplete('/perfil/movilidad', data))
         setForm({
           movilizacion: boolToSelect(logistica.movilizacion),
           tipo_vehiculo: logistica.tipo_vehiculo || '',
@@ -121,11 +121,11 @@ export default function ProfilePreferencias() {
     try {
       setSaving(true)
       await saveForm()
-      showToast({ type: 'success', message: 'Preferencias guardadas.' })
+      showToast({ type: 'success', message: 'Movilidad guardada.' })
     } catch (error) {
       showToast({
         type: 'error',
-        message: getPerfilErrorMessage(error, 'No se pudo guardar tus preferencias.')
+        message: getPerfilErrorMessage(error, 'No se pudo guardar la movilidad.')
       })
     } finally {
       setSaving(false)
@@ -136,12 +136,12 @@ export default function ProfilePreferencias() {
     try {
       setSaving(true)
       await saveForm()
-      showToast({ type: 'success', message: 'Preferencias guardadas.' })
-      navigate('/perfil/experiencia')
+      showToast({ type: 'success', message: 'Movilidad guardada.' })
+      navigate('/perfil/salud')
     } catch (error) {
       showToast({
         type: 'error',
-        message: getPerfilErrorMessage(error, 'No se pudo guardar tus preferencias.')
+        message: getPerfilErrorMessage(error, 'No se pudo guardar la movilidad.')
       })
     } finally {
       setSaving(false)
@@ -149,9 +149,9 @@ export default function ProfilePreferencias() {
   }
 
   return (
-    <ProfileWizardLayout
-      currentTab="/perfil/preferencias"
-      title="Preferencias laborales"
+      <ProfileWizardLayout
+      currentTab="/perfil/movilidad"
+      title="Movilidad"
       description="Configura movilidad y disponibilidad para mejorar coincidencias con vacantes."
       isSectionComplete={isSectionComplete}
       onCancel={() => navigate('/app/candidate/perfil')}

@@ -219,6 +219,43 @@ async function upsertSimpleByPk(conn, table, estudianteId, data, allowedKeys) {
   );
 }
 
+async function upsertSimpleByLatest(conn, table, estudianteId, data, allowedKeys) {
+  if (!data) return;
+  const payload = buildPatch(data, allowedKeys);
+  const keys = Object.keys(payload);
+  if (!keys.length) return;
+
+  const [rows] = await conn.query(
+    `SELECT id
+     FROM ${table}
+     WHERE candidato_id = ?
+       AND deleted_at IS NULL
+     ORDER BY updated_at DESC, id DESC
+     LIMIT 1`,
+    [estudianteId]
+  );
+
+  const latestId = rows[0]?.id || null;
+  if (!latestId) {
+    const columns = ['candidato_id', ...keys];
+    const values = [estudianteId, ...keys.map((k) => payload[k])];
+    await conn.query(
+      `INSERT INTO ${table} (${columns.join(', ')})
+       VALUES (${columns.map(() => '?').join(', ')})`,
+      values
+    );
+    return;
+  }
+
+  const setSql = keys.map((key) => `${key} = COALESCE(?, ${key})`).join(', ');
+  await conn.query(
+    `UPDATE ${table}
+     SET ${setSql}
+     WHERE id = ?`,
+    [...keys.map((k) => payload[k]), latestId]
+  );
+}
+
 async function replaceExperiencias(conn, estudianteId, experiencias) {
   if (!Array.isArray(experiencias)) return;
   await conn.query('DELETE FROM candidatos_experiencia WHERE candidato_id = ?', [estudianteId]);
@@ -470,7 +507,7 @@ async function runAcreditadosImport(rawParams = {}) {
               'movilizacion', 'tipo_vehiculo', 'licencia', 'disp_viajar', 'disp_turnos', 'disp_fines_semana'
             ]);
 
-            await upsertSimpleByPk(conn, 'candidatos_educacion_general', estudianteId, item.educacion_general, [
+            await upsertSimpleByLatest(conn, 'candidatos_educacion_general', estudianteId, item.educacion_general, [
               'nivel_estudio', 'institucion', 'titulo_obtenido'
             ]);
 

@@ -11,7 +11,6 @@ export default function ProfileWizardLayout({
   phase2Notice,
   sidebarContext,
   isSectionComplete = false,
-  onCancel,
   contextAlerts = [],
   children
 }) {

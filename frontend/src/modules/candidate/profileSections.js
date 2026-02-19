@@ -1,7 +1,8 @@
-﻿import {
+import {
   Briefcase,
   FileText,
   GraduationCap,
+  HeartPulse,
   Languages,
   MapPin,
   Settings,
@@ -22,36 +23,45 @@ function sectionStatus(isComplete) {
 
 export const PROFILE_SECTION_DEFS = [
   {
-    id: 'datos-basicos',
-    title: 'Informacion basica',
-    summary: 'Documento, nombres y estado academico',
-    route: '/perfil/datos-basicos',
+    id: 'perfil',
+    title: 'Perfil',
+    summary: 'Datos personales y de contacto',
+    route: '/perfil/perfil',
     level: 'obligatorio',
     phase: 'fase1',
     icon: User
   },
   {
-    id: 'datos-personales',
-    title: 'Datos personales',
-    summary: 'Contacto y domicilio para ser ubicado',
-    route: '/perfil/datos-personales',
+    id: 'domicilio',
+    title: 'Domicilio',
+    summary: 'Ubicacion y direccion actual',
+    route: '/perfil/domicilio',
     level: 'obligatorio',
     phase: 'fase1',
     icon: MapPin
   },
   {
-    id: 'preferencias',
-    title: 'Preferencias laborales',
-    summary: 'Movilidad y disponibilidad',
-    route: '/perfil/preferencias',
+    id: 'movilidad',
+    title: 'Movilidad',
+    summary: 'Movilidad y disponibilidad laboral',
+    route: '/perfil/movilidad',
     level: 'recomendado',
     phase: 'fase1',
     icon: Settings
   },
   {
+    id: 'salud',
+    title: 'Salud',
+    summary: 'Datos de salud para el perfil',
+    route: '/perfil/salud',
+    level: 'recomendado',
+    phase: 'fase1',
+    icon: HeartPulse
+  },
+  {
     id: 'formacion',
     title: 'Formacion',
-    summary: 'Nivel de estudio e institucion',
+    summary: 'Formacion academica, externa y certificaciones',
     route: '/perfil/formacion',
     level: 'recomendado',
     phase: 'fase1',
@@ -90,28 +100,29 @@ function getSectionStatus(id, perfil) {
   const datosBasicos = perfil?.datos_basicos || {}
   const contacto = perfil?.contacto || {}
   const domicilio = perfil?.domicilio || {}
+  const salud = perfil?.salud || {}
   const logistica = perfil?.logistica || {}
   const educacion = perfil?.educacion || {}
+  const formacionDetalle = Array.isArray(perfil?.formacion_detalle) ? perfil.formacion_detalle : []
   const idiomas = Array.isArray(perfil?.idiomas) ? perfil.idiomas : []
   const experiencia = Array.isArray(perfil?.experiencia) ? perfil.experiencia : []
   const documentos = Array.isArray(perfil?.documentos) ? perfil.documentos : []
 
-  if (id === 'datos-basicos') {
+  if (id === 'perfil') {
     const complete =
       hasText(datosBasicos.nombres) &&
       hasText(datosBasicos.apellidos) &&
-      hasText(datosBasicos.documento_identidad)
+      hasText(datosBasicos.documento_identidad) &&
+      (hasText(contacto.email) || hasText(contacto.telefono_celular))
     return sectionStatus(complete)
   }
 
-  if (id === 'datos-personales') {
-    const complete =
-      (hasText(contacto.email) || hasText(contacto.telefono_celular)) &&
-      (hasText(domicilio.provincia) || hasText(domicilio.direccion))
+  if (id === 'domicilio') {
+    const complete = hasText(domicilio.provincia) && hasText(domicilio.canton) && hasText(domicilio.parroquia)
     return sectionStatus(complete)
   }
 
-  if (id === 'preferencias') {
+  if (id === 'movilidad') {
     const complete =
       isTruthyNumber(logistica.movilizacion) ||
       hasText(logistica.tipo_vehiculo) ||
@@ -121,23 +132,27 @@ function getSectionStatus(id, perfil) {
     return sectionStatus(complete)
   }
 
-  if (id === 'formacion') {
+  if (id === 'salud') {
     const complete =
-      hasText(educacion.nivel_estudio) || hasText(educacion.institucion) || hasText(educacion.titulo_obtenido)
+      hasText(salud.tipo_sangre) ||
+      Number.isFinite(Number(salud.estatura)) ||
+      Number.isFinite(Number(salud.peso)) ||
+      hasText(salud.tatuaje)
     return sectionStatus(complete)
   }
 
-  if (id === 'idiomas') {
-    return sectionStatus(idiomas.length > 0)
+  if (id === 'formacion') {
+    const complete =
+      formacionDetalle.length > 0 ||
+      hasText(educacion.nivel_estudio) ||
+      hasText(educacion.institucion) ||
+      hasText(educacion.titulo_obtenido)
+    return sectionStatus(complete)
   }
 
-  if (id === 'experiencia') {
-    return sectionStatus(experiencia.length > 0)
-  }
-
-  if (id === 'documentos') {
-    return sectionStatus(documentos.length > 0)
-  }
+  if (id === 'idiomas') return sectionStatus(idiomas.length > 0)
+  if (id === 'experiencia') return sectionStatus(experiencia.length > 0)
+  if (id === 'documentos') return sectionStatus(documentos.length > 0)
 
   return 'pending'
 }

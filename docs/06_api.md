@@ -181,7 +181,13 @@ Respuesta `GET` exitosa:
     "nivel_estudio": null,
     "institucion": null,
     "titulo_obtenido": null
-  }
+  },
+  "educacion_general_items": [],
+  "idiomas": [],
+  "experiencia": [],
+  "documentos": [],
+  "formacion_detalle": [],
+  "formacion_resultados": []
 }
 ```
 
@@ -248,6 +254,23 @@ Errores esperados:
 - Body permitido (parcial):
   - `nivel_estudio` (`Educacion Basica|Bachillerato|Educacion Superior`)
   - `institucion`, `titulo_obtenido`
+- Nota:
+  - Actualiza el registro academico mas reciente del candidato.
+  - Para multiples registros usar `/api/perfil/me/educacion-general`.
+
+### GET `/api/perfil/me/educacion-general`
+### POST `/api/perfil/me/educacion-general`
+### PUT `/api/perfil/me/educacion-general/:educacionGeneralId`
+### DELETE `/api/perfil/me/educacion-general/:educacionGeneralId`
+- Auth: requerido.
+- Roles: `candidato`.
+- Body (`POST|PUT`) permitido:
+  - `nivel_estudio` (`Educacion Basica|Bachillerato|Educacion Superior`)
+  - `institucion`, `titulo_obtenido`
+- Errores:
+  - `400 INVALID_EDUCACION_GENERAL_ID`
+  - `404 EDUCACION_GENERAL_NOT_FOUND`
+  - `400 INVALID_PAYLOAD`
 
 ### GET `/api/perfil/me/idiomas`
 - Auth: requerido.
@@ -314,6 +337,64 @@ Errores esperados:
   - `400 INVALID_EXPERIENCIA_ID`
   - `404 EXPERIENCIA_NOT_FOUND`
 
+### GET `/api/perfil/me/experiencia/:experienciaId/certificado`
+### POST `/api/perfil/me/experiencia/:experienciaId/certificado`
+### PUT `/api/perfil/me/experiencia/:experienciaId/certificado`
+### DELETE `/api/perfil/me/experiencia/:experienciaId/certificado`
+- Auth: requerido.
+- Roles: `candidato`.
+- `POST|PUT`: `multipart/form-data` con campo `archivo` (pdf/jpg/png/webp) y metadata opcional:
+  - `fecha_emision`, `descripcion`, `estado` (`pendiente|aprobado|rechazado|vencido`)
+- Errores:
+  - `400 INVALID_EXPERIENCIA_ID`
+  - `404 EXPERIENCIA_NOT_FOUND`
+  - `404 CERTIFICADO_NOT_FOUND`
+  - `400 FILE_REQUIRED`
+  - `400 INVALID_FILE_TYPE`
+  - `400 FILE_TOO_LARGE`
+
+### GET `/api/perfil/me/formacion`
+### POST `/api/perfil/me/formacion`
+### PUT `/api/perfil/me/formacion/:formacionId`
+### DELETE `/api/perfil/me/formacion/:formacionId`
+- Auth: requerido.
+- Roles: `candidato`.
+- Uso funcional:
+  - Formacion academica principal se guarda con `PUT /api/perfil/me/educacion`.
+  - Este CRUD de `formacion` se usa para formacion externa.
+- Body formacion (externa):
+  - `categoria_formacion` (`externa`)
+  - `subtipo_formacion`: `curso|ministerio|chofer_profesional`
+  - `estado` (`inscrito|cursando|egresado|acreditado|anulado|reprobado`)
+  - `institucion`, `nombre_programa`, `titulo_obtenido`, `fecha_inicio`, `fecha_fin`
+  - `entidad_emisora`, `numero_registro`, `fecha_emision`, `fecha_vencimiento`
+- Nota compatibilidad:
+  - Registros legacy importados pueden venir sin `categoria_formacion`; se exponen como `categoria_ui = externa`.
+- Errores:
+  - `400 INVALID_FORMACION_ID`
+  - `404 FORMACION_NOT_FOUND`
+  - `400 INVALID_PAYLOAD`
+
+### GET `/api/perfil/me/formacion/:formacionId/resultado`
+### PUT `/api/perfil/me/formacion/:formacionId/resultado`
+- Auth: requerido.
+- Roles: `candidato`.
+- Body permitido:
+  - `resultado_curso` (`aprobado|reprobado|pendiente`)
+  - `nota_curso`
+  - `fuente_curso` (`classroom|manual|externo`)
+  - `fecha_cierre_curso`
+  - `examen_estado` (`no_presentado|primera_oportunidad|segunda_oportunidad`)
+  - `nota_examen`
+  - `acreditado` (`0|1|false|true`)
+  - `fecha_examen`
+  - `documento_url`
+- Errores:
+  - `400 INVALID_FORMACION_ID`
+  - `404 FORMACION_NOT_FOUND`
+  - `400 INVALID_RESULTADO_PAYLOAD`
+  - `400 FORMACION_RESULTADO_NOT_ALLOWED` (resultado disponible solo para formacion externa)
+
 ### GET `/api/perfil/me/documentos`
 - Auth: requerido.
 - Roles: `candidato`.
@@ -358,13 +439,21 @@ Errores esperados:
 - Roles: `administrador`, `superadmin`.
 
 ### GET `/api/perfil/:candidatoId/idiomas`
+### GET `/api/perfil/:candidatoId/educacion-general`
 ### GET `/api/perfil/:candidatoId/experiencia`
+### GET `/api/perfil/:candidatoId/experiencia/:experienciaId/certificado`
+### GET `/api/perfil/:candidatoId/formacion`
+### GET `/api/perfil/:candidatoId/formacion/:formacionId/resultado`
 ### GET `/api/perfil/:candidatoId/documentos`
 - Auth: requerido.
 - Roles: `empresa`, `administrador`, `superadmin`.
 
 ### POST|PUT|DELETE `/api/perfil/:candidatoId/idiomas*`
+### POST|PUT|DELETE `/api/perfil/:candidatoId/educacion-general*`
 ### POST|PUT|DELETE `/api/perfil/:candidatoId/experiencia*`
+### POST|PUT|DELETE `/api/perfil/:candidatoId/experiencia/:experienciaId/certificado`
+### POST|PUT|DELETE `/api/perfil/:candidatoId/formacion*`
+### PUT `/api/perfil/:candidatoId/formacion/:formacionId/resultado`
 ### POST|PUT|DELETE `/api/perfil/:candidatoId/documentos*`
 - Auth: requerido.
 - Roles: `administrador`, `superadmin`.

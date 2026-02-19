@@ -36,6 +36,13 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `POST /api/perfil/me/documentos` sin archivo devuelve `400 FILE_REQUIRED`.
 - `POST /api/perfil/me/documentos` con mime invalido devuelve `400 INVALID_FILE_TYPE`.
 - `POST /api/perfil/me/documentos` con archivo grande devuelve `400 FILE_TOO_LARGE`.
+- `GET|POST|PUT|DELETE /api/perfil/me/formacion*` validan CRUD por categoria/subtipo.
+- `GET|POST|PUT|DELETE /api/perfil/me/educacion-general*` permiten multiples registros academicos.
+- `PUT /api/perfil/me/formacion/:formacionId/resultado` hace upsert y valida `INVALID_RESULTADO_PAYLOAD`.
+- `PUT /api/perfil/me/formacion/:formacionId/resultado` en item no externa devuelve `FORMACION_RESULTADO_NOT_ALLOWED`.
+- `GET|POST|PUT|DELETE /api/perfil/me/experiencia/:experienciaId/certificado` respetan ownership.
+- `POST certificado` sin archivo devuelve `400 FILE_REQUIRED`.
+- Empresa solo lectura en `/:candidatoId/formacion*` y `/:candidatoId/experiencia/:experienciaId/certificado`.
 
 ## Checklist de regresion rapida
 - Login funciona por email.
@@ -46,9 +53,9 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 ## Pruebas manuales frontend (perfil candidato wizard)
 
 ### 1) Layout y navegacion
-- Entrar a `/perfil/datos-basicos` y verificar layout 2 columnas en desktop (form + sidebar).
+- Entrar a `/perfil/perfil` y verificar layout 2 columnas en desktop (form + sidebar).
 - Verificar que en mobile el sidebar aparece debajo del formulario.
-- Verificar tabs visibles: `Informacion basica`, `Datos personales`, `Preferencias`, `Formacion`, `Idiomas`, `Experiencia`, `Documentos`.
+- Verificar tabs visibles: `Perfil`, `Domicilio`, `Movilidad`, `Salud`, `Formacion`, `Idiomas`, `Experiencia`, `Documentos`.
 
 ### 2) Sidebar de estado
 - Confirmar barra de progreso y checklist por estado (`Completo`, `Pendiente`, `Fase 2`).
@@ -60,10 +67,11 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - En seccion pendiente: botones `Guardar` y `Guardar y continuar`.
 - `Cancelar` debe volver a `/app/candidate/perfil` sin guardar cambios.
 
-### 4) Alertas contextuales de edicion
-- En `datos-basicos`, cambiar `email`, `telefono celular` o `documento` y validar alertas en sidebar.
-- En `datos-personales`, cambiar `email` o `telefono celular` y validar alertas en sidebar.
-- Revertir el valor original debe ocultar la alerta correspondiente.
+### 4) Reorganizacion de secciones
+- `/perfil/datos-basicos` redirige a `/perfil/perfil`.
+- `/perfil/datos-personales` redirige a `/perfil/perfil`.
+- `/perfil/preferencias` redirige a `/perfil/movilidad`.
+- `ProfilePerfil` guarda datos basicos + contacto sin romper contratos.
 
 ### 5) Integridad de flujo
 - `Guardar` mantiene comportamiento de persistencia actual.
@@ -73,9 +81,15 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 ### 6) Perfil candidato Fase 2 (frontend)
 - `ProfileIdiomas` permite crear, editar y eliminar items.
 - `ProfileExperiencia` permite crear, editar y eliminar items.
+- `ProfileExperiencia` permite crear/actualizar/eliminar certificado laboral por experiencia.
 - `ProfileDocumentos` permite subir archivo y actualizar metadatos.
+- `ProfileFormacion` usa tabs:
+  - `Academica` permite CRUD multiple en `candidatos_educacion_general`.
+  - `Externa` usa CRUD de `/api/perfil/me/formacion`.
+  - `Certificacion` redirige operacion a `ProfileExperiencia` (certificado laboral por experiencia).
+- En `Externa`, registros legacy importados sin categoria se muestran como `Externa (importada)`.
 - El dashboard de perfil actualiza progreso total al completar secciones de Fase 2.
-- El drawer de empresa muestra `idiomas`, `experiencia` y `documentos` del candidato.
+- El drawer de empresa muestra `idiomas`, `experiencia`, `formacion` y `documentos` del candidato.
 
 ## Recomendacion de automatizacion
 1. Backend: incorporar `jest` + `supertest` para rutas criticas (`auth`, `candidatos`, `hoja-vida`, `integraciones`).

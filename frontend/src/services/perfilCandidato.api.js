@@ -13,6 +13,14 @@ function parsePerfilError(error, fallbackMessage) {
   if (code === 'IDIOMA_NOT_FOUND') return 'No se encontro el idioma seleccionado.'
   if (code === 'INVALID_EXPERIENCIA_ID') return 'La experiencia seleccionada no es valida.'
   if (code === 'EXPERIENCIA_NOT_FOUND') return 'No se encontro la experiencia seleccionada.'
+  if (code === 'INVALID_FORMACION_ID') return 'La formacion seleccionada no es valida.'
+  if (code === 'FORMACION_NOT_FOUND') return 'No se encontro la formacion seleccionada.'
+  if (code === 'FORMACION_RESULTADO_NOT_ALLOWED') return 'Solo las formaciones externas permiten registrar resultados.'
+  if (code === 'INVALID_EDUCACION_GENERAL_ID') return 'El registro de educacion general no es valido.'
+  if (code === 'EDUCACION_GENERAL_NOT_FOUND') return 'No se encontro el registro de educacion general.'
+  if (code === 'INVALID_RESULTADO_PAYLOAD') return 'Los datos del resultado no son validos.'
+  if (code === 'INVALID_CERTIFICADO_ID') return 'El certificado seleccionado no es valido.'
+  if (code === 'CERTIFICADO_NOT_FOUND') return 'No se encontro el certificado seleccionado.'
   if (code === 'INVALID_DOCUMENTO_ID') return 'El documento seleccionado no es valido.'
   if (code === 'DOCUMENTO_NOT_FOUND') return 'No se encontro el documento seleccionado.'
   if (code === 'INVALID_TIPO_DOCUMENTO') return 'Tipo de documento invalido.'
@@ -25,6 +33,25 @@ function parsePerfilError(error, fallbackMessage) {
 
 export function getPerfilErrorMessage(error, fallbackMessage = 'Ocurrio un error.') {
   return parsePerfilError(error, fallbackMessage)
+}
+
+export function normalizeFormacionItem(item) {
+  const hasExternalSignal = Boolean(
+    item?.matricula_id || item?.nivel_id || item?.curso_id || item?.formacion_origen_id
+  )
+  const categoriaUi = item?.categoria_ui || item?.categoria_formacion || (hasExternalSignal ? 'externa' : null)
+  const legacyImportado = item?.legacy_importado ?? (!item?.categoria_formacion && hasExternalSignal)
+
+  return {
+    ...item,
+    categoria_ui: categoriaUi,
+    legacy_importado: Boolean(legacyImportado),
+  }
+}
+
+export function normalizeFormacionList(items) {
+  if (!Array.isArray(items)) return []
+  return items.map(normalizeFormacionItem)
 }
 
 export async function getMyPerfil() {
@@ -70,6 +97,30 @@ export async function updateMyEducacion(payload) {
   return apiRequest('/api/perfil/me/educacion', {
     method: 'PUT',
     body: JSON.stringify(payload)
+  })
+}
+
+export async function getMyEducacionGeneralItems() {
+  return apiRequest('/api/perfil/me/educacion-general')
+}
+
+export async function createMyEducacionGeneralItem(payload) {
+  return apiRequest('/api/perfil/me/educacion-general', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateMyEducacionGeneralItem(educacionGeneralId, payload) {
+  return apiRequest(`/api/perfil/me/educacion-general/${educacionGeneralId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteMyEducacionGeneralItem(educacionGeneralId) {
+  return apiRequest(`/api/perfil/me/educacion-general/${educacionGeneralId}`, {
+    method: 'DELETE'
   })
 }
 
@@ -131,6 +182,77 @@ export async function deleteMyExperiencia(experienciaId) {
 
 export async function getExperienciaByCandidatoId(candidatoId) {
   return apiRequest(`/api/perfil/${candidatoId}/experiencia`)
+}
+
+export async function getMyExperienciaCertificado(experienciaId) {
+  return apiRequest(`/api/perfil/me/experiencia/${experienciaId}/certificado`)
+}
+
+export async function createMyExperienciaCertificado(experienciaId, formData) {
+  return apiRequest(`/api/perfil/me/experiencia/${experienciaId}/certificado`, {
+    method: 'POST',
+    body: formData
+  })
+}
+
+export async function updateMyExperienciaCertificado(experienciaId, formData) {
+  return apiRequest(`/api/perfil/me/experiencia/${experienciaId}/certificado`, {
+    method: 'PUT',
+    body: formData
+  })
+}
+
+export async function deleteMyExperienciaCertificado(experienciaId) {
+  return apiRequest(`/api/perfil/me/experiencia/${experienciaId}/certificado`, {
+    method: 'DELETE'
+  })
+}
+
+export async function getMyFormacion() {
+  const response = await apiRequest('/api/perfil/me/formacion')
+  return {
+    ...response,
+    items: normalizeFormacionList(response?.items)
+  }
+}
+
+export async function createMyFormacion(payload) {
+  return apiRequest('/api/perfil/me/formacion', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateMyFormacion(formacionId, payload) {
+  return apiRequest(`/api/perfil/me/formacion/${formacionId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteMyFormacion(formacionId) {
+  return apiRequest(`/api/perfil/me/formacion/${formacionId}`, {
+    method: 'DELETE'
+  })
+}
+
+export async function getMyFormacionResultado(formacionId) {
+  return apiRequest(`/api/perfil/me/formacion/${formacionId}/resultado`)
+}
+
+export async function updateMyFormacionResultado(formacionId, payload) {
+  return apiRequest(`/api/perfil/me/formacion/${formacionId}/resultado`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function getFormacionByCandidatoId(candidatoId) {
+  const response = await apiRequest(`/api/perfil/${candidatoId}/formacion`)
+  return {
+    ...response,
+    items: normalizeFormacionList(response?.items)
+  }
 }
 
 export async function getMyDocumentos() {
