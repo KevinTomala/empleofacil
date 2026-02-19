@@ -1,9 +1,14 @@
-const {
+﻿const {
   findCandidatoIdByUserId,
   existsCandidato,
   getPerfilByCandidatoId,
   updateDatosBasicos,
   upsertByCandidatoIdPk,
+  listEducacionGeneralItems,
+  createEducacionGeneralItem,
+  updateEducacionGeneralItem,
+  deleteEducacionGeneralItem,
+  upsertEducacionGeneralSummary,
   listIdiomas,
   createIdioma,
   updateIdioma,
@@ -12,6 +17,17 @@ const {
   createExperiencia,
   updateExperiencia,
   deleteExperiencia,
+  getExperienciaCertificado,
+  createExperienciaCertificado,
+  updateExperienciaCertificado,
+  deleteExperienciaCertificado,
+  listFormacion,
+  createFormacion,
+  updateFormacion,
+  deleteFormacion,
+  getFormacionResultado,
+  canUseFormacionResultado,
+  upsertFormacionResultado,
   listDocumentos,
   createDocumento,
   updateDocumento,
@@ -22,6 +38,21 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const IDIOMA_NIVELES = ['Basico', 'Intermedio', 'Avanzado', 'Nativo'];
 const CONTRATO_TIPOS = ['temporal', 'indefinido', 'practicante', 'otro'];
+const FORMACION_CATEGORIAS = ['academica', 'externa', 'certificacion'];
+const FORMACION_SUBTIPOS = {
+  academica: ['escuela', 'colegio', 'universidad', 'tecnologico'],
+  externa: ['curso', 'ministerio', 'chofer_profesional'],
+  certificacion: ['certificacion']
+};
+const FORMACION_SUBTIPOS_ALL = [
+  ...FORMACION_SUBTIPOS.academica,
+  ...FORMACION_SUBTIPOS.externa,
+  ...FORMACION_SUBTIPOS.certificacion
+];
+const FORMACION_ESTADOS = ['inscrito', 'cursando', 'egresado', 'acreditado', 'anulado', 'reprobado'];
+const RESULTADO_CURSO = ['aprobado', 'reprobado', 'pendiente'];
+const FUENTE_CURSO = ['classroom', 'manual', 'externo'];
+const EXAMEN_ESTADO = ['no_presentado', 'primera_oportunidad', 'segunda_oportunidad'];
 const DOCUMENTO_TIPOS = [
   'documento_identidad',
   'carnet_tipo_sangre',
@@ -38,6 +69,7 @@ const DOCUMENTO_TIPOS = [
   'otro'
 ];
 const DOCUMENTO_ESTADOS = ['pendiente', 'aprobado', 'rechazado', 'vencido'];
+const CERTIFICADO_ESTADOS = ['pendiente', 'aprobado', 'rechazado', 'vencido'];
 
 function isPlainObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
@@ -64,6 +96,16 @@ function normalizeTinyInt(value) {
 
 function isTinyIntLike(value) {
   return value === 0 || value === 1 || value === true || value === false || value === null;
+}
+
+function parseNullableNumber(value) {
+  if (value === null) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return NaN;
 }
 
 function isNullableNumber(value) {
@@ -186,8 +228,9 @@ function validateAndNormalize(section, payload) {
         if (!isEnum(value, ['no', 'si_visible', 'si_no_visible'])) return null;
         normalized[key] = value;
       } else if (['estatura', 'peso'].includes(key)) {
-        if (!isNullableNumber(value)) return null;
-        normalized[key] = value;
+        const parsed = parseNullableNumber(value);
+        if (!isNullableNumber(parsed)) return null;
+        normalized[key] = parsed;
       }
     }
 
@@ -267,6 +310,26 @@ function validateIdiomaPayload(payload, { partial = false } = {}) {
   return normalized;
 }
 
+function validateEducacionGeneralItemPayload(payload, { partial = false } = {}) {
+  const allowed = ['nivel_estudio', 'institucion', 'titulo_obtenido'];
+  if (!validatePayloadShape(payload, allowed)) return null;
+
+  const normalized = {};
+  for (const [key, raw] of Object.entries(payload)) {
+    const value = toNullIfEmptyString(raw);
+    if (key === 'nivel_estudio') {
+      if (!isEnum(value, ['Educacion Basica', 'Bachillerato', 'Educacion Superior'])) return null;
+      normalized.nivel_estudio = value;
+    } else {
+      if (!isNullableString(value)) return null;
+      normalized[key] = normalizeString(value);
+    }
+  }
+
+  if (!partial && !normalized.nivel_estudio) return null;
+  return normalized;
+}
+
 function validateExperienciaPayload(payload, { partial = false } = {}) {
   const allowed = ['empresa_id', 'cargo', 'fecha_inicio', 'fecha_fin', 'actualmente_trabaja', 'tipo_contrato', 'descripcion'];
   if (!validatePayloadShape(payload, allowed)) return null;
@@ -303,6 +366,115 @@ function validateExperienciaPayload(payload, { partial = false } = {}) {
   return normalized;
 }
 
+function validateFormacionPayload(payload, { partial = false } = {}) {
+  const allowed = [
+    'estado',
+    'fecha_inicio',
+    'fecha_fin',
+    'activo',
+    'categoria_formacion',
+    'subtipo_formacion',
+    'institucion',
+    'nombre_programa',
+    'titulo_obtenido',
+    'entidad_emisora',
+    'numero_registro',
+    'fecha_emision',
+    'fecha_vencimiento'
+  ];
+
+  if (!validatePayloadShape(payload, allowed)) return null;
+
+  const normalized = {};
+  for (const [key, raw] of Object.entries(payload)) {
+    const value = toNullIfEmptyString(raw);
+
+    if (key === 'estado') {
+      if (!isEnum(value, FORMACION_ESTADOS)) return null;
+      normalized.estado = value;
+    } else if (key === 'activo') {
+      if (!isTinyIntLike(value)) return null;
+      normalized.activo = normalizeTinyInt(value);
+    } else if (['fecha_inicio', 'fecha_fin', 'fecha_emision', 'fecha_vencimiento'].includes(key)) {
+      if (!isNullableDate(value)) return null;
+      normalized[key] = value;
+    } else if (key === 'categoria_formacion') {
+      if (!isEnum(value, FORMACION_CATEGORIAS)) return null;
+      normalized.categoria_formacion = value;
+    } else if (key === 'subtipo_formacion') {
+      if (!isEnum(value, FORMACION_SUBTIPOS_ALL)) return null;
+      normalized.subtipo_formacion = value;
+    } else {
+      if (!isNullableString(value)) return null;
+      normalized[key] = normalizeString(value);
+    }
+  }
+
+  if (!partial) {
+    if (!normalized.categoria_formacion || !normalized.subtipo_formacion) return null;
+  } else {
+    const hasCategoria = Object.prototype.hasOwnProperty.call(normalized, 'categoria_formacion');
+    const hasSubtipo = Object.prototype.hasOwnProperty.call(normalized, 'subtipo_formacion');
+    if (hasCategoria !== hasSubtipo) return null;
+  }
+
+  if (normalized.categoria_formacion && !normalized.subtipo_formacion) return null;
+  if (normalized.subtipo_formacion && !normalized.categoria_formacion) return null;
+
+  if (normalized.categoria_formacion && normalized.subtipo_formacion) {
+    const allowedSubtypes = FORMACION_SUBTIPOS[normalized.categoria_formacion] || [];
+    if (!allowedSubtypes.includes(normalized.subtipo_formacion)) return null;
+  }
+
+  return normalized;
+}
+
+function validateFormacionResultadoPayload(payload) {
+  const allowed = [
+    'resultado_curso',
+    'nota_curso',
+    'fuente_curso',
+    'fecha_cierre_curso',
+    'examen_estado',
+    'nota_examen',
+    'acreditado',
+    'fecha_examen',
+    'documento_url'
+  ];
+
+  if (!validatePayloadShape(payload, allowed)) return null;
+
+  const normalized = {};
+  for (const [key, raw] of Object.entries(payload)) {
+    const value = toNullIfEmptyString(raw);
+    if (key === 'resultado_curso') {
+      if (!isEnum(value, RESULTADO_CURSO)) return null;
+      normalized.resultado_curso = value;
+    } else if (key === 'fuente_curso') {
+      if (!isEnum(value, FUENTE_CURSO)) return null;
+      normalized.fuente_curso = value;
+    } else if (key === 'examen_estado') {
+      if (!isEnum(value, EXAMEN_ESTADO)) return null;
+      normalized.examen_estado = value;
+    } else if (key === 'acreditado') {
+      if (!isTinyIntLike(value)) return null;
+      normalized.acreditado = normalizeTinyInt(value);
+    } else if (['nota_curso', 'nota_examen'].includes(key)) {
+      const parsed = parseNullableNumber(value);
+      if (!isNullableNumber(parsed)) return null;
+      normalized[key] = parsed;
+    } else if (['fecha_cierre_curso', 'fecha_examen'].includes(key)) {
+      if (!isNullableDate(value)) return null;
+      normalized[key] = value;
+    } else if (key === 'documento_url') {
+      if (!isNullableString(value)) return null;
+      normalized.documento_url = normalizeString(value);
+    }
+  }
+
+  return Object.keys(normalized).length ? normalized : null;
+}
+
 function validateDocumentoMetaPayload(payload, { allowEstado = false } = {}) {
   const allowed = ['tipo_documento', 'fecha_emision', 'fecha_vencimiento', 'numero_documento', 'descripcion', 'observaciones'];
   if (allowEstado) allowed.push('estado');
@@ -323,6 +495,28 @@ function validateDocumentoMetaPayload(payload, { allowEstado = false } = {}) {
     } else {
       if (!isNullableString(value)) return null;
       normalized[key] = normalizeString(value);
+    }
+  }
+
+  return normalized;
+}
+
+function validateCertificadoMetaPayload(payload) {
+  const allowed = ['fecha_emision', 'descripcion', 'estado'];
+  if (!validatePayloadShape(payload, allowed)) return null;
+
+  const normalized = {};
+  for (const [key, raw] of Object.entries(payload)) {
+    const value = toNullIfEmptyString(raw);
+    if (key === 'fecha_emision') {
+      if (!isNullableDate(value)) return null;
+      normalized.fecha_emision = value;
+    } else if (key === 'estado') {
+      if (!isEnum(value, CERTIFICADO_ESTADOS)) return null;
+      normalized.estado = value;
+    } else {
+      if (!isNullableString(value)) return null;
+      normalized.descripcion = normalizeString(value);
     }
   }
 
@@ -404,9 +598,13 @@ async function updateSection(req, res, section) {
     contacto: 'candidatos_contacto',
     domicilio: 'candidatos_domicilio',
     salud: 'candidatos_salud',
-    logistica: 'candidatos_logistica',
-    educacion: 'candidatos_educacion_general'
+    logistica: 'candidatos_logistica'
   };
+
+  if (section === 'educacion') {
+    await upsertEducacionGeneralSummary(req.candidatoId, patch);
+    return res.json({ ok: true });
+  }
 
   await upsertByCandidatoIdPk(tableBySection[section], req.candidatoId, patch);
   return res.json({ ok: true });
@@ -416,6 +614,44 @@ async function listIdiomasHandler(req, res) {
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
   const items = await listIdiomas(req.candidatoId);
   return res.json({ items });
+}
+
+async function listEducacionGeneralItemsHandler(req, res) {
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const items = await listEducacionGeneralItems(req.candidatoId);
+  return res.json({ items });
+}
+
+async function createEducacionGeneralItemHandler(req, res) {
+  const payload = validateEducacionGeneralItemPayload(req.body || {}, { partial: false });
+  if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const created = await createEducacionGeneralItem(req.candidatoId, payload);
+  return res.status(201).json({ ok: true, id: created.id });
+}
+
+async function updateEducacionGeneralItemHandler(req, res) {
+  const itemId = parsePositiveInt(req.params.educacionGeneralId);
+  if (!itemId) return res.status(400).json({ error: 'INVALID_EDUCACION_GENERAL_ID' });
+
+  const payload = validateEducacionGeneralItemPayload(req.body || {}, { partial: true });
+  if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const affected = await updateEducacionGeneralItem(req.candidatoId, itemId, payload);
+  if (!affected) return res.status(404).json({ error: 'EDUCACION_GENERAL_NOT_FOUND' });
+  return res.json({ ok: true });
+}
+
+async function deleteEducacionGeneralItemHandler(req, res) {
+  const itemId = parsePositiveInt(req.params.educacionGeneralId);
+  if (!itemId) return res.status(400).json({ error: 'INVALID_EDUCACION_GENERAL_ID' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const affected = await deleteEducacionGeneralItem(req.candidatoId, itemId);
+  if (!affected) return res.status(404).json({ error: 'EDUCACION_GENERAL_NOT_FOUND' });
+  return res.json({ ok: true });
 }
 
 async function createIdiomaHandler(req, res) {
@@ -485,6 +721,151 @@ async function deleteExperienciaHandler(req, res) {
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
   const affected = await deleteExperiencia(req.candidatoId, experienciaId);
   if (!affected) return res.status(404).json({ error: 'EXPERIENCIA_NOT_FOUND' });
+  return res.json({ ok: true });
+}
+
+async function getExperienciaCertificadoHandler(req, res) {
+  const experienciaId = parsePositiveInt(req.params.experienciaId);
+  if (!experienciaId) return res.status(400).json({ error: 'INVALID_EXPERIENCIA_ID' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const result = await getExperienciaCertificado(req.candidatoId, experienciaId);
+  if (!result.exists) return res.status(404).json({ error: 'EXPERIENCIA_NOT_FOUND' });
+  return res.json({ item: result.certificado });
+}
+
+async function createExperienciaCertificadoHandler(req, res) {
+  const experienciaId = parsePositiveInt(req.params.experienciaId);
+  if (!experienciaId) return res.status(400).json({ error: 'INVALID_EXPERIENCIA_ID' });
+  if (!req.file) return res.status(400).json({ error: 'FILE_REQUIRED' });
+
+  const meta = validateCertificadoMetaPayload(req.body || {});
+  if (req.body && Object.keys(req.body).length && !meta) {
+    return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+  }
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+
+  const certificado = await createExperienciaCertificado(req.candidatoId, experienciaId, {
+    nombre_archivo: req.file.filename,
+    nombre_original: req.file.originalname,
+    ruta_archivo: `/uploads/candidatos/${req.file.filename}`,
+    tipo_mime: req.file.mimetype,
+    tamanio_kb: Math.max(1, Math.round(req.file.size / 1024)),
+    fecha_emision: meta?.fecha_emision ?? null,
+    descripcion: meta?.descripcion ?? null,
+    estado: meta?.estado ?? 'pendiente'
+  });
+
+  if (!certificado) return res.status(404).json({ error: 'EXPERIENCIA_NOT_FOUND' });
+  return res.status(201).json({ ok: true, id: certificado.id });
+}
+
+async function updateExperienciaCertificadoHandler(req, res) {
+  const experienciaId = parsePositiveInt(req.params.experienciaId);
+  if (!experienciaId) return res.status(400).json({ error: 'INVALID_EXPERIENCIA_ID' });
+
+  const meta = validateCertificadoMetaPayload(req.body || {});
+  if (req.body && Object.keys(req.body).length && !meta) {
+    return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+  }
+
+  const patch = { ...(meta || {}) };
+  if (req.file) {
+    patch.nombre_archivo = req.file.filename;
+    patch.nombre_original = req.file.originalname;
+    patch.ruta_archivo = `/uploads/candidatos/${req.file.filename}`;
+    patch.tipo_mime = req.file.mimetype;
+    patch.tamanio_kb = Math.max(1, Math.round(req.file.size / 1024));
+  }
+
+  if (!Object.keys(patch).length) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+
+  const affected = await updateExperienciaCertificado(req.candidatoId, experienciaId, patch);
+  if (affected === -1) return res.status(404).json({ error: 'EXPERIENCIA_NOT_FOUND' });
+  if (!affected) return res.status(404).json({ error: 'CERTIFICADO_NOT_FOUND' });
+  return res.json({ ok: true });
+}
+
+async function deleteExperienciaCertificadoHandler(req, res) {
+  const experienciaId = parsePositiveInt(req.params.experienciaId);
+  if (!experienciaId) return res.status(400).json({ error: 'INVALID_EXPERIENCIA_ID' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const affected = await deleteExperienciaCertificado(req.candidatoId, experienciaId);
+  if (affected === -1) return res.status(404).json({ error: 'EXPERIENCIA_NOT_FOUND' });
+  if (!affected) return res.status(404).json({ error: 'CERTIFICADO_NOT_FOUND' });
+  return res.json({ ok: true });
+}
+
+async function listFormacionHandler(req, res) {
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const items = await listFormacion(req.candidatoId);
+  return res.json({ items });
+}
+
+async function createFormacionHandler(req, res) {
+  const payload = validateFormacionPayload(req.body || {}, { partial: false });
+  if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const created = await createFormacion(req.candidatoId, payload);
+  return res.status(201).json({ ok: true, id: created.id });
+}
+
+async function updateFormacionHandler(req, res) {
+  const formacionId = parsePositiveInt(req.params.formacionId);
+  if (!formacionId) return res.status(400).json({ error: 'INVALID_FORMACION_ID' });
+
+  const payload = validateFormacionPayload(req.body || {}, { partial: true });
+  if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const affected = await updateFormacion(req.candidatoId, formacionId, payload);
+  if (!affected) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
+  return res.json({ ok: true });
+}
+
+async function deleteFormacionHandler(req, res) {
+  const formacionId = parsePositiveInt(req.params.formacionId);
+  if (!formacionId) return res.status(400).json({ error: 'INVALID_FORMACION_ID' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const affected = await deleteFormacion(req.candidatoId, formacionId);
+  if (!affected) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
+  return res.json({ ok: true });
+}
+
+async function getFormacionResultadoHandler(req, res) {
+  const formacionId = parsePositiveInt(req.params.formacionId);
+  if (!formacionId) return res.status(400).json({ error: 'INVALID_FORMACION_ID' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const state = await canUseFormacionResultado(req.candidatoId, formacionId);
+  if (!state.exists) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
+  if (!state.allowed) return res.status(400).json({ error: 'FORMACION_RESULTADO_NOT_ALLOWED' });
+
+  const item = await getFormacionResultado(req.candidatoId, formacionId);
+  return res.json({ item });
+}
+
+async function updateFormacionResultadoHandler(req, res) {
+  const formacionId = parsePositiveInt(req.params.formacionId);
+  if (!formacionId) return res.status(400).json({ error: 'INVALID_FORMACION_ID' });
+
+  const payload = validateFormacionResultadoPayload(req.body || {});
+  if (!payload) return res.status(400).json({ error: 'INVALID_RESULTADO_PAYLOAD' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const state = await canUseFormacionResultado(req.candidatoId, formacionId);
+  if (!state.exists) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
+  if (!state.allowed) return res.status(400).json({ error: 'FORMACION_RESULTADO_NOT_ALLOWED' });
+
+  const result = await upsertFormacionResultado(req.candidatoId, formacionId, payload);
+  if (result === -1) return res.status(400).json({ error: 'FORMACION_RESULTADO_NOT_ALLOWED' });
+  if (!result) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
   return res.json({ ok: true });
 }
 
@@ -602,6 +983,15 @@ module.exports = {
   updateLogisticaById: makeIdUpdateHandler('logistica'),
   updateEducacionById: makeIdUpdateHandler('educacion'),
 
+  listMyEducacionGeneralItems: makeCandidateScopeHandler('me', listEducacionGeneralItemsHandler, 'fetch'),
+  createMyEducacionGeneralItem: makeCandidateScopeHandler('me', createEducacionGeneralItemHandler, 'update'),
+  updateMyEducacionGeneralItem: makeCandidateScopeHandler('me', updateEducacionGeneralItemHandler, 'update'),
+  deleteMyEducacionGeneralItem: makeCandidateScopeHandler('me', deleteEducacionGeneralItemHandler, 'update'),
+  listEducacionGeneralItemsById: makeCandidateScopeHandler('id', listEducacionGeneralItemsHandler, 'fetch'),
+  createEducacionGeneralItemById: makeCandidateScopeHandler('id', createEducacionGeneralItemHandler, 'update'),
+  updateEducacionGeneralItemById: makeCandidateScopeHandler('id', updateEducacionGeneralItemHandler, 'update'),
+  deleteEducacionGeneralItemById: makeCandidateScopeHandler('id', deleteEducacionGeneralItemHandler, 'update'),
+
   listMyIdiomas: makeCandidateScopeHandler('me', listIdiomasHandler, 'fetch'),
   createMyIdioma: makeCandidateScopeHandler('me', createIdiomaHandler, 'update'),
   updateMyIdioma: makeCandidateScopeHandler('me', updateIdiomaHandler, 'update'),
@@ -620,6 +1010,29 @@ module.exports = {
   updateExperienciaById: makeCandidateScopeHandler('id', updateExperienciaHandler, 'update'),
   deleteExperienciaById: makeCandidateScopeHandler('id', deleteExperienciaHandler, 'update'),
 
+  getMyExperienciaCertificado: makeCandidateScopeHandler('me', getExperienciaCertificadoHandler, 'fetch'),
+  createMyExperienciaCertificado: makeCandidateScopeHandler('me', createExperienciaCertificadoHandler, 'update'),
+  updateMyExperienciaCertificado: makeCandidateScopeHandler('me', updateExperienciaCertificadoHandler, 'update'),
+  deleteMyExperienciaCertificado: makeCandidateScopeHandler('me', deleteExperienciaCertificadoHandler, 'update'),
+  getExperienciaCertificadoById: makeCandidateScopeHandler('id', getExperienciaCertificadoHandler, 'fetch'),
+  createExperienciaCertificadoById: makeCandidateScopeHandler('id', createExperienciaCertificadoHandler, 'update'),
+  updateExperienciaCertificadoById: makeCandidateScopeHandler('id', updateExperienciaCertificadoHandler, 'update'),
+  deleteExperienciaCertificadoById: makeCandidateScopeHandler('id', deleteExperienciaCertificadoHandler, 'update'),
+
+  listMyFormacion: makeCandidateScopeHandler('me', listFormacionHandler, 'fetch'),
+  createMyFormacion: makeCandidateScopeHandler('me', createFormacionHandler, 'update'),
+  updateMyFormacion: makeCandidateScopeHandler('me', updateFormacionHandler, 'update'),
+  deleteMyFormacion: makeCandidateScopeHandler('me', deleteFormacionHandler, 'update'),
+  listFormacionById: makeCandidateScopeHandler('id', listFormacionHandler, 'fetch'),
+  createFormacionById: makeCandidateScopeHandler('id', createFormacionHandler, 'update'),
+  updateFormacionById: makeCandidateScopeHandler('id', updateFormacionHandler, 'update'),
+  deleteFormacionById: makeCandidateScopeHandler('id', deleteFormacionHandler, 'update'),
+
+  getMyFormacionResultado: makeCandidateScopeHandler('me', getFormacionResultadoHandler, 'fetch'),
+  updateMyFormacionResultado: makeCandidateScopeHandler('me', updateFormacionResultadoHandler, 'update'),
+  getFormacionResultadoById: makeCandidateScopeHandler('id', getFormacionResultadoHandler, 'fetch'),
+  updateFormacionResultadoById: makeCandidateScopeHandler('id', updateFormacionResultadoHandler, 'update'),
+
   listMyDocumentos: makeCandidateScopeHandler('me', listDocumentosHandler, 'fetch'),
   createMyDocumento: makeCandidateScopeHandler('me', createDocumentoHandler, 'update'),
   updateMyDocumento: makeCandidateScopeHandler('me', (req, res) => updateDocumentoHandler(req, res, { allowEstado: false }), 'update'),
@@ -630,3 +1043,4 @@ module.exports = {
   updateDocumentoById: makeCandidateScopeHandler('id', (req, res) => updateDocumentoHandler(req, res, { allowEstado: true }), 'update'),
   deleteDocumentoById: makeCandidateScopeHandler('id', deleteDocumentoHandler, 'update')
 };
+

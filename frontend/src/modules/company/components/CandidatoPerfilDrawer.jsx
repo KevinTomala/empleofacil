@@ -2,11 +2,13 @@ function renderValue(value) {
   if (value === null || value === undefined || value === '') return 'N/D'
   if (value === 1 || value === true) return 'Si'
   if (value === 0 || value === false) return 'No'
+  if (typeof value === 'object') return JSON.stringify(value)
   return String(value)
 }
 
 function Section({ title, data }) {
   if (Array.isArray(data)) {
+    const isFormacion = String(title || '').toLowerCase().includes('formacion')
     return (
       <section className="border border-border rounded-xl p-3 bg-white">
         <h3 className="text-sm font-semibold mb-2">{title}</h3>
@@ -15,6 +17,9 @@ function Section({ title, data }) {
           <div className="space-y-2">
             {data.map((item) => (
               <div key={item.id || JSON.stringify(item)} className="border border-border/70 rounded-lg px-2 py-1.5">
+                {isFormacion && item?.legacy_importado && (
+                  <p className="text-[11px] text-amber-700 mb-1">Externa (importada)</p>
+                )}
                 {Object.entries(item).map(([key, value]) => (
                   <p key={key} className="text-xs text-foreground/80">
                     <span className="text-foreground/50">{key}: </span>
@@ -88,6 +93,11 @@ export default function CandidatoPerfilDrawer({
               <Section title="Salud" data={perfil.salud} />
               <Section title="Logistica" data={perfil.logistica} />
               <Section title="Educacion" data={perfil.educacion} />
+              <Section title="Educacion general" data={perfil.educacion_general_items} />
+              <Section title="Formacion" data={perfil.formacion_detalle} />
+              <Section title="Resultados formacion" data={perfil.formacion_resultados} />
+              <Section title="Experiencia" data={perfil.experiencia} />
+              <Section title="Documentos" data={perfil.documentos} />
             </>
           )}
         </div>

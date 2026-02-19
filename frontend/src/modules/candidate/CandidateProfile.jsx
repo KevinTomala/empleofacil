@@ -50,7 +50,7 @@ export default function CandidateProfile() {
     pendingRecommended
   } = useMemo(() => getProfileProgressMetrics(sections), [sections])
 
-  const nextRoute = getNextPendingRoute(sections, '/perfil/datos-basicos') || '/perfil/datos-basicos'
+  const nextRoute = getNextPendingRoute(sections, '/perfil/perfil') || '/perfil/perfil'
 
   const visibilityLabel = progressFase1 >= 90 ? 'Alta' : progressFase1 >= 60 ? 'Media' : 'Baja'
   const matchScore = Math.min(95, 35 + completedRequired * 25 + completedRecommended * 10)

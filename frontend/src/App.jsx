@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { BrowserRouter, Navigate, Routes, Route, useLocation } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import LandingPage from './modules/Landing/LandingPage'
 import Login from './modules/auth/Login'
@@ -8,13 +8,14 @@ import RequestPassword from './modules/auth/RequestPassword'
 import CandidateVacantes from './modules/candidate/CandidateVacantes'
 import CandidatePostulaciones from './modules/candidate/CandidatePostulaciones'
 import CandidateProfile from './modules/candidate/CandidateProfile'
-import ProfileDatosBasicos from './modules/candidate/ProfileDatosBasicos'
+import ProfilePerfil from './modules/candidate/ProfilePerfil'
+import ProfileDomicilio from './modules/candidate/ProfileDomicilio'
 import ProfilePreferencias from './modules/candidate/ProfilePreferencias'
 import ProfileExperiencia from './modules/candidate/ProfileExperiencia'
 import ProfileFormacion from './modules/candidate/ProfileFormacion'
 import ProfileIdiomas from './modules/candidate/ProfileIdiomas'
 import ProfileDocumentos from './modules/candidate/ProfileDocumentos'
-import ProfileDatosPersonales from './modules/candidate/ProfileDatosPersonales'
+import ProfileSalud from './modules/candidate/ProfileSalud'
 import CompanyHome from './modules/company/CompanyHome'
 import CompanyVacantes from './modules/company/CompanyVacantes'
 import CompanyCandidatos from './modules/company/CompanyCandidatos'
@@ -78,18 +79,42 @@ function App() {
             }
           />
           <Route
-            path="/perfil/datos-basicos"
+            path="/perfil/perfil"
             element={
               <ProtectedRoute roles={['candidato']}>
-                <ProfileDatosBasicos />
+                <ProfilePerfil />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/perfil/preferencias"
+            path="/perfil/domicilio"
+            element={
+              <ProtectedRoute roles={['candidato']}>
+                <ProfileDomicilio />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/perfil/movilidad"
             element={
               <ProtectedRoute roles={['candidato']}>
                 <ProfilePreferencias />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/perfil/salud"
+            element={
+              <ProtectedRoute roles={['candidato']}>
+                <ProfileSalud />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/perfil/idiomas"
+            element={
+              <ProtectedRoute roles={['candidato']}>
+                <ProfileIdiomas />
               </ProtectedRoute>
             }
           />
@@ -110,14 +135,6 @@ function App() {
             }
           />
           <Route
-            path="/perfil/idiomas"
-            element={
-              <ProtectedRoute roles={['candidato']}>
-                <ProfileIdiomas />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/perfil/documentos"
             element={
               <ProtectedRoute roles={['candidato']}>
@@ -125,14 +142,9 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/perfil/datos-personales"
-            element={
-              <ProtectedRoute roles={['candidato']}>
-                <ProfileDatosPersonales />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/perfil/datos-basicos" element={<Navigate to="/perfil/perfil" replace />} />
+          <Route path="/perfil/datos-personales" element={<Navigate to="/perfil/perfil" replace />} />
+          <Route path="/perfil/preferencias" element={<Navigate to="/perfil/movilidad" replace />} />
           <Route
             path="/app/company"
             element={

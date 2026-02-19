@@ -12,12 +12,20 @@ const {
   updateMySalud,
   updateMyLogistica,
   updateMyEducacion,
+  listMyEducacionGeneralItems,
+  createMyEducacionGeneralItem,
+  updateMyEducacionGeneralItem,
+  deleteMyEducacionGeneralItem,
   updateDatosBasicosById,
   updateContactoById,
   updateDomicilioById,
   updateSaludById,
   updateLogisticaById,
   updateEducacionById,
+  listEducacionGeneralItemsById,
+  createEducacionGeneralItemById,
+  updateEducacionGeneralItemById,
+  deleteEducacionGeneralItemById,
   listMyIdiomas,
   createMyIdioma,
   updateMyIdioma,
@@ -30,10 +38,30 @@ const {
   createMyExperiencia,
   updateMyExperiencia,
   deleteMyExperiencia,
+  getMyExperienciaCertificado,
+  createMyExperienciaCertificado,
+  updateMyExperienciaCertificado,
+  deleteMyExperienciaCertificado,
   listExperienciaById,
   createExperienciaById,
   updateExperienciaById,
   deleteExperienciaById,
+  getExperienciaCertificadoById,
+  createExperienciaCertificadoById,
+  updateExperienciaCertificadoById,
+  deleteExperienciaCertificadoById,
+  listMyFormacion,
+  createMyFormacion,
+  updateMyFormacion,
+  deleteMyFormacion,
+  listFormacionById,
+  createFormacionById,
+  updateFormacionById,
+  deleteFormacionById,
+  getMyFormacionResultado,
+  updateMyFormacionResultado,
+  getFormacionResultadoById,
+  updateFormacionResultadoById,
   listMyDocumentos,
   createMyDocumento,
   updateMyDocumento,
@@ -90,6 +118,10 @@ router.put('/me/domicilio', authRequired, requireRole(['candidato']), updateMyDo
 router.put('/me/salud', authRequired, requireRole(['candidato']), updateMySalud);
 router.put('/me/logistica', authRequired, requireRole(['candidato']), updateMyLogistica);
 router.put('/me/educacion', authRequired, requireRole(['candidato']), updateMyEducacion);
+router.get('/me/educacion-general', authRequired, requireRole(['candidato']), listMyEducacionGeneralItems);
+router.post('/me/educacion-general', authRequired, requireRole(['candidato']), createMyEducacionGeneralItem);
+router.put('/me/educacion-general/:educacionGeneralId', authRequired, requireRole(['candidato']), updateMyEducacionGeneralItem);
+router.delete('/me/educacion-general/:educacionGeneralId', authRequired, requireRole(['candidato']), deleteMyEducacionGeneralItem);
 
 router.get('/me/idiomas', authRequired, requireRole(['candidato']), listMyIdiomas);
 router.post('/me/idiomas', authRequired, requireRole(['candidato']), createMyIdioma);
@@ -100,6 +132,17 @@ router.get('/me/experiencia', authRequired, requireRole(['candidato']), listMyEx
 router.post('/me/experiencia', authRequired, requireRole(['candidato']), createMyExperiencia);
 router.put('/me/experiencia/:experienciaId', authRequired, requireRole(['candidato']), updateMyExperiencia);
 router.delete('/me/experiencia/:experienciaId', authRequired, requireRole(['candidato']), deleteMyExperiencia);
+router.get('/me/experiencia/:experienciaId/certificado', authRequired, requireRole(['candidato']), getMyExperienciaCertificado);
+router.post('/me/experiencia/:experienciaId/certificado', authRequired, requireRole(['candidato']), uploadDocumento.single('archivo'), createMyExperienciaCertificado);
+router.put('/me/experiencia/:experienciaId/certificado', authRequired, requireRole(['candidato']), uploadDocumento.single('archivo'), updateMyExperienciaCertificado);
+router.delete('/me/experiencia/:experienciaId/certificado', authRequired, requireRole(['candidato']), deleteMyExperienciaCertificado);
+
+router.get('/me/formacion', authRequired, requireRole(['candidato']), listMyFormacion);
+router.post('/me/formacion', authRequired, requireRole(['candidato']), createMyFormacion);
+router.put('/me/formacion/:formacionId', authRequired, requireRole(['candidato']), updateMyFormacion);
+router.delete('/me/formacion/:formacionId', authRequired, requireRole(['candidato']), deleteMyFormacion);
+router.get('/me/formacion/:formacionId/resultado', authRequired, requireRole(['candidato']), getMyFormacionResultado);
+router.put('/me/formacion/:formacionId/resultado', authRequired, requireRole(['candidato']), updateMyFormacionResultado);
 
 router.get('/me/documentos', authRequired, requireRole(['candidato']), listMyDocumentos);
 router.post('/me/documentos', authRequired, requireRole(['candidato']), uploadDocumento.single('archivo'), createMyDocumento);
@@ -113,6 +156,10 @@ router.put('/:candidatoId/domicilio', authRequired, requireRole(['administrador'
 router.put('/:candidatoId/salud', authRequired, requireRole(['administrador', 'superadmin']), updateSaludById);
 router.put('/:candidatoId/logistica', authRequired, requireRole(['administrador', 'superadmin']), updateLogisticaById);
 router.put('/:candidatoId/educacion', authRequired, requireRole(['administrador', 'superadmin']), updateEducacionById);
+router.get('/:candidatoId/educacion-general', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), listEducacionGeneralItemsById);
+router.post('/:candidatoId/educacion-general', authRequired, requireRole(['administrador', 'superadmin']), createEducacionGeneralItemById);
+router.put('/:candidatoId/educacion-general/:educacionGeneralId', authRequired, requireRole(['administrador', 'superadmin']), updateEducacionGeneralItemById);
+router.delete('/:candidatoId/educacion-general/:educacionGeneralId', authRequired, requireRole(['administrador', 'superadmin']), deleteEducacionGeneralItemById);
 
 router.get('/:candidatoId/idiomas', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), listIdiomasById);
 router.post('/:candidatoId/idiomas', authRequired, requireRole(['administrador', 'superadmin']), createIdiomaById);
@@ -123,6 +170,17 @@ router.get('/:candidatoId/experiencia', authRequired, requireRole(['empresa', 'a
 router.post('/:candidatoId/experiencia', authRequired, requireRole(['administrador', 'superadmin']), createExperienciaById);
 router.put('/:candidatoId/experiencia/:experienciaId', authRequired, requireRole(['administrador', 'superadmin']), updateExperienciaById);
 router.delete('/:candidatoId/experiencia/:experienciaId', authRequired, requireRole(['administrador', 'superadmin']), deleteExperienciaById);
+router.get('/:candidatoId/experiencia/:experienciaId/certificado', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), getExperienciaCertificadoById);
+router.post('/:candidatoId/experiencia/:experienciaId/certificado', authRequired, requireRole(['administrador', 'superadmin']), uploadDocumento.single('archivo'), createExperienciaCertificadoById);
+router.put('/:candidatoId/experiencia/:experienciaId/certificado', authRequired, requireRole(['administrador', 'superadmin']), uploadDocumento.single('archivo'), updateExperienciaCertificadoById);
+router.delete('/:candidatoId/experiencia/:experienciaId/certificado', authRequired, requireRole(['administrador', 'superadmin']), deleteExperienciaCertificadoById);
+
+router.get('/:candidatoId/formacion', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), listFormacionById);
+router.post('/:candidatoId/formacion', authRequired, requireRole(['administrador', 'superadmin']), createFormacionById);
+router.put('/:candidatoId/formacion/:formacionId', authRequired, requireRole(['administrador', 'superadmin']), updateFormacionById);
+router.delete('/:candidatoId/formacion/:formacionId', authRequired, requireRole(['administrador', 'superadmin']), deleteFormacionById);
+router.get('/:candidatoId/formacion/:formacionId/resultado', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), getFormacionResultadoById);
+router.put('/:candidatoId/formacion/:formacionId/resultado', authRequired, requireRole(['administrador', 'superadmin']), updateFormacionResultadoById);
 
 router.get('/:candidatoId/documentos', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), listDocumentosById);
 router.post('/:candidatoId/documentos', authRequired, requireRole(['administrador', 'superadmin']), uploadDocumento.single('archivo'), createDocumentoById);

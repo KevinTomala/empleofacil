@@ -318,14 +318,16 @@ CREATE TABLE candidatos_documentos (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE candidatos_educacion_general (
-  candidato_id BIGINT PRIMARY KEY,
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  candidato_id BIGINT NOT NULL,
   nivel_estudio ENUM('Educacion Basica','Bachillerato','Educacion Superior') DEFAULT 'Educacion Basica',
   institucion VARCHAR(150),
   titulo_obtenido VARCHAR(150),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at DATETIME NULL,
-  CONSTRAINT fk_candidatos_educacion_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE
+  CONSTRAINT fk_candidatos_educacion_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
+  INDEX idx_candidatos_educacion_candidato_id (candidato_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE candidatos_idiomas (
@@ -368,12 +370,60 @@ CREATE TABLE candidatos_formaciones (
   fecha_inicio DATE,
   fecha_fin DATE,
   fecha_aprobacion DATE NULL,
-  activo TINYINT UNSIGNED DEFAULT 1,
+  categoria_formacion ENUM('academica','externa','certificacion') NULL,
+  subtipo_formacion ENUM('escuela','colegio','universidad','tecnologico','curso','ministerio','chofer_profesional','certificacion') NULL,
+  institucion VARCHAR(200) NULL,
+  nombre_programa VARCHAR(200) NULL,
+  titulo_obtenido VARCHAR(200) NULL,
+  entidad_emisora VARCHAR(200) NULL,
+  numero_registro VARCHAR(120) NULL,
+  fecha_emision DATE NULL,
+  fecha_vencimiento DATE NULL,
+  activo TINYINT(1) DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL,
   deleted_at DATETIME NULL,
   CONSTRAINT fk_candidatos_formaciones_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
   CONSTRAINT fk_candidatos_formaciones_self FOREIGN KEY (formacion_origen_id) REFERENCES candidatos_formaciones(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE candidatos_formacion_resultados (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  candidato_formacion_id BIGINT NOT NULL,
+  resultado_curso ENUM('aprobado','reprobado','pendiente') NOT NULL DEFAULT 'pendiente',
+  nota_curso DECIMAL(5,2) NULL,
+  fuente_curso ENUM('classroom','manual','externo') NOT NULL DEFAULT 'classroom',
+  fecha_cierre_curso DATE NULL,
+  examen_estado ENUM('no_presentado','primera_oportunidad','segunda_oportunidad') NOT NULL DEFAULT 'no_presentado',
+  nota_examen DECIMAL(5,2) NULL,
+  acreditado TINYINT(1) NOT NULL DEFAULT 0,
+  fecha_examen DATE NULL,
+  documento_url VARCHAR(500) NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME NULL,
+  CONSTRAINT uq_formacion_resultado UNIQUE (candidato_formacion_id),
+  CONSTRAINT fk_formacion_resultados_formacion FOREIGN KEY (candidato_formacion_id) REFERENCES candidatos_formaciones(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE candidatos_experiencia_certificados (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  candidato_id BIGINT NOT NULL,
+  experiencia_id BIGINT NOT NULL,
+  nombre_archivo VARCHAR(255) NOT NULL,
+  nombre_original VARCHAR(255) NOT NULL,
+  ruta_archivo VARCHAR(500) NOT NULL,
+  tipo_mime VARCHAR(100) NOT NULL,
+  tamanio_kb INT NOT NULL,
+  fecha_emision DATE NULL,
+  descripcion TEXT NULL,
+  estado ENUM('pendiente','aprobado','rechazado','vencido') DEFAULT 'pendiente',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME NULL,
+  CONSTRAINT uq_experiencia_certificado UNIQUE (experiencia_id),
+  CONSTRAINT fk_experiencia_certificados_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
+  CONSTRAINT fk_experiencia_certificados_experiencia FOREIGN KEY (experiencia_id) REFERENCES candidatos_experiencia(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -------------------------------------------------------------

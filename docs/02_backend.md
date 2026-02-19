@@ -54,6 +54,9 @@ Rutas registradas actualmente:
 - Fase 2 activa en el mismo modulo:
   - `idiomas` (CRUD)
   - `experiencia` (CRUD)
+  - `experiencia/:experienciaId/certificado` (CRUD 1:1 + upload multipart)
+  - `formacion` (CRUD relacional por item)
+  - `formacion/:formacionId/resultado` (upsert 1:1)
   - `documentos` (CRUD + upload multipart con `multer`)
 - Archivos de documentos:
   - destino local: `backend/uploads/candidatos/`
@@ -92,6 +95,7 @@ Rutas registradas actualmente:
 - Respetar `deleted_at` cuando aplique.
 - Para tablas 1:1, usar upsert con PK `candidato_id`.
 - Para tablas 1:N de perfil (`idiomas`, `experiencia`, `documentos`), usar CRUD por item con soft delete.
+- Para relaciones 1:1 anidadas (`formacion_resultado`, `experiencia_certificado`), validar ownership del padre antes de operar.
 
 ## Jobs y operacion
 - Job actual: `jobs/ademySync.job.js`.

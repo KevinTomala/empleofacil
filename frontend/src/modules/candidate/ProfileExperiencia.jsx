@@ -4,10 +4,14 @@ import FormDropdown from '../../components/FormDropdown'
 import { showToast } from '../../utils/showToast'
 import {
   createMyExperiencia,
+  createMyExperienciaCertificado,
   deleteMyExperiencia,
+  deleteMyExperienciaCertificado,
   getMyExperiencia,
+  getMyExperienciaCertificado,
   getPerfilErrorMessage,
-  updateMyExperiencia
+  updateMyExperiencia,
+  updateMyExperienciaCertificado
 } from '../../services/perfilCandidato.api'
 import ProfileWizardLayout from './ProfileWizardLayout'
 
@@ -19,11 +23,6 @@ const contratoOptions = [
   { value: 'otro', label: 'Otro' }
 ]
 
-const booleanOptions = [
-  { value: 1, label: 'Si' },
-  { value: 0, label: 'No' }
-]
-
 const initialForm = {
   cargo: '',
   empresa_id: null,
@@ -32,6 +31,27 @@ const initialForm = {
   actualmente_trabaja: 0,
   tipo_contrato: '',
   descripcion: ''
+}
+
+const estadoCertificadoOptions = [
+  { value: 'pendiente', label: 'Pendiente' },
+  { value: 'aprobado', label: 'Aprobado' },
+  { value: 'rechazado', label: 'Rechazado' },
+  { value: 'vencido', label: 'Vencido' }
+]
+
+const initialCertForm = {
+  fecha_emision: '',
+  descripcion: '',
+  estado: 'pendiente'
+}
+
+function buildFileUrl(path) {
+  if (!path) return ''
+  if (path.startsWith('http://') || path.startsWith('https://')) return path
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+  if (path.startsWith('/')) return `${apiBase}${path}`
+  return `${apiBase}/${path}`
 }
 
 function normalizeDate(value) {
@@ -45,6 +65,11 @@ export default function ProfileExperiencia() {
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(initialForm)
+  const [certTargetId, setCertTargetId] = useState(null)
+  const [certForm, setCertForm] = useState(initialCertForm)
+  const [certFile, setCertFile] = useState(null)
+  const [certHasExisting, setCertHasExisting] = useState(false)
+  const [certSaving, setCertSaving] = useState(false)
 
   const isSectionComplete = useMemo(() => items.length > 0, [items])
 
@@ -82,6 +107,13 @@ export default function ProfileExperiencia() {
     setEditingId(null)
   }
 
+  const resetCertForm = () => {
+    setCertTargetId(null)
+    setCertForm(initialCertForm)
+    setCertFile(null)
+    setCertHasExisting(false)
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     if (!form.cargo.trim()) {
@@ -93,7 +125,7 @@ export default function ProfileExperiencia() {
       cargo: form.cargo.trim(),
       empresa_id: form.empresa_id,
       fecha_inicio: normalizeDate(form.fecha_inicio),
-      fecha_fin: normalizeDate(form.fecha_fin),
+      fecha_fin: Number(form.actualmente_trabaja) === 1 ? null : normalizeDate(form.fecha_fin),
       actualmente_trabaja: Number(form.actualmente_trabaja),
       tipo_contrato: form.tipo_contrato || null,
       descripcion: form.descripcion.trim() || null
@@ -134,9 +166,77 @@ export default function ProfileExperiencia() {
       await deleteMyExperiencia(id)
       await loadExperiencia()
       if (editingId === id) resetForm()
+      if (certTargetId === id) resetCertForm()
       showToast({ type: 'success', message: 'Experiencia eliminada.' })
     } catch (error) {
       showToast({ type: 'error', message: getPerfilErrorMessage(error, 'No se pudo eliminar experiencia.') })
+    }
+  }
+
+  const handleOpenCertificado = async (experienciaId) => {
+    try {
+      setCertTargetId(experienciaId)
+      setCertFile(null)
+      const response = await getMyExperienciaCertificado(experienciaId)
+      const item = response?.item
+      setCertHasExisting(Boolean(item))
+      setCertForm({
+        fecha_emision: item?.fecha_emision || '',
+        descripcion: item?.descripcion || '',
+        estado: item?.estado || 'pendiente'
+      })
+    } catch (error) {
+      setCertHasExisting(false)
+      setCertForm(initialCertForm)
+      showToast({ type: 'error', message: getPerfilErrorMessage(error, 'No se pudo cargar el certificado laboral.') })
+    }
+  }
+
+  const handleSaveCertificado = async () => {
+    if (!certTargetId) return
+    if (!certHasExisting && !certFile) {
+      showToast({ type: 'warning', message: 'Selecciona un archivo para crear el certificado.' })
+      return
+    }
+
+    const payload = new FormData()
+    if (certFile) payload.append('archivo', certFile)
+    if (certForm.fecha_emision) payload.append('fecha_emision', certForm.fecha_emision)
+    if (certForm.descripcion.trim()) payload.append('descripcion', certForm.descripcion.trim())
+    if (certForm.estado) payload.append('estado', certForm.estado)
+
+    try {
+      setCertSaving(true)
+      if (certHasExisting) {
+        await updateMyExperienciaCertificado(certTargetId, payload)
+      } else {
+        await createMyExperienciaCertificado(certTargetId, payload)
+      }
+      await loadExperiencia()
+      setCertHasExisting(true)
+      setCertFile(null)
+      showToast({ type: 'success', message: 'Certificado laboral guardado.' })
+    } catch (error) {
+      showToast({ type: 'error', message: getPerfilErrorMessage(error, 'No se pudo guardar el certificado.') })
+    } finally {
+      setCertSaving(false)
+    }
+  }
+
+  const handleDeleteCertificado = async () => {
+    if (!certTargetId) return
+    try {
+      setCertSaving(true)
+      await deleteMyExperienciaCertificado(certTargetId)
+      await loadExperiencia()
+      setCertHasExisting(false)
+      setCertFile(null)
+      setCertForm(initialCertForm)
+      showToast({ type: 'success', message: 'Certificado laboral eliminado.' })
+    } catch (error) {
+      showToast({ type: 'error', message: getPerfilErrorMessage(error, 'No se pudo eliminar el certificado.') })
+    } finally {
+      setCertSaving(false)
     }
   }
 
@@ -179,23 +279,52 @@ export default function ProfileExperiencia() {
                 onChange={(event) => setForm((prev) => ({ ...prev, fecha_inicio: event.target.value }))}
               />
             </label>
-            <label className="space-y-1 text-sm font-medium text-foreground/80">
-              Fecha fin
-              <input
-                className="ef-control"
-                type="date"
-                value={form.fecha_fin}
-                onChange={(event) => setForm((prev) => ({ ...prev, fecha_fin: event.target.value }))}
-              />
-            </label>
+            {Number(form.actualmente_trabaja) !== 1 && (
+              <label className="space-y-1 text-sm font-medium text-foreground/80">
+                Fecha fin
+                <input
+                  className="ef-control"
+                  type="date"
+                  value={form.fecha_fin}
+                  onChange={(event) => setForm((prev) => ({ ...prev, fecha_fin: event.target.value }))}
+                />
+              </label>
+            )}
+            {Number(form.actualmente_trabaja) === 1 && (
+              <label className="space-y-1 text-sm font-medium text-foreground/80">
+                Fecha fin
+                <span className="ef-control flex items-center justify-between">
+                  <span>No aplica (trabaja actualmente)</span>
+                  <input
+                    type="checkbox"
+                    checked
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        actualmente_trabaja: event.target.checked ? 1 : 0,
+                        fecha_fin: event.target.checked ? '' : prev.fecha_fin
+                      }))
+                    }
+                  />
+                </span>
+              </label>
+            )}
             <label className="space-y-1 text-sm font-medium text-foreground/80">
               Actualmente trabaja
-              <FormDropdown
-                value={Number(form.actualmente_trabaja)}
-                options={booleanOptions}
-                onChange={(value) => setForm((prev) => ({ ...prev, actualmente_trabaja: Number(value) }))}
-                placeholder="Selecciona"
-              />
+              <span className="ef-control flex items-center justify-between">
+                <span>{Number(form.actualmente_trabaja) === 1 ? 'Si' : 'No'}</span>
+                <input
+                  type="checkbox"
+                  checked={Number(form.actualmente_trabaja) === 1}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      actualmente_trabaja: event.target.checked ? 1 : 0,
+                      fecha_fin: event.target.checked ? '' : prev.fecha_fin
+                    }))
+                  }
+                />
+              </span>
             </label>
             <label className="space-y-1 text-sm font-medium text-foreground/80 sm:col-span-2">
               Descripcion
@@ -239,10 +368,26 @@ export default function ProfileExperiencia() {
                     <p className="text-xs text-foreground/60">
                       {item.tipo_contrato || 'Contrato no especificado'} | {item.fecha_inicio || 'Sin inicio'} - {item.fecha_fin || 'Actual'}
                     </p>
+                    <p className="text-xs text-foreground/60">
+                      Certificado laboral: {item.certificado_laboral ? 'Cargado' : 'Pendiente'}
+                    </p>
+                    {item.certificado_laboral?.ruta_archivo && (
+                      <a
+                        href={buildFileUrl(item.certificado_laboral.ruta_archivo)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-primary underline"
+                      >
+                        Ver certificado
+                      </a>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button type="button" className="px-3 py-1.5 text-xs border border-border rounded-lg" onClick={() => handleEdit(item)}>
                       Editar
+                    </button>
+                    <button type="button" className="px-3 py-1.5 text-xs border border-border rounded-lg" onClick={() => handleOpenCertificado(item.id)}>
+                      Certificado
                     </button>
                     <button type="button" className="px-3 py-1.5 text-xs border border-rose-300 text-rose-700 rounded-lg" onClick={() => handleDelete(item.id)}>
                       Eliminar
@@ -253,6 +398,76 @@ export default function ProfileExperiencia() {
             </div>
           )}
         </section>
+
+        {certTargetId && (
+          <section className="bg-white border border-border rounded-2xl p-6 space-y-3">
+            <h2 className="font-semibold text-base">Certificado laboral</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="space-y-1 text-sm font-medium text-foreground/80">
+                Archivo (PDF o imagen)
+                <input
+                  className="ef-control"
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp"
+                  onChange={(event) => setCertFile(event.target.files?.[0] || null)}
+                />
+              </label>
+              <label className="space-y-1 text-sm font-medium text-foreground/80">
+                Estado
+                <FormDropdown
+                  value={certForm.estado}
+                  options={estadoCertificadoOptions}
+                  onChange={(value) => setCertForm((prev) => ({ ...prev, estado: value }))}
+                />
+              </label>
+              <label className="space-y-1 text-sm font-medium text-foreground/80">
+                Fecha emision
+                <input
+                  className="ef-control"
+                  type="date"
+                  value={certForm.fecha_emision}
+                  onChange={(event) => setCertForm((prev) => ({ ...prev, fecha_emision: event.target.value }))}
+                />
+              </label>
+              <label className="space-y-1 text-sm font-medium text-foreground/80 sm:col-span-2">
+                Descripcion
+                <textarea
+                  className="ef-control min-h-20"
+                  value={certForm.descripcion}
+                  onChange={(event) => setCertForm((prev) => ({ ...prev, descripcion: event.target.value }))}
+                />
+              </label>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg border border-border text-sm font-medium"
+                onClick={resetCertForm}
+                disabled={certSaving}
+              >
+                Cerrar
+              </button>
+              {certHasExisting && (
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-lg border border-rose-300 text-rose-700 text-sm font-medium"
+                  onClick={handleDeleteCertificado}
+                  disabled={certSaving}
+                >
+                  Eliminar certificado
+                </button>
+              )}
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium"
+                onClick={handleSaveCertificado}
+                disabled={certSaving}
+              >
+                {certSaving ? 'Guardando...' : certHasExisting ? 'Actualizar certificado' : 'Subir certificado'}
+              </button>
+            </div>
+          </section>
+        )}
       </div>
     </ProfileWizardLayout>
   )

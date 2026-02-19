@@ -1,5 +1,11 @@
 const db = require('../db');
 
+function isExternalLikeFormacion(row) {
+  if (row?.categoria_formacion === 'externa') return true;
+  if (row?.categoria_formacion) return false;
+  return Boolean(row?.matricula_id || row?.nivel_id || row?.curso_id || row?.formacion_origen_id);
+}
+
 async function findCandidatoIdByUserId(userId) {
   const [rows] = await db.query(
     `SELECT id
@@ -78,9 +84,17 @@ async function getPerfilByCandidatoId(candidatoId) {
      LEFT JOIN candidatos_logistica cl
        ON cl.candidato_id = c.id
       AND cl.deleted_at IS NULL
-     LEFT JOIN candidatos_educacion_general ce
+     LEFT JOIN (
+       SELECT ce1.candidato_id, ce1.nivel_estudio, ce1.institucion, ce1.titulo_obtenido
+       FROM candidatos_educacion_general ce1
+       INNER JOIN (
+         SELECT candidato_id, MAX(id) AS max_id
+         FROM candidatos_educacion_general
+         WHERE deleted_at IS NULL
+         GROUP BY candidato_id
+       ) cem ON cem.max_id = ce1.id
+     ) ce
        ON ce.candidato_id = c.id
-      AND ce.deleted_at IS NULL
      WHERE c.id = ?
        AND c.deleted_at IS NULL
      LIMIT 1`,
@@ -90,11 +104,20 @@ async function getPerfilByCandidatoId(candidatoId) {
   const row = rows[0];
   if (!row) return null;
 
-  const [idiomas, experiencia, documentos] = await Promise.all([
+  const [educacionGeneralItems, idiomas, experiencia, documentos, formacion] = await Promise.all([
+    listEducacionGeneralItems(candidatoId),
     listIdiomas(candidatoId),
     listExperiencias(candidatoId),
-    listDocumentos(candidatoId)
+    listDocumentos(candidatoId),
+    listFormacion(candidatoId)
   ]);
+
+  const formacionResultados = formacion
+    .filter((item) => item.resultado)
+    .map((item) => ({
+      candidato_formacion_id: item.id,
+      ...item.resultado
+    }));
 
   return {
     datos_basicos: {
@@ -147,9 +170,12 @@ async function getPerfilByCandidatoId(candidatoId) {
       institucion: row.ce_institucion,
       titulo_obtenido: row.ce_titulo_obtenido
     },
+    educacion_general_items: educacionGeneralItems,
     idiomas,
     experiencia,
-    documentos
+    documentos,
+    formacion_detalle: formacion,
+    formacion_resultados: formacionResultados
   };
 }
 
@@ -184,6 +210,90 @@ async function upsertByCandidatoIdPk(table, candidatoId, patch) {
   );
 }
 
+async function listEducacionGeneralItems(candidatoId) {
+  const [rows] = await db.query(
+    `SELECT id, candidato_id, nivel_estudio, institucion, titulo_obtenido, created_at, updated_at
+     FROM candidatos_educacion_general
+     WHERE candidato_id = ?
+       AND deleted_at IS NULL
+     ORDER BY created_at DESC, id DESC`,
+    [candidatoId]
+  );
+  return rows;
+}
+
+async function createEducacionGeneralItem(candidatoId, payload) {
+  const [result] = await db.query(
+    `INSERT INTO candidatos_educacion_general (candidato_id, nivel_estudio, institucion, titulo_obtenido)
+     VALUES (?, ?, ?, ?)`,
+    [candidatoId, payload.nivel_estudio, payload.institucion ?? null, payload.titulo_obtenido ?? null]
+  );
+  return { id: result.insertId };
+}
+
+async function updateEducacionGeneralItem(candidatoId, itemId, payload) {
+  const keys = Object.keys(payload);
+  if (!keys.length) return 0;
+
+  const setSql = keys.map((key) => `${key} = ?`).join(', ');
+  const [result] = await db.query(
+    `UPDATE candidatos_educacion_general
+     SET ${setSql}
+     WHERE id = ?
+       AND candidato_id = ?
+       AND deleted_at IS NULL`,
+    [...keys.map((key) => payload[key]), itemId, candidatoId]
+  );
+  return result.affectedRows;
+}
+
+async function deleteEducacionGeneralItem(candidatoId, itemId) {
+  const [result] = await db.query(
+    `UPDATE candidatos_educacion_general
+     SET deleted_at = NOW()
+     WHERE id = ?
+       AND candidato_id = ?
+       AND deleted_at IS NULL`,
+    [itemId, candidatoId]
+  );
+  return result.affectedRows;
+}
+
+async function upsertEducacionGeneralSummary(candidatoId, patch) {
+  const keys = Object.keys(patch);
+  if (!keys.length) return;
+
+  const [rows] = await db.query(
+    `SELECT id
+     FROM candidatos_educacion_general
+     WHERE candidato_id = ?
+       AND deleted_at IS NULL
+     ORDER BY updated_at DESC, id DESC
+     LIMIT 1`,
+    [candidatoId]
+  );
+
+  const latestId = rows[0]?.id || null;
+  if (!latestId) {
+    const columns = ['candidato_id', ...keys];
+    const placeholders = columns.map(() => '?').join(', ');
+    await db.query(
+      `INSERT INTO candidatos_educacion_general (${columns.join(', ')})
+       VALUES (${placeholders})`,
+      [candidatoId, ...keys.map((key) => patch[key])]
+    );
+    return;
+  }
+
+  const setSql = keys.map((key) => `${key} = ?`).join(', ');
+  await db.query(
+    `UPDATE candidatos_educacion_general
+     SET ${setSql}
+     WHERE id = ?`,
+    [...keys.map((key) => patch[key]), latestId]
+  );
+}
+
 async function listIdiomas(candidatoId) {
   const [rows] = await db.query(
     `SELECT id, candidato_id, idioma, nivel, created_at, updated_at
@@ -207,7 +317,7 @@ async function createIdioma(candidatoId, payload) {
 
 async function updateIdioma(candidatoId, idiomaId, payload) {
   const keys = Object.keys(payload);
-  if (!keys.length) return;
+  if (!keys.length) return 0;
 
   const setSql = keys.map((key) => `${key} = ?`).join(', ');
   const [result] = await db.query(
@@ -236,24 +346,66 @@ async function deleteIdioma(candidatoId, idiomaId) {
 async function listExperiencias(candidatoId) {
   const [rows] = await db.query(
     `SELECT
-      id,
-      candidato_id,
-      empresa_id,
-      cargo,
-      fecha_inicio,
-      fecha_fin,
-      actualmente_trabaja,
-      tipo_contrato,
-      descripcion,
-      created_at,
-      updated_at
-     FROM candidatos_experiencia
-     WHERE candidato_id = ?
-       AND deleted_at IS NULL
-     ORDER BY created_at DESC`,
+      e.id,
+      e.candidato_id,
+      e.empresa_id,
+      e.cargo,
+      e.fecha_inicio,
+      e.fecha_fin,
+      e.actualmente_trabaja,
+      e.tipo_contrato,
+      e.descripcion,
+      e.created_at,
+      e.updated_at,
+      ec.id AS cert_id,
+      ec.nombre_archivo AS cert_nombre_archivo,
+      ec.nombre_original AS cert_nombre_original,
+      ec.ruta_archivo AS cert_ruta_archivo,
+      ec.tipo_mime AS cert_tipo_mime,
+      ec.tamanio_kb AS cert_tamanio_kb,
+      ec.fecha_emision AS cert_fecha_emision,
+      ec.descripcion AS cert_descripcion,
+      ec.estado AS cert_estado,
+      ec.created_at AS cert_created_at,
+      ec.updated_at AS cert_updated_at
+     FROM candidatos_experiencia e
+     LEFT JOIN candidatos_experiencia_certificados ec
+       ON ec.experiencia_id = e.id
+      AND ec.deleted_at IS NULL
+     WHERE e.candidato_id = ?
+       AND e.deleted_at IS NULL
+     ORDER BY e.created_at DESC`,
     [candidatoId]
   );
-  return rows;
+
+  return rows.map((row) => ({
+    id: row.id,
+    candidato_id: row.candidato_id,
+    empresa_id: row.empresa_id,
+    cargo: row.cargo,
+    fecha_inicio: row.fecha_inicio,
+    fecha_fin: row.fecha_fin,
+    actualmente_trabaja: row.actualmente_trabaja,
+    tipo_contrato: row.tipo_contrato,
+    descripcion: row.descripcion,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    certificado_laboral: row.cert_id
+      ? {
+          id: row.cert_id,
+          nombre_archivo: row.cert_nombre_archivo,
+          nombre_original: row.cert_nombre_original,
+          ruta_archivo: row.cert_ruta_archivo,
+          tipo_mime: row.cert_tipo_mime,
+          tamanio_kb: row.cert_tamanio_kb,
+          fecha_emision: row.cert_fecha_emision,
+          descripcion: row.cert_descripcion,
+          estado: row.cert_estado,
+          created_at: row.cert_created_at,
+          updated_at: row.cert_updated_at
+        }
+      : null
+  }));
 }
 
 async function createExperiencia(candidatoId, payload) {
@@ -277,7 +429,7 @@ async function createExperiencia(candidatoId, payload) {
 
 async function updateExperiencia(candidatoId, experienciaId, payload) {
   const keys = Object.keys(payload);
-  if (!keys.length) return;
+  if (!keys.length) return 0;
 
   const setSql = keys.map((key) => `${key} = ?`).join(', ');
   const [result] = await db.query(
@@ -301,6 +453,415 @@ async function deleteExperiencia(candidatoId, experienciaId) {
     [experienciaId, candidatoId]
   );
   return result.affectedRows;
+}
+
+async function existsExperiencia(candidatoId, experienciaId) {
+  const [rows] = await db.query(
+    `SELECT id
+     FROM candidatos_experiencia
+     WHERE id = ?
+       AND candidato_id = ?
+       AND deleted_at IS NULL
+     LIMIT 1`,
+    [experienciaId, candidatoId]
+  );
+  return Boolean(rows.length);
+}
+
+async function getExperienciaCertificado(candidatoId, experienciaId) {
+  const [rows] = await db.query(
+    `SELECT
+      e.id AS experiencia_id,
+      ec.id,
+      ec.candidato_id,
+      ec.experiencia_id AS cert_experiencia_id,
+      ec.nombre_archivo,
+      ec.nombre_original,
+      ec.ruta_archivo,
+      ec.tipo_mime,
+      ec.tamanio_kb,
+      ec.fecha_emision,
+      ec.descripcion,
+      ec.estado,
+      ec.created_at,
+      ec.updated_at
+     FROM candidatos_experiencia e
+     LEFT JOIN candidatos_experiencia_certificados ec
+       ON ec.experiencia_id = e.id
+      AND ec.deleted_at IS NULL
+     WHERE e.id = ?
+       AND e.candidato_id = ?
+       AND e.deleted_at IS NULL
+     LIMIT 1`,
+    [experienciaId, candidatoId]
+  );
+
+  const row = rows[0];
+  if (!row) return { exists: false, certificado: null };
+  if (!row.id) return { exists: true, certificado: null };
+
+  return {
+    exists: true,
+    certificado: {
+      id: row.id,
+      candidato_id: row.candidato_id,
+      experiencia_id: row.cert_experiencia_id,
+      nombre_archivo: row.nombre_archivo,
+      nombre_original: row.nombre_original,
+      ruta_archivo: row.ruta_archivo,
+      tipo_mime: row.tipo_mime,
+      tamanio_kb: row.tamanio_kb,
+      fecha_emision: row.fecha_emision,
+      descripcion: row.descripcion,
+      estado: row.estado,
+      created_at: row.created_at,
+      updated_at: row.updated_at
+    }
+  };
+}
+
+async function createExperienciaCertificado(candidatoId, experienciaId, payload) {
+  const exists = await existsExperiencia(candidatoId, experienciaId);
+  if (!exists) return null;
+
+  await db.query(
+    `INSERT INTO candidatos_experiencia_certificados (
+      candidato_id,
+      experiencia_id,
+      nombre_archivo,
+      nombre_original,
+      ruta_archivo,
+      tipo_mime,
+      tamanio_kb,
+      fecha_emision,
+      descripcion,
+      estado
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      nombre_archivo = VALUES(nombre_archivo),
+      nombre_original = VALUES(nombre_original),
+      ruta_archivo = VALUES(ruta_archivo),
+      tipo_mime = VALUES(tipo_mime),
+      tamanio_kb = VALUES(tamanio_kb),
+      fecha_emision = VALUES(fecha_emision),
+      descripcion = VALUES(descripcion),
+      estado = VALUES(estado),
+      deleted_at = NULL`,
+    [
+      candidatoId,
+      experienciaId,
+      payload.nombre_archivo,
+      payload.nombre_original,
+      payload.ruta_archivo,
+      payload.tipo_mime,
+      payload.tamanio_kb,
+      payload.fecha_emision ?? null,
+      payload.descripcion ?? null,
+      payload.estado ?? 'pendiente'
+    ]
+  );
+
+  const cert = await getExperienciaCertificado(candidatoId, experienciaId);
+  return cert.certificado;
+}
+
+async function updateExperienciaCertificado(candidatoId, experienciaId, patch) {
+  const experienciaExiste = await existsExperiencia(candidatoId, experienciaId);
+  if (!experienciaExiste) return -1;
+
+  const keys = Object.keys(patch);
+  if (!keys.length) return 0;
+
+  const setSql = keys.map((key) => `${key} = ?`).join(', ');
+  const [result] = await db.query(
+    `UPDATE candidatos_experiencia_certificados
+     SET ${setSql}
+     WHERE experiencia_id = ?
+       AND candidato_id = ?
+       AND deleted_at IS NULL`,
+    [...keys.map((key) => patch[key]), experienciaId, candidatoId]
+  );
+  return result.affectedRows;
+}
+
+async function deleteExperienciaCertificado(candidatoId, experienciaId) {
+  const experienciaExiste = await existsExperiencia(candidatoId, experienciaId);
+  if (!experienciaExiste) return -1;
+
+  const [result] = await db.query(
+    `UPDATE candidatos_experiencia_certificados
+     SET deleted_at = NOW()
+     WHERE experiencia_id = ?
+       AND candidato_id = ?
+       AND deleted_at IS NULL`,
+    [experienciaId, candidatoId]
+  );
+  return result.affectedRows;
+}
+
+async function listFormacion(candidatoId) {
+  const [rows] = await db.query(
+    `SELECT
+      f.id,
+      f.candidato_id,
+      f.matricula_id,
+      f.nivel_id,
+      f.curso_id,
+      f.formacion_origen_id,
+      f.estado,
+      f.fecha_inicio,
+      f.fecha_fin,
+      f.fecha_aprobacion,
+      f.activo,
+      f.categoria_formacion,
+      f.subtipo_formacion,
+      f.institucion,
+      f.nombre_programa,
+      f.titulo_obtenido,
+      f.entidad_emisora,
+      f.numero_registro,
+      f.fecha_emision,
+      f.fecha_vencimiento,
+      f.created_at,
+      f.updated_at,
+      fr.id AS fr_id,
+      fr.resultado_curso AS fr_resultado_curso,
+      fr.nota_curso AS fr_nota_curso,
+      fr.fuente_curso AS fr_fuente_curso,
+      fr.fecha_cierre_curso AS fr_fecha_cierre_curso,
+      fr.examen_estado AS fr_examen_estado,
+      fr.nota_examen AS fr_nota_examen,
+      fr.acreditado AS fr_acreditado,
+      fr.fecha_examen AS fr_fecha_examen,
+      fr.documento_url AS fr_documento_url,
+      fr.created_at AS fr_created_at,
+      fr.updated_at AS fr_updated_at
+     FROM candidatos_formaciones f
+     LEFT JOIN candidatos_formacion_resultados fr
+       ON fr.candidato_formacion_id = f.id
+      AND fr.deleted_at IS NULL
+     WHERE f.candidato_id = ?
+       AND f.deleted_at IS NULL
+     ORDER BY f.created_at DESC`,
+    [candidatoId]
+  );
+
+  return rows.map((row) => {
+    const externalLike = isExternalLikeFormacion(row);
+    return {
+      id: row.id,
+      candidato_id: row.candidato_id,
+      matricula_id: row.matricula_id,
+      nivel_id: row.nivel_id,
+      curso_id: row.curso_id,
+      formacion_origen_id: row.formacion_origen_id,
+      estado: row.estado,
+      fecha_inicio: row.fecha_inicio,
+      fecha_fin: row.fecha_fin,
+      fecha_aprobacion: row.fecha_aprobacion,
+      activo: row.activo,
+      categoria_formacion: row.categoria_formacion,
+      categoria_ui: row.categoria_formacion || (externalLike ? 'externa' : null),
+      legacy_importado: !row.categoria_formacion && externalLike,
+      subtipo_formacion: row.subtipo_formacion,
+      institucion: row.institucion,
+      nombre_programa: row.nombre_programa,
+      titulo_obtenido: row.titulo_obtenido,
+      entidad_emisora: row.entidad_emisora,
+      numero_registro: row.numero_registro,
+      fecha_emision: row.fecha_emision,
+      fecha_vencimiento: row.fecha_vencimiento,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      resultado: row.fr_id
+        ? {
+            id: row.fr_id,
+            resultado_curso: row.fr_resultado_curso,
+            nota_curso: row.fr_nota_curso,
+            fuente_curso: row.fr_fuente_curso,
+            fecha_cierre_curso: row.fr_fecha_cierre_curso,
+            examen_estado: row.fr_examen_estado,
+            nota_examen: row.fr_nota_examen,
+            acreditado: row.fr_acreditado,
+            fecha_examen: row.fr_fecha_examen,
+            documento_url: row.fr_documento_url,
+            created_at: row.fr_created_at,
+            updated_at: row.fr_updated_at
+          }
+        : null
+    };
+  });
+}
+
+async function createFormacion(candidatoId, payload) {
+  const [result] = await db.query(
+    `INSERT INTO candidatos_formaciones (
+      candidato_id,
+      estado,
+      fecha_inicio,
+      fecha_fin,
+      activo,
+      categoria_formacion,
+      subtipo_formacion,
+      institucion,
+      nombre_programa,
+      titulo_obtenido,
+      entidad_emisora,
+      numero_registro,
+      fecha_emision,
+      fecha_vencimiento
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      candidatoId,
+      payload.estado ?? 'inscrito',
+      payload.fecha_inicio ?? null,
+      payload.fecha_fin ?? null,
+      payload.activo ?? 1,
+      payload.categoria_formacion,
+      payload.subtipo_formacion,
+      payload.institucion ?? null,
+      payload.nombre_programa ?? null,
+      payload.titulo_obtenido ?? null,
+      payload.entidad_emisora ?? null,
+      payload.numero_registro ?? null,
+      payload.fecha_emision ?? null,
+      payload.fecha_vencimiento ?? null
+    ]
+  );
+  return { id: result.insertId };
+}
+
+async function updateFormacion(candidatoId, formacionId, payload) {
+  const keys = Object.keys(payload);
+  if (!keys.length) return 0;
+
+  const setSql = keys.map((key) => `${key} = ?`).join(', ');
+  const [result] = await db.query(
+    `UPDATE candidatos_formaciones
+     SET ${setSql}
+     WHERE id = ?
+       AND candidato_id = ?
+       AND deleted_at IS NULL`,
+    [...keys.map((key) => payload[key]), formacionId, candidatoId]
+  );
+  return result.affectedRows;
+}
+
+async function deleteFormacion(candidatoId, formacionId) {
+  const [result] = await db.query(
+    `UPDATE candidatos_formaciones
+     SET deleted_at = NOW()
+     WHERE id = ?
+       AND candidato_id = ?
+       AND deleted_at IS NULL`,
+    [formacionId, candidatoId]
+  );
+  return result.affectedRows;
+}
+
+async function existsFormacion(candidatoId, formacionId) {
+  const [rows] = await db.query(
+    `SELECT id
+     FROM candidatos_formaciones
+     WHERE id = ?
+       AND candidato_id = ?
+       AND deleted_at IS NULL
+     LIMIT 1`,
+    [formacionId, candidatoId]
+  );
+  return Boolean(rows.length);
+}
+
+async function getFormacionResultado(candidatoId, formacionId) {
+  const [rows] = await db.query(
+    `SELECT
+      fr.id,
+      fr.candidato_formacion_id,
+      fr.resultado_curso,
+      fr.nota_curso,
+      fr.fuente_curso,
+      fr.fecha_cierre_curso,
+      fr.examen_estado,
+      fr.nota_examen,
+      fr.acreditado,
+      fr.fecha_examen,
+      fr.documento_url,
+      fr.created_at,
+      fr.updated_at
+     FROM candidatos_formaciones f
+     LEFT JOIN candidatos_formacion_resultados fr
+       ON fr.candidato_formacion_id = f.id
+      AND fr.deleted_at IS NULL
+     WHERE f.id = ?
+       AND f.candidato_id = ?
+       AND f.deleted_at IS NULL
+     LIMIT 1`,
+    [formacionId, candidatoId]
+  );
+
+  const row = rows[0];
+  if (!row || !row.id) return null;
+
+  return {
+    id: row.id,
+    candidato_formacion_id: row.candidato_formacion_id,
+    resultado_curso: row.resultado_curso,
+    nota_curso: row.nota_curso,
+    fuente_curso: row.fuente_curso,
+    fecha_cierre_curso: row.fecha_cierre_curso,
+    examen_estado: row.examen_estado,
+    nota_examen: row.nota_examen,
+    acreditado: row.acreditado,
+    fecha_examen: row.fecha_examen,
+    documento_url: row.documento_url,
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
+}
+
+async function canUseFormacionResultado(candidatoId, formacionId) {
+  const [rows] = await db.query(
+    `SELECT
+      id,
+      categoria_formacion,
+      matricula_id,
+      nivel_id,
+      curso_id,
+      formacion_origen_id
+     FROM candidatos_formaciones
+     WHERE id = ?
+       AND candidato_id = ?
+       AND deleted_at IS NULL
+     LIMIT 1`,
+    [formacionId, candidatoId]
+  );
+
+  const row = rows[0];
+  if (!row) return { exists: false, allowed: false };
+  return { exists: true, allowed: isExternalLikeFormacion(row) };
+}
+
+async function upsertFormacionResultado(candidatoId, formacionId, payload) {
+  const state = await canUseFormacionResultado(candidatoId, formacionId);
+  if (!state.exists) return 0;
+  if (!state.allowed) return -1;
+
+  const keys = Object.keys(payload);
+  if (!keys.length) return 0;
+
+  const columns = ['candidato_formacion_id', ...keys];
+  const placeholders = columns.map(() => '?').join(', ');
+  const values = [formacionId, ...keys.map((key) => payload[key])];
+  const updateSql = [...keys.map((key) => `${key} = VALUES(${key})`), 'deleted_at = NULL'].join(', ');
+
+  await db.query(
+    `INSERT INTO candidatos_formacion_resultados (${columns.join(', ')})
+     VALUES (${placeholders})
+     ON DUPLICATE KEY UPDATE ${updateSql}`,
+    values
+  );
+
+  return 1;
 }
 
 async function listDocumentos(candidatoId) {
@@ -374,7 +935,7 @@ async function createDocumento(candidatoId, payload) {
 
 async function updateDocumento(candidatoId, documentoId, patch) {
   const keys = Object.keys(patch);
-  if (!keys.length) return;
+  if (!keys.length) return 0;
 
   const setSql = keys.map((key) => `${key} = ?`).join(', ');
   const [result] = await db.query(
@@ -406,6 +967,11 @@ module.exports = {
   getPerfilByCandidatoId,
   updateDatosBasicos,
   upsertByCandidatoIdPk,
+  listEducacionGeneralItems,
+  createEducacionGeneralItem,
+  updateEducacionGeneralItem,
+  deleteEducacionGeneralItem,
+  upsertEducacionGeneralSummary,
   listIdiomas,
   createIdioma,
   updateIdioma,
@@ -414,8 +980,22 @@ module.exports = {
   createExperiencia,
   updateExperiencia,
   deleteExperiencia,
+  getExperienciaCertificado,
+  createExperienciaCertificado,
+  updateExperienciaCertificado,
+  deleteExperienciaCertificado,
+  listFormacion,
+  createFormacion,
+  updateFormacion,
+  deleteFormacion,
+  existsFormacion,
+  getFormacionResultado,
+  canUseFormacionResultado,
+  upsertFormacionResultado,
   listDocumentos,
   createDocumento,
   updateDocumento,
   deleteDocumento
 };
+
+
