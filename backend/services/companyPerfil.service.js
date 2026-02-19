@@ -160,11 +160,6 @@ function buildResumen(empresa, perfil) {
       done: Boolean(String(perfil?.sitio_web || '').trim())
     },
     {
-      key: 'linkedin_url',
-      label: 'LinkedIn',
-      done: Boolean(String(perfil?.linkedin_url || '').trim())
-    },
-    {
       key: 'instagram_url',
       label: 'Instagram',
       done: Boolean(String(perfil?.instagram_url || '').trim())
@@ -173,6 +168,11 @@ function buildResumen(empresa, perfil) {
       key: 'facebook_url',
       label: 'Facebook',
       done: Boolean(String(perfil?.facebook_url || '').trim())
+    },
+    {
+      key: 'logo_url',
+      label: 'Logo',
+      done: Boolean(String(perfil?.logo_url || '').trim())
     }
   ];
 

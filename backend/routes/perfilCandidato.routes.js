@@ -43,6 +43,10 @@ const {
   updateDocumentoById,
   deleteDocumentoById
 } = require('../controllers/perfilCandidato.controller');
+const {
+  getMyCandidateVerification,
+  requestMyCandidateVerification
+} = require('../controllers/verificaciones.controller');
 
 const router = express.Router();
 
@@ -78,6 +82,8 @@ const uploadDocumento = multer({
 });
 
 router.get('/me', authRequired, requireRole(['candidato']), getMyPerfil);
+router.get('/me/verificacion', authRequired, requireRole(['candidato']), getMyCandidateVerification);
+router.post('/me/verificacion/solicitar', authRequired, requireRole(['candidato']), requestMyCandidateVerification);
 router.put('/me/datos-basicos', authRequired, requireRole(['candidato']), updateMyDatosBasicos);
 router.put('/me/contacto', authRequired, requireRole(['candidato']), updateMyContacto);
 router.put('/me/domicilio', authRequired, requireRole(['candidato']), updateMyDomicilio);

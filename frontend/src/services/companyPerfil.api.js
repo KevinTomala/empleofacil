@@ -13,10 +13,17 @@ function parseCompanyPerfilError(error, fallbackMessage) {
   }
 
   if (code === 'INVALID_PAYLOAD') return 'Revisa los datos ingresados. Hay campos invalidos.'
+  if (code === 'FILE_REQUIRED') return 'Selecciona un archivo de logo.'
+  if (code === 'INVALID_FILE_TYPE') return 'El logo debe ser JPG, PNG o WEBP.'
+  if (code === 'FILE_TOO_LARGE') return 'El logo supera el limite permitido de 5 MB.'
+  if (code === 'INTERNAL_ERROR') return 'Error interno del servidor al procesar el logo. Intenta nuevamente.'
   if (code === 'FORBIDDEN') return 'No tienes permisos para editar el perfil de empresa.'
+  if (code === 'SUPERADMIN_REQUIRED') return 'Esta accion requiere un superadmin.'
   if (code === 'EMPRESA_NOT_FOUND') return 'No se encontro una empresa asociada a tu cuenta.'
   if (code === 'PROFILE_FETCH_FAILED') return 'No se pudo cargar el perfil de empresa.'
   if (code === 'PROFILE_UPDATE_FAILED') return 'No se pudo guardar el perfil de empresa.'
+  if (code === 'VERIFICATION_FETCH_FAILED') return 'No se pudo cargar la verificacion.'
+  if (code === 'VERIFICATION_UPDATE_FAILED') return 'No se pudo actualizar la verificacion.'
 
   return error?.message || fallbackMessage
 }
@@ -34,4 +41,49 @@ export async function updateMyCompanyDatosGenerales(payload) {
     method: 'PUT',
     body: JSON.stringify(payload)
   })
+}
+
+export async function uploadMyCompanyLogo(formData) {
+  return apiRequest('/api/company/perfil/me/logo', {
+    method: 'POST',
+    body: formData
+  })
+}
+
+export async function getMyCompanyVerification() {
+  return apiRequest('/api/company/perfil/me/verificacion')
+}
+
+export async function requestMyCompanyVerification(payload = {}) {
+  return apiRequest('/api/company/perfil/me/verificacion/solicitar', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteMyCompanyLogo() {
+  const attempts = [
+    () => apiRequest('/api/company/perfil/me/logo/delete', { method: 'POST' }),
+    () => apiRequest('/api/company/perfil/me/logo?action=delete', { method: 'POST' }),
+    () => apiRequest('/api/company/perfil/me/logo', { method: 'DELETE' }),
+  ]
+
+  let lastError = null
+
+  for (const run of attempts) {
+    try {
+      return await run()
+    } catch (error) {
+      lastError = error
+      const code = error?.payload?.error || error?.code || error?.message || ''
+      const recoverableStatus = error?.status === 404 || error?.status === 405
+      const recoverableCode = code === 'FILE_REQUIRED'
+      if (recoverableStatus || recoverableCode) {
+        continue
+      }
+      throw error
+    }
+  }
+
+  throw lastError || new Error('PROFILE_UPDATE_FAILED')
 }

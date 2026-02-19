@@ -1,0 +1,218 @@
+const { resolveEmpresaIdForUser } = require('../services/companyPerfil.service');
+const { findCandidatoIdByUserId } = require('../services/perfilCandidato.service');
+const {
+  VALID_VERIFICACION_ESTADOS,
+  VALID_VERIFICACION_NIVELES,
+  ensureVerificacionByScope,
+  requestVerificacionByScope,
+  listVerificaciones,
+  getVerificacionById,
+  listVerificacionEventos,
+  reviewVerificacionById
+} = require('../services/verificaciones.service');
+
+function parsePositiveInt(value) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number <= 0) return null;
+  return number;
+}
+
+function parseNullableDateTime(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function parseNullableString(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+async function getMyCompanyVerification(req, res) {
+  try {
+    const userId = req.user?.id;
+    const empresaId = await resolveEmpresaIdForUser(userId, { autoCreate: req.user?.rol === 'empresa' });
+    if (!empresaId) return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+
+    const verificacion = await ensureVerificacionByScope({ tipo: 'empresa', empresaId });
+    return res.json({ verificacion });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'VERIFICATION_FETCH_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+async function requestMyCompanyVerification(req, res) {
+  try {
+    const userId = req.user?.id;
+    const empresaId = await resolveEmpresaIdForUser(userId, { autoCreate: req.user?.rol === 'empresa' });
+    if (!empresaId) return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+
+    const verificacion = await requestVerificacionByScope({
+      tipo: 'empresa',
+      empresaId,
+      actorUsuarioId: userId,
+      actorRol: req.user?.rol || 'empresa',
+      comentario: parseNullableString(req.body?.comentario)
+    });
+
+    return res.json({ ok: true, verificacion });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'VERIFICATION_UPDATE_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+async function getMyCandidateVerification(req, res) {
+  try {
+    const userId = req.user?.id;
+    const candidatoId = await findCandidatoIdByUserId(userId);
+    if (!candidatoId) return res.status(404).json({ error: 'CANDIDATO_NOT_FOUND' });
+
+    const verificacion = await ensureVerificacionByScope({ tipo: 'candidato', candidatoId });
+    return res.json({ verificacion });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'VERIFICATION_FETCH_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+async function requestMyCandidateVerification(req, res) {
+  try {
+    const userId = req.user?.id;
+    const candidatoId = await findCandidatoIdByUserId(userId);
+    if (!candidatoId) return res.status(404).json({ error: 'CANDIDATO_NOT_FOUND' });
+
+    const verificacion = await requestVerificacionByScope({
+      tipo: 'candidato',
+      candidatoId,
+      actorUsuarioId: userId,
+      actorRol: req.user?.rol || 'candidato',
+      comentario: parseNullableString(req.body?.comentario)
+    });
+
+    return res.json({ ok: true, verificacion });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'VERIFICATION_UPDATE_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+async function listVerificacionesAdmin(req, res) {
+  try {
+    const estado = parseNullableString(req.query.estado);
+    const tipo = parseNullableString(req.query.tipo);
+    const q = parseNullableString(req.query.q) || '';
+    const page = parsePositiveInt(req.query.page) || 1;
+    const pageSize = parsePositiveInt(req.query.page_size) || 20;
+
+    const result = await listVerificaciones({
+      estado,
+      tipo,
+      q,
+      page,
+      pageSize
+    });
+
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({
+      error: 'VERIFICATION_FETCH_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+async function getVerificacionByIdAdmin(req, res) {
+  const verificacionId = parsePositiveInt(req.params.verificacionId);
+  if (!verificacionId) return res.status(400).json({ error: 'INVALID_VERIFICACION_ID' });
+
+  try {
+    const verificacion = await getVerificacionById(verificacionId);
+    if (!verificacion) return res.status(404).json({ error: 'VERIFICACION_NOT_FOUND' });
+
+    const eventos = await listVerificacionEventos(verificacionId, {
+      limit: parsePositiveInt(req.query.limit) || 20
+    });
+
+    return res.json({ verificacion, eventos });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'VERIFICATION_FETCH_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+async function reviewVerificacionAdmin(req, res) {
+  const verificacionId = parsePositiveInt(req.params.verificacionId);
+  if (!verificacionId) return res.status(400).json({ error: 'INVALID_VERIFICACION_ID' });
+
+  const payload = req.body || {};
+  const estado = parseNullableString(payload.estado);
+  const nivel = parseNullableString(payload.nivel);
+  const motivoRechazo = parseNullableString(payload.motivo_rechazo);
+  const notasAdmin = parseNullableString(payload.notas_admin);
+  const comentario = parseNullableString(payload.comentario);
+  const expiresAt = parseNullableDateTime(payload.expires_at);
+
+  if (!estado || !VALID_VERIFICACION_ESTADOS.includes(estado)) {
+    return res.status(400).json({ error: 'INVALID_ESTADO' });
+  }
+  if (nivel && !VALID_VERIFICACION_NIVELES.includes(nivel)) {
+    return res.status(400).json({ error: 'INVALID_NIVEL' });
+  }
+  if (estado === 'rechazada' && !motivoRechazo) {
+    return res.status(400).json({ error: 'MOTIVO_RECHAZO_REQUIRED' });
+  }
+  if (payload.expires_at !== undefined && payload.expires_at !== null && payload.expires_at !== '' && !expiresAt) {
+    return res.status(400).json({ error: 'INVALID_EXPIRES_AT' });
+  }
+  if (req.user?.rol === 'administrador' && estado === 'suspendida') {
+    return res.status(403).json({ error: 'SUPERADMIN_REQUIRED' });
+  }
+
+  try {
+    const verificacion = await reviewVerificacionById({
+      verificacionId,
+      estado,
+      nivel,
+      motivoRechazo,
+      notasAdmin,
+      expiresAt,
+      actorUsuarioId: req.user?.id || null,
+      actorRol: req.user?.rol || 'administrador',
+      comentario
+    });
+
+    if (!verificacion) return res.status(404).json({ error: 'VERIFICACION_NOT_FOUND' });
+
+    return res.json({ ok: true, verificacion });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'VERIFICATION_UPDATE_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+module.exports = {
+  getMyCompanyVerification,
+  requestMyCompanyVerification,
+  getMyCandidateVerification,
+  requestMyCandidateVerification,
+  listVerificacionesAdmin,
+  getVerificacionByIdAdmin,
+  reviewVerificacionAdmin
+};

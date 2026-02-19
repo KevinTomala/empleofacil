@@ -1,19 +1,30 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './company.css'
 import {
   Building2,
+  Facebook,
   Globe,
+  Instagram,
+  Linkedin,
   Link2,
+  MoreVertical,
+  Pencil,
   ShieldCheck,
+  Trash2,
   TriangleAlert,
+  Upload,
   Users,
 } from 'lucide-react'
 import Header from '../../components/Header'
 import { showToast } from '../../utils/showToast'
 import {
+  deleteMyCompanyLogo,
   getCompanyPerfilErrorMessage,
+  getMyCompanyVerification,
   getMyCompanyPerfil,
+  requestMyCompanyVerification,
   updateMyCompanyDatosGenerales,
+  uploadMyCompanyLogo,
 } from '../../services/companyPerfil.api'
 
 const EMPTY_FORM = {
@@ -72,12 +83,65 @@ function toExternalUrl(value) {
   return `https://${text}`
 }
 
+function toAssetUrl(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  if (text.startsWith('http://') || text.startsWith('https://')) return text
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+  return text.startsWith('/') ? `${apiBase}${text}` : `${apiBase}/${text}`
+}
+
+function buildCompanyResumen(payload) {
+  const empresa = payload?.empresa || {}
+  const perfil = payload?.perfil || {}
+
+  const checks = [
+    { label: 'Nombre', done: Boolean(String(empresa?.nombre || '').trim()) },
+    { label: 'Industria', done: Boolean(String(perfil?.industria || '').trim()) },
+    { label: 'Ubicacion', done: Boolean(String(perfil?.ubicacion_principal || '').trim()) },
+    {
+      label: 'Tamano',
+      done: Number.isInteger(perfil?.tamano_empleados) && perfil?.tamano_empleados > 0,
+    },
+    { label: 'Descripcion', done: Boolean(String(perfil?.descripcion || '').trim()) },
+    { label: 'Sitio web', done: Boolean(String(perfil?.sitio_web || '').trim()) },
+    { label: 'Instagram', done: Boolean(String(perfil?.instagram_url || '').trim()) },
+    { label: 'Facebook', done: Boolean(String(perfil?.facebook_url || '').trim()) },
+    { label: 'Logo', done: Boolean(String(perfil?.logo_url || '').trim()) },
+  ]
+
+  const completados = checks.filter((item) => item.done).length
+  const porcentajeCompletitud = Math.round((completados / checks.length) * 100)
+  const camposPendientes = checks.filter((item) => !item.done).map((item) => item.label)
+
+  return { porcentajeCompletitud, camposPendientes }
+}
+
 export default function CompanyPerfil() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [deletingLogo, setDeletingLogo] = useState(false)
+  const [requestingVerification, setRequestingVerification] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [openQuickMenu, setOpenQuickMenu] = useState(null)
   const [perfilData, setPerfilData] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
+  const logoInputRef = useRef(null)
+  const logoMenuRef = useRef(null)
+  const linksMenuRef = useRef(null)
+
+  const applyPerfilResponse = (data) => {
+    const normalized = {
+      empresa: data?.empresa || {},
+      perfil: data?.perfil || {},
+      resumen: data?.resumen || { porcentaje_completitud: 0, campos_pendientes: [] },
+      verificacion: data?.verificacion || null,
+    }
+
+    setPerfilData(normalized)
+    setForm(mapPayloadToForm(normalized))
+  }
 
   useEffect(() => {
     let active = true
@@ -87,8 +151,18 @@ export default function CompanyPerfil() {
         setLoading(true)
         const data = await getMyCompanyPerfil()
         if (!active) return
-        setPerfilData(data)
-        setForm(mapPayloadToForm(data))
+        if (data?.verificacion) {
+          applyPerfilResponse(data)
+        } else {
+          try {
+            const verificationRes = await getMyCompanyVerification()
+            if (!active) return
+            applyPerfilResponse({ ...data, verificacion: verificationRes?.verificacion || null })
+          } catch (_verificationError) {
+            if (!active) return
+            applyPerfilResponse(data)
+          }
+        }
       } catch (error) {
         if (!active) return
         showToast({
@@ -107,13 +181,55 @@ export default function CompanyPerfil() {
     }
   }, [])
 
-  const porcentajeCompletitud = perfilData?.resumen?.porcentaje_completitud || 0
-  const pendientes = useMemo(() => {
-    const items = perfilData?.resumen?.campos_pendientes
-    return Array.isArray(items) ? items : []
+  useEffect(() => {
+    if (!openQuickMenu) return undefined
+
+    const onPointerDown = (event) => {
+      const insideLogoMenu = logoMenuRef.current?.contains(event.target)
+      const insideLinksMenu = linksMenuRef.current?.contains(event.target)
+      if (!insideLogoMenu && !insideLinksMenu) {
+        setOpenQuickMenu(null)
+      }
+    }
+
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [openQuickMenu])
+
+  const resumenUi = useMemo(() => {
+    if (!perfilData) return { porcentajeCompletitud: 0, camposPendientes: [] }
+    return buildCompanyResumen(perfilData)
   }, [perfilData])
+  const porcentajeCompletitud = resumenUi.porcentajeCompletitud
+  const pendientes = resumenUi.camposPendientes
 
   const sitioWeb = String(perfilData?.perfil?.sitio_web || '').trim()
+  const linkedinUrl = String(perfilData?.perfil?.linkedin_url || '').trim()
+  const instagramUrl = String(perfilData?.perfil?.instagram_url || '').trim()
+  const facebookUrl = String(perfilData?.perfil?.facebook_url || '').trim()
+  const logoUrl = String(perfilData?.perfil?.logo_url || '').trim()
+  const logoSrc = toAssetUrl(logoUrl)
+  const verificacion = perfilData?.verificacion || null
+  const verificationStatus = String(verificacion?.estado || 'pendiente')
+  const verificationLevel = String(verificacion?.nivel || 'basico')
+  const verificationReviewedAt = verificacion?.reviewed_at || null
+  const verificationReason = String(verificacion?.motivo_rechazo || '').trim()
+  const verificationStatusUi = {
+    pendiente: { label: 'Pendiente', className: 'bg-amber-100 text-amber-700' },
+    en_revision: { label: 'En revision', className: 'bg-blue-100 text-blue-700' },
+    aprobada: { label: 'Verificado', className: 'bg-emerald-100 text-emerald-700' },
+    rechazada: { label: 'Rechazado', className: 'bg-rose-100 text-rose-700' },
+    suspendida: { label: 'Suspendido', className: 'bg-rose-100 text-rose-700' },
+    vencida: { label: 'Vencida', className: 'bg-slate-200 text-slate-700' },
+  }
+  const verificationBadge = verificationStatusUi[verificationStatus] || verificationStatusUi.pendiente
+  const canRequestVerification = ['pendiente', 'rechazada', 'vencida'].includes(verificationStatus)
+  const socialLinks = [
+    { key: 'sitio_web', label: sitioWeb, icon: Globe, href: toExternalUrl(sitioWeb) },
+    { key: 'linkedin_url', label: linkedinUrl, icon: Linkedin, href: toExternalUrl(linkedinUrl) },
+    { key: 'instagram_url', label: instagramUrl, icon: Instagram, href: toExternalUrl(instagramUrl) },
+    { key: 'facebook_url', label: facebookUrl, icon: Facebook, href: toExternalUrl(facebookUrl) },
+  ].filter((item) => item.label)
   const tamanoEmpleados =
     Number.isInteger(perfilData?.perfil?.tamano_empleados) && perfilData?.perfil?.tamano_empleados >= 0
       ? `${perfilData.perfil.tamano_empleados} personas`
@@ -124,13 +240,89 @@ export default function CompanyPerfil() {
   }
 
   const handleStartEdit = () => {
+    setOpenQuickMenu(null)
     setForm(mapPayloadToForm(perfilData))
     setEditing(true)
+  }
+
+  const handleEditLogoMenu = () => {
+    setOpenQuickMenu(null)
+    if (!editing) {
+      handleStartEdit()
+    }
   }
 
   const handleCancelEdit = () => {
     setForm(mapPayloadToForm(perfilData))
     setEditing(false)
+  }
+
+  const handleSelectLogo = () => {
+    if (uploadingLogo || deletingLogo) return
+    setOpenQuickMenu(null)
+    logoInputRef.current?.click()
+  }
+
+  const handleLogoChange = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    const formData = new FormData()
+    formData.append('logo', file)
+
+    try {
+      setUploadingLogo(true)
+      const data = await uploadMyCompanyLogo(formData)
+      applyPerfilResponse(data)
+      showToast({ type: 'success', message: 'Logo actualizado.' })
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getCompanyPerfilErrorMessage(error, 'No se pudo actualizar el logo.'),
+      })
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
+
+  const handleDeleteLogo = async () => {
+    if (!logoSrc || deletingLogo || uploadingLogo) return
+
+    try {
+      setOpenQuickMenu(null)
+      setDeletingLogo(true)
+      const data = await deleteMyCompanyLogo()
+      applyPerfilResponse(data)
+      showToast({ type: 'success', message: 'Logo eliminado.' })
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getCompanyPerfilErrorMessage(error, 'No se pudo eliminar el logo.'),
+      })
+    } finally {
+      setDeletingLogo(false)
+    }
+  }
+
+  const handleRequestVerification = async () => {
+    if (requestingVerification) return
+    try {
+      setRequestingVerification(true)
+      const response = await requestMyCompanyVerification()
+      setPerfilData((prev) => ({
+        ...(prev || {}),
+        verificacion: response?.verificacion || prev?.verificacion || null,
+      }))
+      showToast({ type: 'success', message: 'Solicitud de verificacion enviada.' })
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getCompanyPerfilErrorMessage(error, 'No se pudo solicitar la verificacion.'),
+      })
+    } finally {
+      setRequestingVerification(false)
+    }
   }
 
   const handleSubmit = async (event) => {
@@ -155,14 +347,7 @@ export default function CompanyPerfil() {
     try {
       setSaving(true)
       const data = await updateMyCompanyDatosGenerales(payload)
-      const normalized = {
-        empresa: data?.empresa || {},
-        perfil: data?.perfil || {},
-        resumen: data?.resumen || { porcentaje_completitud: 0, campos_pendientes: [] },
-      }
-
-      setPerfilData(normalized)
-      setForm(mapPayloadToForm(normalized))
+      applyPerfilResponse(data)
       setEditing(false)
       showToast({ type: 'success', message: 'Perfil de empresa actualizado.' })
     } catch (error) {
@@ -357,6 +542,76 @@ export default function CompanyPerfil() {
                       />
                     </label>
 
+                    <div
+                      className="border border-border rounded-xl p-4 space-y-2 text-sm relative"
+                      ref={logoMenuRef}
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="text-foreground/60">Logo</p>
+                        <button
+                          type="button"
+                          className="w-7 h-7 rounded-full border border-border text-foreground/60 inline-flex items-center justify-center hover:bg-secondary"
+                          onClick={() =>
+                            setOpenQuickMenu((prev) => (prev === 'logo_edit' ? null : 'logo_edit'))
+                          }
+                          aria-label="Opciones de logo"
+                          disabled={saving || uploadingLogo || deletingLogo}
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {openQuickMenu === 'logo_edit' ? (
+                        <div className="absolute top-11 right-4 w-44 rounded-xl border border-border bg-white shadow-lg p-1 z-20 space-y-1">
+                          <button
+                            type="button"
+                            className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-secondary inline-flex items-center gap-2"
+                            onClick={handleSelectLogo}
+                            disabled={uploadingLogo || deletingLogo}
+                          >
+                            <Upload className="w-4 h-4" />
+                            Subir
+                          </button>
+                          <button
+                            type="button"
+                            className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-secondary inline-flex items-center gap-2"
+                            onClick={handleEditLogoMenu}
+                            disabled
+                          >
+                            <Pencil className="w-4 h-4" />
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-secondary text-red-600 inline-flex items-center gap-2 disabled:text-foreground/40"
+                            onClick={handleDeleteLogo}
+                            disabled={deletingLogo || uploadingLogo || !logoSrc}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Eliminar
+                          </button>
+                        </div>
+                      ) : null}
+                      {logoSrc ? (
+                        <img
+                          src={logoSrc}
+                          alt={`Logo de ${perfilData?.empresa?.nombre || 'empresa'}`}
+                          className="w-16 h-16 rounded-lg object-cover border border-border"
+                        />
+                      ) : (
+                        <p className="text-xs text-foreground/60">Sin logo</p>
+                      )}
+                      <input
+                        ref={logoInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={handleLogoChange}
+                      />
+                      {uploadingLogo ? <p className="text-xs text-foreground/60">Subiendo logo...</p> : null}
+                      {deletingLogo ? <p className="text-xs text-foreground/60">Eliminando logo...</p> : null}
+                      <p className="text-[11px] text-foreground/50">Formatos: JPG, PNG, WEBP. Maximo 5 MB.</p>
+                    </div>
+
                     <div className="flex flex-wrap items-center justify-end gap-3">
                       <button
                         type="button"
@@ -411,36 +666,115 @@ export default function CompanyPerfil() {
                     </div>
 
                     <div className="grid sm:grid-cols-2 gap-4 text-sm">
-                      <div className="border border-border rounded-xl p-4 space-y-2">
-                        <p className="text-foreground/60">Logo</p>
-                        <span className="inline-flex items-center gap-2 text-xs font-semibold bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full">
-                          Pendiente
-                        </span>
-                        <button type="button" className="text-xs text-primary font-semibold">
-                          Cambiar logo
-                        </button>
-                      </div>
-                      <div className="border border-border rounded-xl p-4 space-y-2">
-                        <p className="text-foreground/60">Redes / web</p>
-                        {sitioWeb ? (
-                          <a
-                            className="inline-flex items-center gap-2 text-primary text-sm font-semibold"
-                            href={toExternalUrl(sitioWeb)}
-                            target="_blank"
-                            rel="noreferrer"
+                      <div className="border border-border rounded-xl p-4 space-y-2 relative" ref={logoMenuRef}>
+                        <div className="flex items-center justify-between">
+                          <p className="text-foreground/60">Logo</p>
+                          <button
+                            type="button"
+                            className="w-7 h-7 rounded-full border border-border text-foreground/60 inline-flex items-center justify-center hover:bg-secondary"
+                            onClick={() => setOpenQuickMenu((prev) => (prev === 'logo' ? null : 'logo'))}
+                            aria-label="Opciones de logo"
+                            disabled={uploadingLogo || deletingLogo}
                           >
-                            <Globe className="w-4 h-4" /> {sitioWeb}
-                          </a>
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </div>
+                        {openQuickMenu === 'logo' ? (
+                          <div className="absolute top-11 right-4 w-44 rounded-xl border border-border bg-white shadow-lg p-1 z-20 space-y-1">
+                            <button
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-secondary inline-flex items-center gap-2"
+                              onClick={handleSelectLogo}
+                              disabled={uploadingLogo || deletingLogo}
+                            >
+                              <Upload className="w-4 h-4" />
+                              Subir
+                            </button>
+                            <button
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-secondary inline-flex items-center gap-2"
+                              onClick={handleEditLogoMenu}
+                            >
+                              <Pencil className="w-4 h-4" />
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-secondary text-red-600 inline-flex items-center gap-2 disabled:text-foreground/40"
+                              onClick={handleDeleteLogo}
+                              disabled={deletingLogo || uploadingLogo || !logoSrc}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Eliminar
+                            </button>
+                          </div>
+                        ) : null}
+                        {logoSrc ? (
+                          <img
+                            src={logoSrc}
+                            alt={`Logo de ${perfilData?.empresa?.nombre || 'empresa'}`}
+                            className="w-16 h-16 rounded-lg object-cover border border-border"
+                          />
+                        ) : (
+                          <p className="text-xs text-foreground/60">Sin logo</p>
+                        )}
+                        <input
+                          ref={logoInputRef}
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="hidden"
+                          onChange={handleLogoChange}
+                        />
+                        {deletingLogo ? <p className="text-xs text-foreground/60">Eliminando logo...</p> : null}
+                        <p className="text-[11px] text-foreground/50">Formatos: JPG, PNG, WEBP. Maximo 5 MB.</p>
+                      </div>
+                      <div className="border border-border rounded-xl p-4 space-y-2 relative" ref={linksMenuRef}>
+                        <div className="flex items-center justify-between">
+                          <p className="text-foreground/60">Redes / web</p>
+                          <button
+                            type="button"
+                            className="w-7 h-7 rounded-full border border-border text-foreground/60 inline-flex items-center justify-center hover:bg-secondary"
+                            onClick={() => setOpenQuickMenu((prev) => (prev === 'links' ? null : 'links'))}
+                            aria-label="Opciones de enlaces"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </div>
+                        {openQuickMenu === 'links' ? (
+                          <div className="absolute top-11 right-4 w-44 rounded-xl border border-border bg-white shadow-lg p-1 z-20">
+                            <button
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-secondary inline-flex items-center gap-2"
+                              onClick={() => {
+                                setOpenQuickMenu(null)
+                                handleStartEdit()
+                              }}
+                            >
+                              <Pencil className="w-4 h-4" />
+                              Editar enlaces
+                            </button>
+                          </div>
+                        ) : null}
+                        {socialLinks.length ? (
+                          <div className="space-y-2">
+                            {socialLinks.map((item) => {
+                              const Icon = item.icon
+                              return (
+                                <a
+                                  key={item.key}
+                                  className="inline-flex items-center gap-2 text-primary text-sm font-semibold break-all"
+                                  href={item.href}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  <Icon className="w-4 h-4" /> {item.label}
+                                </a>
+                              )
+                            })}
+                          </div>
                         ) : (
                           <p className="text-sm text-foreground/60">No definido</p>
                         )}
-                        <button
-                          type="button"
-                          className="text-xs text-primary font-semibold"
-                          onClick={handleStartEdit}
-                        >
-                          Editar enlace
-                        </button>
                       </div>
                     </div>
 
@@ -505,13 +839,31 @@ export default function CompanyPerfil() {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span>Estado</span>
-                <span className="inline-flex items-center gap-2 text-xs font-semibold bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full">
-                  Verificado
+                <span
+                  className={`inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-full ${verificationBadge.className}`}
+                >
+                  {verificationBadge.label}
                 </span>
               </div>
-              <button type="button" className="text-xs text-primary font-semibold">
-                Ver detalles
-              </button>
+              <div className="space-y-1 text-xs text-foreground/65">
+                <p>Nivel: {verificationLevel === 'completo' ? 'Completo' : 'Basico'}</p>
+                {verificationReviewedAt ? <p>Ultima revision: {String(verificationReviewedAt).slice(0, 10)}</p> : null}
+                {verificationReason ? <p>Motivo: {verificationReason}</p> : null}
+              </div>
+              {canRequestVerification ? (
+                <button
+                  type="button"
+                  className="text-xs text-primary font-semibold"
+                  onClick={handleRequestVerification}
+                  disabled={requestingVerification}
+                >
+                  {requestingVerification ? 'Solicitando...' : 'Solicitar revision'}
+                </button>
+              ) : (
+                <button type="button" className="text-xs text-primary font-semibold" disabled>
+                  En seguimiento
+                </button>
+              )}
             </div>
 
             <div className="company-card p-4 bg-secondary/60 shadow-none space-y-3">

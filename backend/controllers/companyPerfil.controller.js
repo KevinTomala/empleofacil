@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const {
   resolveEmpresaIdForUser,
   getPerfilByEmpresaId,
@@ -5,9 +7,22 @@ const {
   upsertPerfilEmpresa,
   saveResumenPerfil
 } = require('../services/companyPerfil.service');
+const { ensureVerificacionByScope } = require('../services/verificaciones.service');
 
 const URL_RE = /^https?:\/\/.+/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const LOGO_UPLOAD_PREFIX = '/uploads/empresas/logos/';
+
+async function getCompanyVerificationOrNull(empresaId) {
+  try {
+    return await ensureVerificacionByScope({ tipo: 'empresa', empresaId });
+  } catch (error) {
+    if (error?.code === 'ER_NO_SUCH_TABLE' || Number(error?.errno) === 1146) {
+      return null;
+    }
+    throw error;
+  }
+}
 
 function isPlainObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
@@ -121,13 +136,15 @@ async function getMyCompanyPerfil(req, res) {
     if (!perfil) {
       return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
     }
+    const verificacion = await getCompanyVerificationOrNull(empresaId);
 
     await saveResumenPerfil(empresaId, perfil.resumen);
 
     return res.json({
       empresa: perfil.empresa,
       perfil: perfil.perfil,
-      resumen: perfil.resumen
+      resumen: perfil.resumen,
+      verificacion
     });
   } catch (error) {
     return res.status(500).json({
@@ -163,6 +180,7 @@ async function updateMyCompanyDatosGenerales(req, res) {
     if (!perfilActualizado) {
       return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
     }
+    const verificacion = await getCompanyVerificationOrNull(empresaId);
 
     await saveResumenPerfil(empresaId, perfilActualizado.resumen);
 
@@ -170,7 +188,145 @@ async function updateMyCompanyDatosGenerales(req, res) {
       ok: true,
       empresa: perfilActualizado.empresa,
       perfil: perfilActualizado.perfil,
-      resumen: perfilActualizado.resumen
+      resumen: perfilActualizado.resumen,
+      verificacion
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'PROFILE_UPDATE_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+function removeLocalLogoIfManaged(logoUrl) {
+  if (!logoUrl || typeof logoUrl !== 'string') return;
+  if (!logoUrl.startsWith(LOGO_UPLOAD_PREFIX)) return;
+
+  const relativePath = logoUrl
+    .replace(/^\//, '')
+    .split('/')
+    .filter(Boolean);
+
+  const localPath = path.join(__dirname, '..', ...relativePath);
+  if (fs.existsSync(localPath)) {
+    fs.unlinkSync(localPath);
+  }
+}
+
+function safeRemoveFile(filePath) {
+  if (!filePath) return;
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (_error) {
+    // Evita que un error de limpieza de archivo rompa la respuesta principal.
+  }
+}
+
+async function clearCompanyLogoByEmpresaId(empresaId) {
+  const perfilPrevio = await getPerfilByEmpresaId(empresaId);
+  if (!perfilPrevio) return null;
+
+  const oldLogoUrl = perfilPrevio?.perfil?.logo_url || null;
+  await upsertPerfilEmpresa(empresaId, { logo_url: null });
+
+  const perfilActualizado = await getPerfilByEmpresaId(empresaId);
+  if (!perfilActualizado) return null;
+
+  await saveResumenPerfil(empresaId, perfilActualizado.resumen);
+
+  if (oldLogoUrl) {
+    try {
+      removeLocalLogoIfManaged(oldLogoUrl);
+    } catch (_error) {
+      // Ignora fallo de limpieza para no afectar la respuesta al usuario.
+    }
+  }
+
+  return perfilActualizado;
+}
+
+async function uploadMyCompanyLogo(req, res) {
+  const action = String(req.query?.action || '').trim().toLowerCase();
+  if (action === 'delete') {
+    return deleteMyCompanyLogo(req, res);
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'FILE_REQUIRED' });
+  }
+
+  let oldLogoUrl = null;
+
+  try {
+    const empresaId = await resolveMyEmpresa(req);
+    if (!empresaId) {
+      safeRemoveFile(req.file.path);
+      return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+    }
+
+    const perfilPrevio = await getPerfilByEmpresaId(empresaId);
+    oldLogoUrl = perfilPrevio?.perfil?.logo_url || null;
+
+    const nextLogoUrl = `${LOGO_UPLOAD_PREFIX}${req.file.filename}`;
+    await upsertPerfilEmpresa(empresaId, { logo_url: nextLogoUrl });
+
+    const perfilActualizado = await getPerfilByEmpresaId(empresaId);
+    if (!perfilActualizado) {
+      safeRemoveFile(req.file.path);
+      return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+    }
+    const verificacion = await getCompanyVerificationOrNull(empresaId);
+
+    await saveResumenPerfil(empresaId, perfilActualizado.resumen);
+
+    if (oldLogoUrl && oldLogoUrl !== nextLogoUrl) {
+      try {
+        removeLocalLogoIfManaged(oldLogoUrl);
+      } catch (_error) {
+        // Ignora fallo de limpieza para no afectar la respuesta al usuario.
+      }
+    }
+
+    return res.json({
+      ok: true,
+      logo_url: nextLogoUrl,
+      empresa: perfilActualizado.empresa,
+      perfil: perfilActualizado.perfil,
+      resumen: perfilActualizado.resumen,
+      verificacion
+    });
+  } catch (error) {
+    safeRemoveFile(req.file?.path);
+    return res.status(500).json({
+      error: 'PROFILE_UPDATE_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+async function deleteMyCompanyLogo(req, res) {
+  try {
+    const empresaId = await resolveMyEmpresa(req);
+    if (!empresaId) {
+      return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+    }
+
+    const perfilActualizado = await clearCompanyLogoByEmpresaId(empresaId);
+    if (!perfilActualizado) {
+      return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+    }
+    const verificacion = await getCompanyVerificationOrNull(empresaId);
+
+    return res.json({
+      ok: true,
+      logo_url: null,
+      empresa: perfilActualizado.empresa,
+      perfil: perfilActualizado.perfil,
+      resumen: perfilActualizado.resumen,
+      verificacion
     });
   } catch (error) {
     return res.status(500).json({
@@ -182,5 +338,7 @@ async function updateMyCompanyDatosGenerales(req, res) {
 
 module.exports = {
   getMyCompanyPerfil,
-  updateMyCompanyDatosGenerales
+  updateMyCompanyDatosGenerales,
+  uploadMyCompanyLogo,
+  deleteMyCompanyLogo
 };

@@ -202,6 +202,39 @@ Errores esperados:
 - Auth: requerido.
 - Roles: `candidato`.
 
+### GET `/api/perfil/me/verificacion`
+- Auth: requerido.
+- Roles: `candidato`.
+- Respuesta `200`:
+```json
+{
+  "verificacion": {}
+}
+```
+- Errores:
+  - `404 CANDIDATO_NOT_FOUND`
+  - `500 VERIFICATION_FETCH_FAILED`
+
+### POST `/api/perfil/me/verificacion/solicitar`
+- Auth: requerido.
+- Roles: `candidato`.
+- Body opcional:
+```json
+{
+  "comentario": "Solicito revision de mi cuenta."
+}
+```
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "verificacion": {}
+}
+```
+- Errores:
+  - `404 CANDIDATO_NOT_FOUND`
+  - `500 VERIFICATION_UPDATE_FAILED`
+
 ### PUT `/api/perfil/me/datos-basicos`
 - Auth: requerido.
 - Roles: `candidato`.
@@ -368,6 +401,189 @@ Errores esperados:
 ### POST|PUT|DELETE `/api/perfil/:candidatoId/documentos*`
 - Auth: requerido.
 - Roles: `administrador`, `superadmin`.
+
+## Perfil de empresa
+
+Base: `/api/company/perfil`
+
+### GET `/api/company/perfil/me`
+- Auth: requerido.
+- Roles: `empresa`, `superadmin`.
+- Respuesta `200`:
+```json
+{
+  "empresa": {},
+  "perfil": {},
+  "resumen": {
+    "porcentaje_completitud": 0,
+    "campos_pendientes": []
+  },
+  "verificacion": {}
+}
+```
+- Errores:
+  - `404 EMPRESA_NOT_FOUND`
+  - `500 PROFILE_FETCH_FAILED`
+
+### PUT `/api/company/perfil/me/datos-generales`
+- Auth: requerido.
+- Roles: `empresa`, `superadmin`.
+- Body permitido (parcial):
+  - `nombre`, `ruc`, `email`, `telefono`
+  - `industria`, `ubicacion_principal`, `tamano_empleados`, `descripcion`
+  - `sitio_web`, `linkedin_url`, `instagram_url`, `facebook_url`
+- Regla de completitud:
+  - Obligatorios para el porcentaje: `nombre`, `industria`, `ubicacion_principal`, `tamano_empleados`, `descripcion`, `sitio_web`, `instagram_url`, `facebook_url`, `logo_url`.
+  - Opcional para el porcentaje: `linkedin_url`.
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "empresa": {},
+  "perfil": {},
+  "resumen": {}
+}
+```
+- Errores:
+  - `400 INVALID_PAYLOAD`
+  - `404 EMPRESA_NOT_FOUND`
+  - `500 PROFILE_UPDATE_FAILED`
+
+### POST `/api/company/perfil/me/logo`
+- Auth: requerido.
+- Roles: `empresa`, `superadmin`.
+- Tipo: `multipart/form-data`.
+- Campos:
+  - `logo` (requerido, `image/jpeg|image/png|image/webp`, max 5 MB)
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "logo_url": "/uploads/empresas/logos/archivo.png",
+  "empresa": {},
+  "perfil": {},
+  "resumen": {}
+}
+```
+- Errores:
+  - `400 FILE_REQUIRED`
+  - `400 INVALID_FILE_TYPE`
+  - `400 FILE_TOO_LARGE`
+  - `404 EMPRESA_NOT_FOUND`
+  - `500 PROFILE_UPDATE_FAILED`
+
+### DELETE `/api/company/perfil/me/logo`
+- Auth: requerido.
+- Roles: `empresa`, `superadmin`.
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "logo_url": null,
+  "empresa": {},
+  "perfil": {},
+  "resumen": {}
+}
+```
+- Errores:
+  - `404 EMPRESA_NOT_FOUND`
+  - `500 PROFILE_UPDATE_FAILED`
+
+### GET `/api/company/perfil/me/verificacion`
+- Auth: requerido.
+- Roles: `empresa`, `superadmin`.
+- Respuesta `200`:
+```json
+{
+  "verificacion": {}
+}
+```
+- Errores:
+  - `404 EMPRESA_NOT_FOUND`
+  - `500 VERIFICATION_FETCH_FAILED`
+
+### POST `/api/company/perfil/me/verificacion/solicitar`
+- Auth: requerido.
+- Roles: `empresa`, `superadmin`.
+- Body opcional:
+```json
+{
+  "comentario": "Solicito revision de mi cuenta."
+}
+```
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "verificacion": {}
+}
+```
+- Errores:
+  - `404 EMPRESA_NOT_FOUND`
+  - `500 VERIFICATION_UPDATE_FAILED`
+
+## Verificaciones (admin)
+
+Base: `/api/verificaciones`
+
+### GET `/api/verificaciones/cuentas`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Query opcional:
+  - `tipo` (`empresa|candidato`)
+  - `estado` (`pendiente|en_revision|aprobada|rechazada|vencida|suspendida`)
+  - `q`, `page`, `page_size`
+- Respuesta `200`:
+```json
+{
+  "items": [],
+  "page": 1,
+  "page_size": 20,
+  "total": 0
+}
+```
+
+### GET `/api/verificaciones/cuentas/:verificacionId`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Respuesta `200`:
+```json
+{
+  "verificacion": {},
+  "eventos": []
+}
+```
+- Errores:
+  - `400 INVALID_VERIFICACION_ID`
+  - `404 VERIFICACION_NOT_FOUND`
+  - `500 VERIFICATION_FETCH_FAILED`
+
+### PUT `/api/verificaciones/cuentas/:verificacionId/estado`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Body:
+```json
+{
+  "estado": "aprobada",
+  "nivel": "completo",
+  "motivo_rechazo": null,
+  "notas_admin": "Revision documental correcta.",
+  "comentario": "Aprobada por admin.",
+  "expires_at": "2027-01-01T00:00:00.000Z"
+}
+```
+- Reglas:
+  - `motivo_rechazo` es requerido cuando `estado = rechazada`.
+  - `administrador` no puede usar `estado = suspendida` (`SUPERADMIN_REQUIRED`).
+- Errores:
+  - `400 INVALID_VERIFICACION_ID`
+  - `400 INVALID_ESTADO`
+  - `400 INVALID_NIVEL`
+  - `400 MOTIVO_RECHAZO_REQUIRED`
+  - `400 INVALID_EXPIRES_AT`
+  - `403 SUPERADMIN_REQUIRED`
+  - `404 VERIFICACION_NOT_FOUND`
+  - `500 VERIFICATION_UPDATE_FAILED`
 
 ## Hoja de vida
 

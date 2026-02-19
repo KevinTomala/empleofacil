@@ -83,6 +83,7 @@ CREATE TABLE empresas_perfil (
   INDEX idx_empresas_perfil_completitud (porcentaje_completitud)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
 INSERT INTO empresas (nombre, email, tipo, activo)
 VALUES ('ADEMY S.A.S.', 'ademy@empleofacil.com', 'externa', 1);
 
@@ -143,6 +144,93 @@ CREATE TABLE candidatos (
   UNIQUE KEY uk_documento_identidad (documento_identidad),
   CONSTRAINT fk_candidatos_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE verificaciones_cuenta (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  cuenta_tipo ENUM('empresa','candidato') NOT NULL,
+  empresa_id BIGINT NULL,
+  candidato_id BIGINT NULL,
+  estado ENUM('pendiente','en_revision','aprobada','rechazada','vencida','suspendida') NOT NULL DEFAULT 'pendiente',
+  nivel ENUM('basico','completo') NOT NULL DEFAULT 'basico',
+  motivo_rechazo TEXT NULL,
+  notas_admin TEXT NULL,
+  fecha_solicitud DATETIME DEFAULT CURRENT_TIMESTAMP,
+  reviewed_by BIGINT NULL,
+  reviewed_at DATETIME NULL,
+  expires_at DATETIME NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_verificaciones_cuenta_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+  CONSTRAINT fk_verificaciones_cuenta_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
+  CONSTRAINT fk_verificaciones_cuenta_reviewed_by FOREIGN KEY (reviewed_by) REFERENCES usuarios(id) ON DELETE SET NULL,
+  UNIQUE KEY uq_verificacion_empresa (empresa_id),
+  UNIQUE KEY uq_verificacion_candidato (candidato_id),
+  INDEX idx_verificaciones_tipo_estado (cuenta_tipo, estado),
+  INDEX idx_verificaciones_reviewed_at (reviewed_at),
+  INDEX idx_verificaciones_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE verificaciones_cuenta_eventos (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  verificacion_id BIGINT NOT NULL,
+  accion ENUM('solicitada','en_revision','aprobada','rechazada','suspendida','reabierta','vencida') NOT NULL,
+  estado_anterior ENUM('pendiente','en_revision','aprobada','rechazada','vencida','suspendida') NULL,
+  estado_nuevo ENUM('pendiente','en_revision','aprobada','rechazada','vencida','suspendida') NULL,
+  actor_usuario_id BIGINT NULL,
+  actor_rol ENUM('candidato','empresa','administrador','superadmin','system') DEFAULT 'system',
+  comentario TEXT NULL,
+  metadata JSON NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_verificaciones_eventos_verificacion FOREIGN KEY (verificacion_id) REFERENCES verificaciones_cuenta(id) ON DELETE CASCADE,
+  CONSTRAINT fk_verificaciones_eventos_actor FOREIGN KEY (actor_usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+  INDEX idx_verificaciones_eventos_verificacion (verificacion_id),
+  INDEX idx_verificaciones_eventos_accion (accion),
+  INDEX idx_verificaciones_eventos_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO verificaciones_cuenta (
+  cuenta_tipo,
+  empresa_id,
+  estado,
+  nivel,
+  reviewed_by,
+  reviewed_at
+)
+SELECT
+  'empresa',
+  e.id,
+  'aprobada',
+  'completo',
+  admin_u.id,
+  NOW()
+FROM empresas e
+JOIN usuarios admin_u ON admin_u.email = 'admin@empleofacil.com'
+WHERE e.email = 'ademy@empleofacil.com'
+LIMIT 1;
+
+INSERT INTO verificaciones_cuenta_eventos (
+  verificacion_id,
+  accion,
+  estado_anterior,
+  estado_nuevo,
+  actor_usuario_id,
+  actor_rol,
+  comentario
+)
+SELECT
+  v.id,
+  'aprobada',
+  NULL,
+  'aprobada',
+  admin_u.id,
+  admin_u.rol,
+  'Semilla inicial de verificacion para empresa demo.'
+FROM verificaciones_cuenta v
+JOIN empresas e ON e.id = v.empresa_id
+JOIN usuarios admin_u ON admin_u.email = 'admin@empleofacil.com'
+WHERE v.cuenta_tipo = 'empresa'
+  AND e.email = 'ademy@empleofacil.com'
+LIMIT 1;
 
 CREATE TABLE candidatos_contacto (
   candidato_id BIGINT PRIMARY KEY,
