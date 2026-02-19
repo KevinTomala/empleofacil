@@ -13,7 +13,7 @@ export default function Header() {
   const [photoError, setPhotoError] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { user, logout, hasCompanyAccess } = useAuth()
   const role = user?.rol
 
   useEffect(() => {
@@ -63,10 +63,10 @@ export default function Header() {
 
   const homeLink = useMemo(() => {
     if (role === 'superadmin' || role === 'administrador') return '/app/admin'
-    if (role === 'empresa') return '/app/company'
     if (role === 'candidato') return '/app/candidate/vacantes'
+    if (role === 'empresa' || hasCompanyAccess) return '/app/company'
     return '/'
-  }, [role])
+  }, [role, hasCompanyAccess])
 
   const navLinks = useMemo(() => {
     if (role === 'superadmin' || role === 'administrador') {
@@ -89,11 +89,15 @@ export default function Header() {
     }
 
     if (role === 'candidato') {
-      return [
+      const links = [
         { href: '/app/candidate/vacantes', label: 'Vacantes' },
         { href: '/app/candidate/postulaciones', label: 'Postulaciones' },
         { href: '/app/candidate/perfil', label: 'Perfil' },
       ]
+      if (hasCompanyAccess) {
+        links.push({ href: '/app/company', label: 'Empresa' })
+      }
+      return links
     }
 
     return [
@@ -102,7 +106,7 @@ export default function Header() {
       { href: '/#como-funciona', label: 'Como Funciona' },
       { href: '/#contacto', label: 'Contacto' },
     ]
-  }, [user])
+  }, [role, hasCompanyAccess])
 
   const handleLogout = () => {
     logout()

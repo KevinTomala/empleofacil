@@ -45,11 +45,15 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - Empresa solo lectura en `/:candidatoId/formacion*` y `/:candidatoId/experiencia/:experienciaId/certificado`.
 
 ### 7) Perfil empresa (backend)
+- Usuario `candidato` con membresia activa en `empresas_usuarios` puede consumir `/api/company/perfil/me` (`200`).
+- Usuario autenticado sin membresia activa recibe `403 COMPANY_ACCESS_REQUIRED` en `/api/company/*`.
 - `GET /api/company/perfil/me/usuarios` responde `200` con lista de vinculaciones.
 - `POST /api/company/perfil/me/usuarios` con email no existente devuelve `404 USER_NOT_FOUND`.
 - `POST /api/company/perfil/me/usuarios` con email ya vinculado devuelve `409 USER_ALREADY_LINKED`.
 - `PUT /api/company/perfil/me/usuarios/:empresaUsuarioId` permite cambiar `rol_empresa`, `estado`, `principal`.
 - Intentar desactivar o degradar el ultimo admin activo devuelve `400 LAST_ADMIN_REQUIRED`.
+- Usuario `rol_empresa=visor` obtiene `403 COMPANY_ROLE_FORBIDDEN` en escrituras (`PUT datos-generales`, `POST logo`, `PUT preferencias`, etc.).
+- Usuario `rol_empresa=reclutador` obtiene `403 COMPANY_ROLE_FORBIDDEN` al gestionar usuarios o desactivar empresa.
 - `GET /api/company/perfil/me/preferencias` responde `200` con preferencias 1:1.
 - `PUT /api/company/perfil/me/preferencias` persiste arrays normalizados.
 - `DELETE /api/company/perfil/me` aplica soft delete y luego `GET /api/company/perfil/me` devuelve `404 EMPRESA_NOT_FOUND`.
@@ -102,11 +106,13 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - El drawer de empresa muestra `idiomas`, `experiencia`, `formacion` y `documentos` del candidato.
 
 ### 7) Perfil empresa (frontend)
+- Candidato con membresia activa en empresa puede abrir rutas `/app/company/*`.
 - `/app/company/empresa` no muestra bloque de facturacion.
 - El porcentaje y campos pendientes se leen desde `resumen` de backend (sin recalculo local).
 - Bloque de usuarios permite: vincular por email, cambiar rol, marcar principal y activar/desactivar.
 - Bloque de preferencias permite guardar modalidades, niveles y observaciones.
 - Boton `Desactivar empresa` ejecuta baja logica y redirige a login cuando responde `200`.
+- Usuario sin membresia activa no accede a `/app/company/*` y es redirigido.
 
 ## Recomendacion de automatizacion
 1. Backend: incorporar `jest` + `supertest` para rutas criticas (`auth`, `candidatos`, `hoja-vida`, `integraciones`).

@@ -34,8 +34,13 @@ function parseNullableString(value) {
 async function getMyCompanyVerification(req, res) {
   try {
     const userId = req.user?.id;
-    const empresaId = await resolveEmpresaIdForUser(userId, { autoCreate: req.user?.rol === 'empresa' });
-    if (!empresaId) return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+    const empresaId = req.companyContext?.empresaId
+      || await resolveEmpresaIdForUser(userId, { autoCreate: req.user?.rol === 'empresa' });
+    if (!empresaId) {
+      return req.companyContext
+        ? res.status(403).json({ error: 'COMPANY_ACCESS_REQUIRED' })
+        : res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+    }
 
     const verificacion = await ensureVerificacionByScope({ tipo: 'empresa', empresaId });
     return res.json({ verificacion });
@@ -50,14 +55,19 @@ async function getMyCompanyVerification(req, res) {
 async function requestMyCompanyVerification(req, res) {
   try {
     const userId = req.user?.id;
-    const empresaId = await resolveEmpresaIdForUser(userId, { autoCreate: req.user?.rol === 'empresa' });
-    if (!empresaId) return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+    const empresaId = req.companyContext?.empresaId
+      || await resolveEmpresaIdForUser(userId, { autoCreate: req.user?.rol === 'empresa' });
+    if (!empresaId) {
+      return req.companyContext
+        ? res.status(403).json({ error: 'COMPANY_ACCESS_REQUIRED' })
+        : res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+    }
 
     const verificacion = await requestVerificacionByScope({
       tipo: 'empresa',
       empresaId,
       actorUsuarioId: userId,
-      actorRol: req.user?.rol || 'empresa',
+      actorRol: req.companyContext?.rolEmpresa || req.user?.rol || 'empresa',
       comentario: parseNullableString(req.body?.comentario)
     });
 

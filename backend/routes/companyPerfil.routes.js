@@ -2,7 +2,12 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const { authRequired, requireRole } = require('../middlewares/auth.middleware');
+const { authRequired } = require('../middlewares/auth.middleware');
+const {
+  companyContextRequired,
+  requireCompanyAnyWrite,
+  requireCompanyAdmin
+} = require('../middlewares/companyAccess.middleware');
 const {
   getMyCompanyPerfil,
   updateMyCompanyDatosGenerales,
@@ -56,19 +61,19 @@ const uploadLogo = multer({
   }
 });
 
-router.get('/perfil/me', authRequired, requireRole(['empresa', 'superadmin']), getMyCompanyPerfil);
-router.get('/perfil/me/verificacion', authRequired, requireRole(['empresa', 'superadmin']), getMyCompanyVerification);
-router.post('/perfil/me/verificacion/solicitar', authRequired, requireRole(['empresa', 'superadmin']), requestMyCompanyVerification);
-router.put('/perfil/me/datos-generales', authRequired, requireRole(['empresa', 'superadmin']), updateMyCompanyDatosGenerales);
-router.post('/perfil/me/logo/delete', authRequired, requireRole(['empresa', 'superadmin']), deleteMyCompanyLogo);
-router.post('/perfil/me/logo', authRequired, requireRole(['empresa', 'superadmin']), uploadLogo.single('logo'), uploadMyCompanyLogo);
-router.delete('/perfil/me/logo', authRequired, requireRole(['empresa', 'superadmin']), deleteMyCompanyLogo);
-router.get('/perfil/me/usuarios', authRequired, requireRole(['empresa', 'superadmin']), listMyCompanyUsuarios);
-router.post('/perfil/me/usuarios', authRequired, requireRole(['empresa', 'superadmin']), createMyCompanyUsuario);
-router.put('/perfil/me/usuarios/:empresaUsuarioId', authRequired, requireRole(['empresa', 'superadmin']), updateMyCompanyUsuario);
-router.delete('/perfil/me/usuarios/:empresaUsuarioId', authRequired, requireRole(['empresa', 'superadmin']), deleteMyCompanyUsuario);
-router.get('/perfil/me/preferencias', authRequired, requireRole(['empresa', 'superadmin']), getMyCompanyPreferencias);
-router.put('/perfil/me/preferencias', authRequired, requireRole(['empresa', 'superadmin']), upsertMyCompanyPreferencias);
-router.delete('/perfil/me', authRequired, requireRole(['empresa', 'superadmin']), deleteMyCompanyPerfil);
+router.get('/perfil/me', authRequired, companyContextRequired(), getMyCompanyPerfil);
+router.get('/perfil/me/verificacion', authRequired, companyContextRequired(), getMyCompanyVerification);
+router.post('/perfil/me/verificacion/solicitar', authRequired, companyContextRequired(), requireCompanyAnyWrite(), requestMyCompanyVerification);
+router.put('/perfil/me/datos-generales', authRequired, companyContextRequired(), requireCompanyAnyWrite(), updateMyCompanyDatosGenerales);
+router.post('/perfil/me/logo/delete', authRequired, companyContextRequired(), requireCompanyAnyWrite(), deleteMyCompanyLogo);
+router.post('/perfil/me/logo', authRequired, companyContextRequired(), requireCompanyAnyWrite(), uploadLogo.single('logo'), uploadMyCompanyLogo);
+router.delete('/perfil/me/logo', authRequired, companyContextRequired(), requireCompanyAnyWrite(), deleteMyCompanyLogo);
+router.get('/perfil/me/usuarios', authRequired, companyContextRequired(), listMyCompanyUsuarios);
+router.post('/perfil/me/usuarios', authRequired, companyContextRequired(), requireCompanyAdmin(), createMyCompanyUsuario);
+router.put('/perfil/me/usuarios/:empresaUsuarioId', authRequired, companyContextRequired(), requireCompanyAdmin(), updateMyCompanyUsuario);
+router.delete('/perfil/me/usuarios/:empresaUsuarioId', authRequired, companyContextRequired(), requireCompanyAdmin(), deleteMyCompanyUsuario);
+router.get('/perfil/me/preferencias', authRequired, companyContextRequired(), getMyCompanyPreferencias);
+router.put('/perfil/me/preferencias', authRequired, companyContextRequired(), requireCompanyAnyWrite(), upsertMyCompanyPreferencias);
+router.delete('/perfil/me', authRequired, companyContextRequired(), requireCompanyAdmin(), deleteMyCompanyPerfil);
 
 module.exports = router;

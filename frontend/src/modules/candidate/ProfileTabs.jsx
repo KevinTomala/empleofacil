@@ -1,4 +1,4 @@
-﻿import { Link } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
 const tabs = [
   { label: 'Perfil', to: '/perfil/perfil' },

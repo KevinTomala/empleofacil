@@ -18,6 +18,8 @@ function parseCompanyPerfilError(error, fallbackMessage) {
   if (code === 'FILE_TOO_LARGE') return 'El logo supera el limite permitido de 5 MB.'
   if (code === 'INTERNAL_ERROR') return 'Error interno del servidor al procesar el logo. Intenta nuevamente.'
   if (code === 'FORBIDDEN') return 'No tienes permisos para editar el perfil de empresa.'
+  if (code === 'COMPANY_ACCESS_REQUIRED') return 'Tu usuario no tiene una membresia activa en empresa.'
+  if (code === 'COMPANY_ROLE_FORBIDDEN') return 'Tu rol en la empresa no tiene permisos para esta accion.'
   if (code === 'SUPERADMIN_REQUIRED') return 'Esta accion requiere un superadmin.'
   if (code === 'EMPRESA_NOT_FOUND') return 'No se encontro una empresa asociada a tu cuenta.'
   if (code === 'PROFILE_FETCH_FAILED') return 'No se pudo cargar el perfil de empresa.'

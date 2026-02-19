@@ -142,6 +142,9 @@ function splitPatch(normalizedPatch) {
 }
 
 async function resolveMyEmpresa(req) {
+  if (req.companyContext?.empresaId) {
+    return req.companyContext.empresaId;
+  }
   const userId = req.user?.id;
   const rol = req.user?.rol;
   if (!userId) return null;
@@ -157,6 +160,8 @@ function mapServiceErrorToHttp(error, defaultStatus = 500) {
   if (code === 'LINK_NOT_FOUND') return { status: 404, error: code };
   if (code === 'USER_ALREADY_LINKED') return { status: 409, error: code };
   if (code === 'LAST_ADMIN_REQUIRED') return { status: 400, error: code };
+  if (code === 'COMPANY_ACCESS_REQUIRED') return { status: 403, error: code };
+  if (code === 'COMPANY_ROLE_FORBIDDEN') return { status: 403, error: code };
 
   return {
     status: defaultStatus,

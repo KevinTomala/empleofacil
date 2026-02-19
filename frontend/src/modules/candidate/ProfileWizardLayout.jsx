@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Header from '../../components/Header'
 import { getMyPerfil, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
 import ProfileSidebarStatus from './ProfileSidebarStatus'

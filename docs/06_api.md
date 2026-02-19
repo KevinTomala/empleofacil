@@ -13,6 +13,8 @@ Errores comunes:
 - `401 AUTH_REQUIRED`
 - `401 INVALID_TOKEN`
 - `403 FORBIDDEN`
+- `403 COMPANY_ACCESS_REQUIRED`
+- `403 COMPANY_ROLE_FORBIDDEN`
 
 ## Health
 
@@ -500,7 +502,7 @@ Nota:
 
 ### GET `/api/company/perfil/me`
 - Auth: requerido.
-- Roles: `empresa`, `superadmin`.
+- Acceso: membresia activa en `empresas_usuarios`.
 - Respuesta `200`:
 ```json
 {
@@ -514,12 +516,13 @@ Nota:
 }
 ```
 - Errores:
+  - `403 COMPANY_ACCESS_REQUIRED`
   - `404 EMPRESA_NOT_FOUND`
   - `500 PROFILE_FETCH_FAILED`
 
 ### PUT `/api/company/perfil/me/datos-generales`
 - Auth: requerido.
-- Roles: `empresa`, `superadmin`.
+- Acceso: `rol_empresa` en `admin|reclutador`.
 - Body permitido (parcial):
   - `nombre`, `ruc`, `email`, `telefono`
   - `industria`, `ubicacion_principal`, `tamano_empleados`, `descripcion`
@@ -538,12 +541,14 @@ Nota:
 ```
 - Errores:
   - `400 INVALID_PAYLOAD`
+  - `403 COMPANY_ACCESS_REQUIRED`
+  - `403 COMPANY_ROLE_FORBIDDEN`
   - `404 EMPRESA_NOT_FOUND`
   - `500 PROFILE_UPDATE_FAILED`
 
 ### POST `/api/company/perfil/me/logo`
 - Auth: requerido.
-- Roles: `empresa`, `superadmin`.
+- Acceso: `rol_empresa` en `admin|reclutador`.
 - Tipo: `multipart/form-data`.
 - Campos:
   - `logo` (requerido, `image/jpeg|image/png|image/webp`, max 5 MB)
@@ -561,12 +566,14 @@ Nota:
   - `400 FILE_REQUIRED`
   - `400 INVALID_FILE_TYPE`
   - `400 FILE_TOO_LARGE`
+  - `403 COMPANY_ACCESS_REQUIRED`
+  - `403 COMPANY_ROLE_FORBIDDEN`
   - `404 EMPRESA_NOT_FOUND`
   - `500 PROFILE_UPDATE_FAILED`
 
 ### DELETE `/api/company/perfil/me/logo`
 - Auth: requerido.
-- Roles: `empresa`, `superadmin`.
+- Acceso: `rol_empresa` en `admin|reclutador`.
 - Respuesta `200`:
 ```json
 {
@@ -578,12 +585,14 @@ Nota:
 }
 ```
 - Errores:
+  - `403 COMPANY_ACCESS_REQUIRED`
+  - `403 COMPANY_ROLE_FORBIDDEN`
   - `404 EMPRESA_NOT_FOUND`
   - `500 PROFILE_UPDATE_FAILED`
 
 ### GET `/api/company/perfil/me/usuarios`
 - Auth: requerido.
-- Roles: `empresa`, `superadmin`.
+- Acceso: membresia activa en `empresas_usuarios`.
 - Respuesta `200`:
 ```json
 {
@@ -602,12 +611,13 @@ Nota:
 }
 ```
 - Errores:
+  - `403 COMPANY_ACCESS_REQUIRED`
   - `404 EMPRESA_NOT_FOUND`
   - `500 PROFILE_FETCH_FAILED`
 
 ### POST `/api/company/perfil/me/usuarios`
 - Auth: requerido.
-- Roles: `empresa`, `superadmin`.
+- Acceso: `rol_empresa` en `admin`.
 - Body:
 ```json
 {
@@ -625,6 +635,8 @@ Nota:
 ```
 - Errores:
   - `400 INVALID_PAYLOAD`
+  - `403 COMPANY_ACCESS_REQUIRED`
+  - `403 COMPANY_ROLE_FORBIDDEN`
   - `404 EMPRESA_NOT_FOUND`
   - `404 USER_NOT_FOUND`
   - `409 USER_ALREADY_LINKED`
@@ -633,7 +645,7 @@ Nota:
 ### PUT `/api/company/perfil/me/usuarios/:empresaUsuarioId`
 ### DELETE `/api/company/perfil/me/usuarios/:empresaUsuarioId`
 - Auth: requerido.
-- Roles: `empresa`, `superadmin`.
+- Acceso: `rol_empresa` en `admin`.
 - Body (`PUT`) permitido (parcial):
   - `rol_empresa` (`admin|reclutador|visor`)
   - `estado` (`activo|inactivo`)
@@ -649,13 +661,15 @@ Nota:
   - `400 INVALID_EMPRESA_USUARIO_ID`
   - `400 INVALID_PAYLOAD`
   - `400 LAST_ADMIN_REQUIRED`
+  - `403 COMPANY_ACCESS_REQUIRED`
+  - `403 COMPANY_ROLE_FORBIDDEN`
   - `404 EMPRESA_NOT_FOUND`
   - `404 LINK_NOT_FOUND`
   - `500 PROFILE_UPDATE_FAILED`
 
 ### GET `/api/company/perfil/me/preferencias`
 - Auth: requerido.
-- Roles: `empresa`, `superadmin`.
+- Acceso: membresia activa en `empresas_usuarios`.
 - Respuesta `200`:
 ```json
 {
@@ -668,12 +682,13 @@ Nota:
 }
 ```
 - Errores:
+  - `403 COMPANY_ACCESS_REQUIRED`
   - `404 EMPRESA_NOT_FOUND`
   - `500 PROFILE_FETCH_FAILED`
 
 ### PUT `/api/company/perfil/me/preferencias`
 - Auth: requerido.
-- Roles: `empresa`, `superadmin`.
+- Acceso: `rol_empresa` en `admin|reclutador`.
 - Body:
 ```json
 {
@@ -691,12 +706,14 @@ Nota:
 ```
 - Errores:
   - `400 INVALID_PAYLOAD`
+  - `403 COMPANY_ACCESS_REQUIRED`
+  - `403 COMPANY_ROLE_FORBIDDEN`
   - `404 EMPRESA_NOT_FOUND`
   - `500 PROFILE_UPDATE_FAILED`
 
 ### DELETE `/api/company/perfil/me`
 - Auth: requerido.
-- Roles: `empresa`, `superadmin`.
+- Acceso: `rol_empresa` en `admin`.
 - Efecto:
   - soft delete en `empresas` (`activo=0`, `deleted_at=NOW()`),
   - desactiva (`estado=inactivo`) los registros de `empresas_usuarios`.
@@ -705,12 +722,14 @@ Nota:
 { "ok": true }
 ```
 - Errores:
+  - `403 COMPANY_ACCESS_REQUIRED`
+  - `403 COMPANY_ROLE_FORBIDDEN`
   - `404 EMPRESA_NOT_FOUND`
   - `500 PROFILE_DELETE_FAILED`
 
 ### GET `/api/company/perfil/me/verificacion`
 - Auth: requerido.
-- Roles: `empresa`, `superadmin`.
+- Acceso: membresia activa en `empresas_usuarios`.
 - Respuesta `200`:
 ```json
 {
@@ -718,12 +737,13 @@ Nota:
 }
 ```
 - Errores:
+  - `403 COMPANY_ACCESS_REQUIRED`
   - `404 EMPRESA_NOT_FOUND`
   - `500 VERIFICATION_FETCH_FAILED`
 
 ### POST `/api/company/perfil/me/verificacion/solicitar`
 - Auth: requerido.
-- Roles: `empresa`, `superadmin`.
+- Acceso: `rol_empresa` en `admin|reclutador`.
 - Body opcional:
 ```json
 {
@@ -738,6 +758,8 @@ Nota:
 }
 ```
 - Errores:
+  - `403 COMPANY_ACCESS_REQUIRED`
+  - `403 COMPANY_ROLE_FORBIDDEN`
   - `404 EMPRESA_NOT_FOUND`
   - `500 VERIFICATION_UPDATE_FAILED`
 
