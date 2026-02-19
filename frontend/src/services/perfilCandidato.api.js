@@ -1,7 +1,12 @@
 import { apiRequest } from './api'
 
 function parsePerfilError(error, fallbackMessage) {
-  const code = error?.payload?.error || error?.message || ''
+  const code = error?.payload?.error || error?.code || error?.message || ''
+  const normalized = String(code).toLowerCase()
+
+  if (code === 'NETWORK_ERROR' || normalized.includes('failed to fetch') || normalized.includes('networkerror')) {
+    return 'No se pudo conectar con el servidor. Verifica que el backend este activo e intenta nuevamente.'
+  }
 
   if (code === 'INVALID_PAYLOAD') return 'Revisa los datos ingresados e intenta nuevamente.'
   if (code === 'INVALID_CANDIDATO_ID') return 'El candidato seleccionado no es valido.'
