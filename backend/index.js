@@ -10,6 +10,7 @@ const integracionesRoutes = require('./routes/integraciones.routes');
 const candidatosRoutes = require('./routes/candidatos.routes');
 const hojaVidaRoutes = require('./routes/hojaVida.routes');
 const perfilCandidatoRoutes = require('./routes/perfilCandidato.routes');
+const companyPerfilRoutes = require('./routes/companyPerfil.routes');
 
 dotenv.config();
 
@@ -35,6 +36,7 @@ app.use('/api/integraciones', integracionesRoutes);
 app.use('/api/candidatos', candidatosRoutes);
 app.use('/api/hoja-vida', hojaVidaRoutes);
 app.use('/api/perfil', perfilCandidatoRoutes);
+app.use('/api/company', companyPerfilRoutes);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use((err, _req, res, _next) => {

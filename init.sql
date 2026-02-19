@@ -14,8 +14,8 @@ CREATE TABLE usuarios (
   nombre_completo VARCHAR(200) NOT NULL,
   rol ENUM('candidato','empresa','administrador','superadmin') NOT NULL DEFAULT 'administrador',
   estado ENUM('activo','inactivo','bloqueado') DEFAULT 'activo',
-  activo TINYINT(1) DEFAULT 1,
-  must_change_password TINYINT(1) NOT NULL DEFAULT 0,
+  activo TINYINT UNSIGNED DEFAULT 1,
+  must_change_password TINYINT UNSIGNED NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_email (email),
@@ -25,8 +25,96 @@ CREATE TABLE usuarios (
 INSERT INTO usuarios (email, password_hash, nombre_completo, rol, estado, activo)
 VALUES ('admin@empleofacil.com', '$2b$10$u6NbnZiGxKoTyWf83nQ3Te1TrxbPhc.Edf5Zb9STIVJlenM0MTQaq', 'Super Admin', 'superadmin', 'activo', 1),
        ('guardia@empleofacil.com', '$2b$10$YKgk0K2lsM/pFBf.nz1Axe6dD4.2yBSZi5lELiSDTpCuMOyCiZPWC', 'Agente N2', 'candidato', 'activo', 1),
-       ('ademy@empleofacil.com', '$2b$10$YKgk0K2lsM/pFBf.nz1Axe6dD4.2yBSZi5lELiSDTpCuMOyCiZPWC', 'Ademy Cia', 'empresa', 'activo', 1)
-ON DUPLICATE KEY UPDATE email = VALUES(email);
+       ('ademy@empleofacil.com', '$2b$10$YKgk0K2lsM/pFBf.nz1Axe6dD4.2yBSZi5lELiSDTpCuMOyCiZPWC', 'Ademy Cia', 'empresa', 'activo', 1);
+
+-- -------------------------------------------------------------
+-- EMPRESAS Y PERFIL EMPLEADOR
+-- -------------------------------------------------------------
+CREATE TABLE empresas (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(200) NOT NULL,
+  ruc VARCHAR(20) NULL,
+  email VARCHAR(150) NULL,
+  telefono VARCHAR(20) NULL,
+  tipo ENUM('interna','externa','proveedor') DEFAULT 'externa',
+  activo TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME NULL,
+  UNIQUE KEY uk_empresas_ruc (ruc),
+  INDEX idx_empresas_nombre (nombre),
+  INDEX idx_empresas_activo (activo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE empresas_usuarios (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  empresa_id BIGINT NOT NULL,
+  usuario_id BIGINT NOT NULL,
+  rol_empresa ENUM('admin','reclutador','visor') DEFAULT 'admin',
+  principal TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  estado ENUM('activo','inactivo') DEFAULT 'activo',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_empresas_usuarios_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+  CONSTRAINT fk_empresas_usuarios_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_empresas_usuarios (empresa_id, usuario_id),
+  INDEX idx_empresas_usuarios_usuario (usuario_id),
+  INDEX idx_empresas_usuarios_estado (estado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE empresas_perfil (
+  empresa_id BIGINT PRIMARY KEY,
+  industria VARCHAR(120) NULL,
+  ubicacion_principal VARCHAR(120) NULL,
+  tamano_empleados INT NULL,
+  descripcion TEXT NULL,
+  cultura TEXT NULL,
+  beneficios JSON NULL,
+  sitio_web VARCHAR(255) NULL,
+  linkedin_url VARCHAR(255) NULL,
+  instagram_url VARCHAR(255) NULL,
+  facebook_url VARCHAR(255) NULL,
+  logo_url VARCHAR(500) NULL,
+  porcentaje_completitud TINYINT UNSIGNED DEFAULT 0,
+  campos_pendientes JSON NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_empresas_perfil_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+  INDEX idx_empresas_perfil_completitud (porcentaje_completitud)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO empresas (nombre, email, tipo, activo)
+VALUES ('ADEMY S.A.S.', 'ademy@empleofacil.com', 'externa', 1);
+
+INSERT INTO empresas_usuarios (empresa_id, usuario_id, rol_empresa, principal, estado)
+SELECT e.id, u.id, 'admin', 1, 'activo'
+FROM empresas e
+JOIN usuarios u ON u.email = 'ademy@empleofacil.com'
+WHERE e.email = 'ademy@empleofacil.com'
+LIMIT 1;
+
+INSERT INTO empresas_perfil (
+  empresa_id,
+  industria,
+  ubicacion_principal,
+  tamano_empleados,
+  descripcion,
+  sitio_web,
+  porcentaje_completitud,
+  campos_pendientes
+)
+SELECT
+  e.id,
+  'Servicios',
+  'La Libertad, Santa Elena',
+  120,
+  'Empresa especializada en soluciones tecnológicas academicas.',
+  'https://ademy.com',
+  70,
+  JSON_ARRAY('Beneficios', 'Cultura', 'Redes sociales')
+FROM empresas e
+WHERE e.email = 'ademy@empleofacil.com'
+LIMIT 1;
 
 -- -------------------------------------------------------------
 -- CANDIDATOS Y PERFIL
@@ -45,7 +133,7 @@ CREATE TABLE candidatos (
   sexo ENUM('M','F','O') DEFAULT 'O',
   estado_civil ENUM('soltero','casado','viudo','divorciado','union_libre') DEFAULT 'soltero',
   estado_academico ENUM('preinscrito','inscrito','matriculado','rechazado') DEFAULT 'preinscrito',
-  activo TINYINT(1) DEFAULT 1,
+  activo TINYINT UNSIGNED DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at DATETIME NULL,
@@ -98,12 +186,12 @@ CREATE TABLE candidatos_salud (
 
 CREATE TABLE candidatos_logistica (
   candidato_id BIGINT PRIMARY KEY,
-  movilizacion TINYINT(1) DEFAULT 0,
+  movilizacion TINYINT UNSIGNED DEFAULT 0,
   tipo_vehiculo ENUM('automovil','bus','camion','camioneta','furgoneta','motocicleta','trailer','tricimoto') NULL,
   licencia ENUM('A','A1','B','C1','C','D1','D','E1','E','F','G') NULL,
-  disp_viajar TINYINT(1) DEFAULT 0,
-  disp_turnos TINYINT(1) DEFAULT 0,
-  disp_fines_semana TINYINT(1) DEFAULT 0,
+  disp_viajar TINYINT UNSIGNED DEFAULT 0,
+  disp_turnos TINYINT UNSIGNED DEFAULT 0,
+  disp_fines_semana TINYINT UNSIGNED DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at DATETIME NULL,
@@ -171,7 +259,7 @@ CREATE TABLE candidatos_experiencia (
   cargo VARCHAR(150) NULL,
   fecha_inicio DATE NULL,
   fecha_fin DATE NULL,
-  actualmente_trabaja TINYINT(1) DEFAULT 0,
+  actualmente_trabaja TINYINT UNSIGNED DEFAULT 0,
   tipo_contrato ENUM('temporal','indefinido','practicante','otro') NULL,
   descripcion TEXT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -192,7 +280,7 @@ CREATE TABLE candidatos_formaciones (
   fecha_inicio DATE,
   fecha_fin DATE,
   fecha_aprobacion DATE NULL,
-  activo TINYINT(1) DEFAULT 1,
+  activo TINYINT UNSIGNED DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL,
   deleted_at DATETIME NULL,

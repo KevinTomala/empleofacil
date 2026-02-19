@@ -28,13 +28,33 @@ export async function apiRequest(path, options = {}, withAuth = true) {
   })
 
   const text = await response.text()
-  const data = text ? JSON.parse(text) : null
+  let data = null
+  let parseError = null
+
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      parseError = error
+      data = { raw: text }
+    }
+  }
 
   if (!response.ok) {
-    const message = data?.message || data?.error || `HTTP ${response.status}`
+    const message =
+      data?.message ||
+      data?.error ||
+      `HTTP ${response.status}`
     const error = new Error(message)
     error.status = response.status
     error.payload = data
+    throw error
+  }
+
+  if (parseError) {
+    const error = new Error('INVALID_JSON_RESPONSE')
+    error.status = response.status
+    error.payload = { error: 'INVALID_JSON_RESPONSE', raw: text }
     throw error
   }
 
