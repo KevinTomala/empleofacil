@@ -450,3 +450,18 @@ Errores esperados:
 - Errores:
   - `400 CURSO_ID_REQUIRED`
   - `500 CATALOGO_ERROR`
+
+## Lineamiento de archivos (R2 dual bucket)
+- EmpleoFacil opera con 2 buckets R2:
+  - `ademy` como origen de archivos heredados.
+  - `empleofacil` como destino de archivos nuevos/subidos localmente.
+- Para archivos de Ademy no se debe duplicar por defecto. La API debe resolver acceso por referencia usando puntero en BD (`origen`, `bucket`, `object_key`).
+- El backend debe exponer descarga/visualizacion mediante URL firmada temporal o proxy seguro.
+- Si el objeto vive en bucket de Ademy, el backend puede:
+  - Firmar lectura directa si tiene credenciales de ese bucket.
+  - O solicitar a Ademy una URL firmada y reenviarla al cliente.
+- Solo se copia fisicamente a bucket `empleofacil` cuando aplique politica de copia (legal, continuidad operativa o copy-on-write).
+- Regla al actualizar documentos heredados:
+  - Si un documento con `origen=ademy` es reemplazado por el usuario en EmpleoFacil, el backend debe guardar la nueva version en bucket `empleofacil`.
+  - El registro vigente debe quedar con `origen=empleofacil` y puntero al nuevo `object_key`.
+  - La referencia anterior de Ademy debe conservarse como historial (trazabilidad/auditoria).
