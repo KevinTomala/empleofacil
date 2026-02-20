@@ -5,6 +5,7 @@ import LandingPage from './modules/Landing/LandingPage'
 import Login from './modules/auth/Login'
 import Register from './modules/auth/Register'
 import RequestPassword from './modules/auth/RequestPassword'
+import ChangePassword from './modules/auth/ChangePassword'
 import CandidateVacantes from './modules/candidate/CandidateVacantes'
 import CandidatePostulaciones from './modules/candidate/CandidatePostulaciones'
 import CandidateProfile from './modules/candidate/CandidateProfile'
@@ -54,6 +55,14 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/request-password" element={<RequestPassword />} />
+          <Route
+            path="/app/change-password"
+            element={
+              <ProtectedRoute>
+                <ChangePassword />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/app/candidate/vacantes"
             element={
