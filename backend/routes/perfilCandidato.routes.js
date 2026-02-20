@@ -42,6 +42,7 @@ const {
   createMyExperienciaCertificado,
   updateMyExperienciaCertificado,
   deleteMyExperienciaCertificado,
+  listCentrosCapacitacion,
   listExperienciaById,
   createExperienciaById,
   updateExperienciaById,
@@ -105,6 +106,7 @@ const uploadDocumento = multer({
   }
 });
 
+router.get('/centros-capacitacion', authRequired, requireRole(['candidato', 'administrador', 'superadmin']), listCentrosCapacitacion);
 router.get('/me', authRequired, requireRole(['candidato']), getMyPerfil);
 router.get('/me/verificacion', authRequired, requireRole(['candidato']), getMyCandidateVerification);
 router.post('/me/verificacion/solicitar', authRequired, requireRole(['candidato']), requestMyCandidateVerification);

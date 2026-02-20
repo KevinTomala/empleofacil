@@ -29,6 +29,22 @@ curl http://localhost:3000/healthz
 3. Frontend:
 - Abrir `http://localhost:3001`.
 
+## Migraciones BD (formacion externa + centros)
+1. Ejecutar migracion principal:
+```bash
+docker compose exec -T mysql mysql -u root -p"$MYSQL_ROOT_PASSWORD" empleof_db < docs/sql/2026-02-20_alter_candidatos_formaciones_to_init.sql
+```
+2. Cargar mapeo manual `promocion_id -> centro_cliente_id` (ajustar IDs antes):
+```bash
+docker compose exec -T mysql mysql -u root -p"$MYSQL_ROOT_PASSWORD" empleof_db < docs/sql/2026-02-20_integracion_ademy_promociones_institucion.sql
+```
+3. Validar estructura minima:
+```sql
+SHOW COLUMNS FROM candidatos_formaciones LIKE 'centro_cliente_id';
+SHOW TABLES LIKE 'centros_capacitacion';
+SHOW TABLES LIKE 'integracion_ademy_promociones_institucion';
+```
+
 ## Logs utiles
 - Backend:
 ```bash

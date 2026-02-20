@@ -53,6 +53,13 @@ function isMissingTableError(error) {
   return code === 'ER_NO_SUCH_TABLE' || errno === 1146;
 }
 
+function isMissingColumnError(error) {
+  if (!error) return false;
+  const code = String(error.code || '');
+  const errno = Number(error.errno || 0);
+  return code === 'ER_BAD_FIELD_ERROR' || errno === 1054;
+}
+
 function toTextOrNull(value) {
   if (!isPresent(value)) return null;
   const text = String(value).trim();
@@ -153,24 +160,149 @@ function resolveFormacionInstitucion(item, formacion) {
   ]);
 }
 
-async function resolveInstitucionByPromocionMap(conn, promocionId, cache) {
+function normalizeCenterName(value) {
+  const text = toTextOrNull(value);
+  return text ? text.replace(/\s+/g, ' ') : null;
+}
+
+async function findCentroCapacitacionById(conn, centroId) {
+  try {
+    const [rows] = await conn.query(
+      `SELECT id, nombre, origen
+       FROM centros_capacitacion
+       WHERE id = ?
+       LIMIT 1`,
+      [centroId]
+    );
+    return rows[0] || null;
+  } catch (error) {
+    if (!isMissingTableError(error)) throw error;
+    return null;
+  }
+}
+
+async function findCentroCapacitacionByNombre(conn, nombre) {
+  try {
+    const [rows] = await conn.query(
+      `SELECT id, nombre, origen
+       FROM centros_capacitacion
+       WHERE nombre = ?
+       LIMIT 1`,
+      [nombre]
+    );
+    return rows[0] || null;
+  } catch (error) {
+    if (!isMissingTableError(error)) throw error;
+    return null;
+  }
+}
+
+function mergeCenterOrigin(currentOrigin, incomingOrigin) {
+  if (!currentOrigin) return incomingOrigin;
+  if (currentOrigin === incomingOrigin) return currentOrigin;
+  return 'mixto';
+}
+
+async function ensureCentroCapacitacion(conn, { centroId = null, institucion = null, defaultOrigin = 'ademy' } = {}) {
+  const normalizedCentroId = toPositiveIntOrNull(centroId);
+  if (normalizedCentroId) {
+    const byId = await findCentroCapacitacionById(conn, normalizedCentroId);
+    if (byId) return byId;
+  }
+
+  const nombre = normalizeCenterName(institucion);
+  if (!nombre) return null;
+
+  const existing = await findCentroCapacitacionByNombre(conn, nombre);
+  if (existing) {
+    const mergedOrigin = mergeCenterOrigin(existing.origen, defaultOrigin);
+    if (mergedOrigin !== existing.origen) {
+      await conn.query(
+        `UPDATE centros_capacitacion
+         SET origen = ?, updated_at = NOW()
+         WHERE id = ?`,
+        [mergedOrigin, existing.id]
+      );
+      existing.origen = mergedOrigin;
+    }
+    return existing;
+  }
+
+  try {
+    const [insert] = await conn.query(
+      `INSERT INTO centros_capacitacion (nombre, origen, activo)
+       VALUES (?, ?, 1)`,
+      [nombre, defaultOrigin]
+    );
+    return {
+      id: insert.insertId,
+      nombre,
+      origen: defaultOrigin
+    };
+  } catch (error) {
+    if (isMissingTableError(error)) return null;
+    if (String(error.code || '') !== 'ER_DUP_ENTRY') throw error;
+    return findCentroCapacitacionByNombre(conn, nombre);
+  }
+}
+
+async function resolveCentroByPromocionMap(conn, promocionId, cache) {
   const key = Number(promocionId || 0);
   if (!key) return null;
   if (cache.has(key)) return cache.get(key);
 
   try {
     const [rows] = await conn.query(
-      `SELECT institucion
-       FROM integracion_ademy_promociones_institucion
-       WHERE promocion_id = ?
-         AND activo = 1
+      `SELECT m.centro_cliente_id, c.nombre
+       FROM integracion_ademy_promociones_institucion m
+       INNER JOIN centros_capacitacion c
+         ON c.id = m.centro_cliente_id
+       WHERE m.promocion_id = ?
+         AND m.activo = 1
+         AND c.activo = 1
        LIMIT 1`,
       [key]
     );
-    const value = toTextOrNull(rows[0]?.institucion) || null;
-    cache.set(key, value);
-    return value;
+    const resolved = rows[0]
+      ? {
+          centro_cliente_id: rows[0].centro_cliente_id,
+          institucion: toTextOrNull(rows[0].nombre)
+        }
+      : null;
+    cache.set(key, resolved);
+    return resolved;
   } catch (error) {
+    const badField = String(error.code || '') === 'ER_BAD_FIELD_ERROR' || Number(error.errno || 0) === 1054;
+    if (badField) {
+      try {
+        const [legacyRows] = await conn.query(
+          `SELECT institucion
+           FROM integracion_ademy_promociones_institucion
+           WHERE promocion_id = ?
+             AND activo = 1
+           LIMIT 1`,
+          [key]
+        );
+        const legacyInstitucion = toTextOrNull(legacyRows[0]?.institucion);
+        if (!legacyInstitucion) {
+          cache.set(key, null);
+          return null;
+        }
+        const centro = await ensureCentroCapacitacion(conn, {
+          institucion: legacyInstitucion,
+          defaultOrigin: 'ademy'
+        });
+        const resolved = centro
+          ? { centro_cliente_id: centro.id, institucion: centro.nombre }
+          : null;
+        cache.set(key, resolved);
+        return resolved;
+      } catch (fallbackError) {
+        if (!isMissingTableError(fallbackError)) throw fallbackError;
+      }
+      cache.set(key, null);
+      return null;
+    }
     if (!isMissingTableError(error)) throw error;
     cache.set(key, null);
     return null;
@@ -503,15 +635,30 @@ async function upsertDocumentos(conn, estudianteId, documentos) {
 }
 
 async function upsertFormaciones(conn, estudianteId, item, options = {}) {
-  const promocionInstitucionCache = options.promocionInstitucionCache || new Map();
+  const promocionCentroCache = options.promocionCentroCache || new Map();
   const formaciones = item.formaciones || (item.formacion ? [item.formacion] : []);
   for (const formacion of formaciones) {
     const origenFormacionId = formacion.formacion_id || formacion.id || item.formacion_id;
     if (!origenFormacionId) continue;
     const promocionId = toPositiveIntOrNull(formacion.promocion_id || item.promocion_id);
     let institucion = resolveFormacionInstitucion(item, formacion);
-    if (!institucion && promocionId) {
-      institucion = await resolveInstitucionByPromocionMap(conn, promocionId, promocionInstitucionCache);
+    let centroClienteId = null;
+
+    if (institucion) {
+      const centro = await ensureCentroCapacitacion(conn, {
+        institucion,
+        defaultOrigin: 'ademy'
+      });
+      centroClienteId = centro?.id || null;
+      institucion = centro?.nombre || institucion;
+    } else if (promocionId) {
+      const mappedCenter = await resolveCentroByPromocionMap(conn, promocionId, promocionCentroCache);
+      if (mappedCenter) {
+        centroClienteId = mappedCenter.centro_cliente_id;
+        institucion = mappedCenter.institucion;
+      } else {
+        console.warn(`[ADEMY] promocion_id sin mapeo de centro: ${promocionId}`);
+      }
     }
 
     const [mapping] = await conn.query(
@@ -521,28 +668,56 @@ async function upsertFormaciones(conn, estudianteId, item, options = {}) {
 
     if (mapping.length) {
       const localId = mapping[0].candidato_formacion_id;
-      await conn.query(
-        `UPDATE candidatos_formaciones SET
-          categoria_formacion = COALESCE(?, categoria_formacion),
-          subtipo_formacion = COALESCE(?, subtipo_formacion),
-          institucion = COALESCE(?, institucion),
-          nombre_programa = COALESCE(?, nombre_programa),
-          titulo_obtenido = COALESCE(?, titulo_obtenido),
-          fecha_aprobacion = COALESCE(?, fecha_aprobacion),
-          activo = COALESCE(?, activo),
-          updated_at = NOW()
-        WHERE id = ?`,
-        [
-          'externa',
-          formacion.subtipo_formacion || 'curso',
-          institucion,
-          formacion.nombre_programa || formacion.nombre || formacion.curso_nombre || null,
-          formacion.titulo_obtenido || formacion.certificado || null,
-          formacion.fecha_aprobacion || null,
-          formacion.activo !== undefined ? (formacion.activo ? 1 : 0) : null,
-          localId
-        ]
-      );
+      try {
+        await conn.query(
+          `UPDATE candidatos_formaciones SET
+            categoria_formacion = COALESCE(?, categoria_formacion),
+            subtipo_formacion = COALESCE(?, subtipo_formacion),
+            centro_cliente_id = COALESCE(?, centro_cliente_id),
+            institucion = COALESCE(?, institucion),
+            nombre_programa = COALESCE(?, nombre_programa),
+            titulo_obtenido = COALESCE(?, titulo_obtenido),
+            fecha_aprobacion = COALESCE(?, fecha_aprobacion),
+            activo = COALESCE(?, activo),
+            updated_at = NOW()
+          WHERE id = ?`,
+          [
+            'externa',
+            formacion.subtipo_formacion || 'curso',
+            centroClienteId,
+            institucion,
+            formacion.nombre_programa || formacion.nombre || formacion.curso_nombre || null,
+            formacion.titulo_obtenido || formacion.certificado || null,
+            formacion.fecha_aprobacion || null,
+            formacion.activo !== undefined ? (formacion.activo ? 1 : 0) : null,
+            localId
+          ]
+        );
+      } catch (error) {
+        if (!isMissingColumnError(error)) throw error;
+        await conn.query(
+          `UPDATE candidatos_formaciones SET
+            categoria_formacion = COALESCE(?, categoria_formacion),
+            subtipo_formacion = COALESCE(?, subtipo_formacion),
+            institucion = COALESCE(?, institucion),
+            nombre_programa = COALESCE(?, nombre_programa),
+            titulo_obtenido = COALESCE(?, titulo_obtenido),
+            fecha_aprobacion = COALESCE(?, fecha_aprobacion),
+            activo = COALESCE(?, activo),
+            updated_at = NOW()
+          WHERE id = ?`,
+          [
+            'externa',
+            formacion.subtipo_formacion || 'curso',
+            institucion,
+            formacion.nombre_programa || formacion.nombre || formacion.curso_nombre || null,
+            formacion.titulo_obtenido || formacion.certificado || null,
+            formacion.fecha_aprobacion || null,
+            formacion.activo !== undefined ? (formacion.activo ? 1 : 0) : null,
+            localId
+          ]
+        );
+      }
 
       await conn.query(
         `UPDATE candidatos_formaciones_origen SET origen_updated_at = ? WHERE origen = ? AND origen_formacion_id = ?`,
@@ -551,22 +726,44 @@ async function upsertFormaciones(conn, estudianteId, item, options = {}) {
       continue;
     }
 
-    const [insert] = await conn.query(
-      `INSERT INTO candidatos_formaciones (
-        candidato_id, categoria_formacion, subtipo_formacion, institucion, nombre_programa, titulo_obtenido, fecha_aprobacion, activo, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
-      [
-        estudianteId,
-        'externa',
-        formacion.subtipo_formacion || 'curso',
-        institucion,
-        formacion.nombre_programa || formacion.nombre || formacion.curso_nombre || null,
-        formacion.titulo_obtenido || formacion.certificado || null,
-        formacion.fecha_aprobacion || null,
-        formacion.activo !== undefined ? (formacion.activo ? 1 : 0) : 1,
-        formacion.updated_at || null
-      ]
-    );
+    let insert;
+    try {
+      [insert] = await conn.query(
+        `INSERT INTO candidatos_formaciones (
+          candidato_id, categoria_formacion, subtipo_formacion, centro_cliente_id, institucion, nombre_programa, titulo_obtenido, fecha_aprobacion, activo, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+        [
+          estudianteId,
+          'externa',
+          formacion.subtipo_formacion || 'curso',
+          centroClienteId,
+          institucion,
+          formacion.nombre_programa || formacion.nombre || formacion.curso_nombre || null,
+          formacion.titulo_obtenido || formacion.certificado || null,
+          formacion.fecha_aprobacion || null,
+          formacion.activo !== undefined ? (formacion.activo ? 1 : 0) : 1,
+          formacion.updated_at || null
+        ]
+      );
+    } catch (error) {
+      if (!isMissingColumnError(error)) throw error;
+      [insert] = await conn.query(
+        `INSERT INTO candidatos_formaciones (
+          candidato_id, categoria_formacion, subtipo_formacion, institucion, nombre_programa, titulo_obtenido, fecha_aprobacion, activo, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+        [
+          estudianteId,
+          'externa',
+          formacion.subtipo_formacion || 'curso',
+          institucion,
+          formacion.nombre_programa || formacion.nombre || formacion.curso_nombre || null,
+          formacion.titulo_obtenido || formacion.certificado || null,
+          formacion.fecha_aprobacion || null,
+          formacion.activo !== undefined ? (formacion.activo ? 1 : 0) : 1,
+          formacion.updated_at || null
+        ]
+      );
+    }
 
     await conn.query(
       `INSERT INTO candidatos_formaciones_origen (
@@ -651,7 +848,7 @@ async function runAcreditadosImport(rawParams = {}) {
       skipped: 0,
       errors: 0
     };
-    const promocionInstitucionCache = new Map();
+    const promocionCentroCache = new Map();
 
     try {
       let page = 1;
@@ -704,7 +901,7 @@ async function runAcreditadosImport(rawParams = {}) {
                 : (item.experiencia ? [item.experiencia] : null));
             await replaceExperiencias(conn, estudianteId, experienciaHistorial);
             await upsertDocumentos(conn, estudianteId, item.documentos);
-            await upsertFormaciones(conn, estudianteId, item, { promocionInstitucionCache });
+            await upsertFormaciones(conn, estudianteId, item, { promocionCentroCache });
 
             await conn.commit();
           } catch (err) {

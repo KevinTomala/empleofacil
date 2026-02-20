@@ -399,16 +399,42 @@ Errores esperados:
 - Body formacion (externa):
   - `categoria_formacion` (`externa`)
   - `subtipo_formacion`: `curso|ministerio|chofer_profesional`
+  - `centro_cliente_id` (opcional)
   - `institucion`, `nombre_programa`, `titulo_obtenido`
   - Regla de integracion Ademy:
     - `institucion` debe representar empresa/sucursal cliente contratante (ej: `CENDCAP`, `CENDCAP SUCURSAL`, `CAPACITAREC`).
+    - si llega `centro_cliente_id`, backend completa `institucion` con el nombre del catalogo.
+  - Regla de validacion:
+    - para `categoria_formacion=externa` se requiere al menos uno: `institucion` o `centro_cliente_id`.
   - `entidad_emisora`, `numero_registro`, `fecha_aprobacion`, `fecha_emision`, `fecha_vencimiento`
 - Breaking change:
   - Ya no se aceptan ni se devuelven: `estado`, `fecha_inicio`, `fecha_fin`, `matricula_id`, `nivel_id`, `curso_id`, `formacion_origen_id`.
 - Errores:
   - `400 INVALID_FORMACION_ID`
+  - `400 CENTRO_CAPACITACION_NOT_FOUND`
   - `404 FORMACION_NOT_FOUND`
+  - `422 FORMACION_INSTITUCION_REQUIRED`
   - `400 INVALID_PAYLOAD`
+
+### GET `/api/perfil/centros-capacitacion`
+- Auth: requerido.
+- Roles: `candidato`, `administrador`, `superadmin`.
+- Query opcional:
+  - `search` (texto parcial por nombre)
+  - `limit` (default `20`, max `100`)
+- Respuesta `200`:
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "nombre": "CENDCAP",
+      "origen": "ademy",
+      "activo": 1
+    }
+  ]
+}
+```
 
 ### GET `/api/perfil/me/documentos`
 - Auth: requerido.

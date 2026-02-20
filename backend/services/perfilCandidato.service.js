@@ -652,30 +652,243 @@ async function deleteExperienciaCertificado(candidatoId, experienciaId) {
   return result.affectedRows;
 }
 
+function buildServiceError(code, status) {
+  const error = new Error(code);
+  error.code = code;
+  error.status = status;
+  return error;
+}
+
+function normalizeCenterName(value) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  return normalized || null;
+}
+
+function normalizePositiveInt(value) {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num <= 0) return null;
+  return num;
+}
+
+function mergeCenterOrigin(currentOrigin, incomingOrigin) {
+  if (!currentOrigin) return incomingOrigin;
+  if (currentOrigin === incomingOrigin) return currentOrigin;
+  return 'mixto';
+}
+
+async function findCentroCapacitacionById(centroId) {
+  try {
+    const [rows] = await db.query(
+      `SELECT id, nombre, origen, activo
+       FROM centros_capacitacion
+       WHERE id = ?
+       LIMIT 1`,
+      [centroId]
+    );
+    return rows[0] || null;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    return null;
+  }
+}
+
+async function findCentroCapacitacionByNombre(nombre) {
+  try {
+    const [rows] = await db.query(
+      `SELECT id, nombre, origen, activo
+       FROM centros_capacitacion
+       WHERE nombre = ?
+       LIMIT 1`,
+      [nombre]
+    );
+    return rows[0] || null;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    return null;
+  }
+}
+
+async function findOrCreateCentroCapacitacionByNombre(nombre, origen = 'externo') {
+  const existing = await findCentroCapacitacionByNombre(nombre);
+  if (existing) {
+    const mergedOrigin = mergeCenterOrigin(existing.origen, origen);
+    if (mergedOrigin !== existing.origen) {
+      await db.query(
+        `UPDATE centros_capacitacion
+         SET origen = ?, updated_at = NOW()
+         WHERE id = ?`,
+        [mergedOrigin, existing.id]
+      );
+      existing.origen = mergedOrigin;
+    }
+    return existing;
+  }
+
+  try {
+    const [insert] = await db.query(
+      `INSERT INTO centros_capacitacion (nombre, origen, activo)
+       VALUES (?, ?, 1)`,
+      [nombre, origen]
+    );
+    return {
+      id: insert.insertId,
+      nombre,
+      origen,
+      activo: 1
+    };
+  } catch (error) {
+    if (isSchemaDriftError(error)) {
+      return {
+        id: null,
+        nombre,
+        origen,
+        activo: 1
+      };
+    }
+    if (String(error.code || '') !== 'ER_DUP_ENTRY') throw error;
+    const duplicate = await findCentroCapacitacionByNombre(nombre);
+    if (!duplicate) throw error;
+    const mergedOrigin = mergeCenterOrigin(duplicate.origen, origen);
+    if (mergedOrigin !== duplicate.origen) {
+      await db.query(
+        `UPDATE centros_capacitacion
+         SET origen = ?, updated_at = NOW()
+         WHERE id = ?`,
+        [mergedOrigin, duplicate.id]
+      );
+      duplicate.origen = mergedOrigin;
+    }
+    return duplicate;
+  }
+}
+
+async function resolveCentroCapacitacionForFormacion({
+  categoriaFormacion,
+  centroClienteId,
+  institucion,
+  allowCenterCreate = true,
+  centerOrigin = 'externo'
+}) {
+  if (categoriaFormacion !== 'externa') {
+    return {
+      centro_cliente_id: centroClienteId ?? null,
+      institucion: normalizeCenterName(institucion)
+    };
+  }
+
+  const centroId = normalizePositiveInt(centroClienteId);
+  if (centroId) {
+    const centro = await findCentroCapacitacionById(centroId);
+    if (centro) {
+      return {
+        centro_cliente_id: centro.id,
+        institucion: centro.nombre
+      };
+    }
+  }
+
+  const institucionNorm = normalizeCenterName(institucion);
+  if (!institucionNorm && centroId) {
+    throw buildServiceError('CENTRO_CAPACITACION_NOT_FOUND', 400);
+  }
+  if (institucionNorm) {
+    if (!allowCenterCreate) {
+      return {
+        centro_cliente_id: null,
+        institucion: institucionNorm
+      };
+    }
+    const centro = await findOrCreateCentroCapacitacionByNombre(institucionNorm, centerOrigin);
+    return {
+      centro_cliente_id: centro.id,
+      institucion: centro.nombre
+    };
+  }
+
+  throw buildServiceError('FORMACION_INSTITUCION_REQUIRED', 422);
+}
+
+async function listCentrosCapacitacion({ search = null, limit = 20 } = {}) {
+  const term = normalizeCenterName(search);
+  const safeLimit = Math.min(Math.max(Number(limit || 20), 1), 100);
+  try {
+    const [rows] = await db.query(
+      `SELECT id, nombre, origen, activo
+       FROM centros_capacitacion
+       WHERE activo = 1
+         AND (? IS NULL OR nombre LIKE ?)
+       ORDER BY nombre ASC
+       LIMIT ?`,
+      [term, term ? `%${term}%` : null, safeLimit]
+    );
+    return rows;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    return [];
+  }
+}
+
 async function listFormacion(candidatoId) {
-  const [rows] = await db.query(
-    `SELECT
-      f.id,
-      f.candidato_id,
-      f.fecha_aprobacion,
-      f.activo,
-      f.categoria_formacion,
-      f.subtipo_formacion,
-      f.institucion,
-      f.nombre_programa,
-      f.titulo_obtenido,
-      f.entidad_emisora,
-      f.numero_registro,
-      f.fecha_emision,
-      f.fecha_vencimiento,
-      f.created_at,
-      f.updated_at
-     FROM candidatos_formaciones f
-     WHERE f.candidato_id = ?
-       AND f.deleted_at IS NULL
-     ORDER BY f.created_at DESC`,
-    [candidatoId]
-  );
+  let rows = [];
+  try {
+    const [queryRows] = await db.query(
+      `SELECT
+        f.id,
+        f.candidato_id,
+        f.fecha_aprobacion,
+        f.activo,
+        f.categoria_formacion,
+        f.subtipo_formacion,
+        f.centro_cliente_id,
+        f.institucion,
+        cc.nombre AS centro_cliente_nombre,
+        f.nombre_programa,
+        f.titulo_obtenido,
+        f.entidad_emisora,
+        f.numero_registro,
+        f.fecha_emision,
+        f.fecha_vencimiento,
+        f.created_at,
+        f.updated_at
+       FROM candidatos_formaciones f
+       LEFT JOIN centros_capacitacion cc
+         ON cc.id = f.centro_cliente_id
+       WHERE f.candidato_id = ?
+         AND f.deleted_at IS NULL
+       ORDER BY f.created_at DESC`,
+      [candidatoId]
+    );
+    rows = queryRows;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    const [queryRows] = await db.query(
+      `SELECT
+        f.id,
+        f.candidato_id,
+        f.fecha_aprobacion,
+        f.activo,
+        f.categoria_formacion,
+        f.subtipo_formacion,
+        NULL AS centro_cliente_id,
+        f.institucion,
+        NULL AS centro_cliente_nombre,
+        f.nombre_programa,
+        f.titulo_obtenido,
+        f.entidad_emisora,
+        f.numero_registro,
+        f.fecha_emision,
+        f.fecha_vencimiento,
+        f.created_at,
+        f.updated_at
+       FROM candidatos_formaciones f
+       WHERE f.candidato_id = ?
+         AND f.deleted_at IS NULL
+       ORDER BY f.created_at DESC`,
+      [candidatoId]
+    );
+    rows = queryRows;
+  }
 
   return rows.map((row) => {
     return {
@@ -685,6 +898,8 @@ async function listFormacion(candidatoId) {
       activo: row.activo,
       categoria_formacion: row.categoria_formacion,
       subtipo_formacion: row.subtipo_formacion,
+      centro_cliente_id: row.centro_cliente_id,
+      centro_cliente_nombre: row.centro_cliente_nombre,
       institucion: row.institucion,
       nombre_programa: row.nombre_programa,
       titulo_obtenido: row.titulo_obtenido,
@@ -699,51 +914,155 @@ async function listFormacion(candidatoId) {
 }
 
 async function createFormacion(candidatoId, payload) {
-  const [result] = await db.query(
-    `INSERT INTO candidatos_formaciones (
-      candidato_id,
-      fecha_aprobacion,
-      activo,
-      categoria_formacion,
-      subtipo_formacion,
-      institucion,
-      nombre_programa,
-      titulo_obtenido,
-      entidad_emisora,
-      numero_registro,
-      fecha_emision,
-      fecha_vencimiento
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      candidatoId,
-      payload.fecha_aprobacion ?? null,
-      payload.activo ?? 1,
-      payload.categoria_formacion,
-      payload.subtipo_formacion,
-      payload.institucion ?? null,
-      payload.nombre_programa ?? null,
-      payload.titulo_obtenido ?? null,
-      payload.entidad_emisora ?? null,
-      payload.numero_registro ?? null,
-      payload.fecha_emision ?? null,
-      payload.fecha_vencimiento ?? null
-    ]
-  );
+  const resolvedCenter = await resolveCentroCapacitacionForFormacion({
+    categoriaFormacion: payload.categoria_formacion,
+    centroClienteId: payload.centro_cliente_id,
+    institucion: payload.institucion,
+    allowCenterCreate: true,
+    centerOrigin: 'externo'
+  });
+
+  let result;
+  try {
+    [result] = await db.query(
+      `INSERT INTO candidatos_formaciones (
+        candidato_id,
+        fecha_aprobacion,
+        activo,
+        categoria_formacion,
+        subtipo_formacion,
+        centro_cliente_id,
+        institucion,
+        nombre_programa,
+        titulo_obtenido,
+        entidad_emisora,
+        numero_registro,
+        fecha_emision,
+        fecha_vencimiento
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        candidatoId,
+        payload.fecha_aprobacion ?? null,
+        payload.activo ?? 1,
+        payload.categoria_formacion,
+        payload.subtipo_formacion,
+        resolvedCenter.centro_cliente_id,
+        resolvedCenter.institucion,
+        payload.nombre_programa ?? null,
+        payload.titulo_obtenido ?? null,
+        payload.entidad_emisora ?? null,
+        payload.numero_registro ?? null,
+        payload.fecha_emision ?? null,
+        payload.fecha_vencimiento ?? null
+      ]
+    );
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    [result] = await db.query(
+      `INSERT INTO candidatos_formaciones (
+        candidato_id,
+        fecha_aprobacion,
+        activo,
+        categoria_formacion,
+        subtipo_formacion,
+        institucion,
+        nombre_programa,
+        titulo_obtenido,
+        entidad_emisora,
+        numero_registro,
+        fecha_emision,
+        fecha_vencimiento
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        candidatoId,
+        payload.fecha_aprobacion ?? null,
+        payload.activo ?? 1,
+        payload.categoria_formacion,
+        payload.subtipo_formacion,
+        resolvedCenter.institucion,
+        payload.nombre_programa ?? null,
+        payload.titulo_obtenido ?? null,
+        payload.entidad_emisora ?? null,
+        payload.numero_registro ?? null,
+        payload.fecha_emision ?? null,
+        payload.fecha_vencimiento ?? null
+      ]
+    );
+  }
   return { id: result.insertId };
 }
 
 async function updateFormacion(candidatoId, formacionId, payload) {
+  let rows = [];
+  let hasCenterColumn = true;
+  try {
+    const [queryRows] = await db.query(
+      `SELECT id, categoria_formacion, centro_cliente_id, institucion
+       FROM candidatos_formaciones
+       WHERE id = ?
+         AND candidato_id = ?
+         AND deleted_at IS NULL
+       LIMIT 1`,
+      [formacionId, candidatoId]
+    );
+    rows = queryRows;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    hasCenterColumn = false;
+    const [queryRows] = await db.query(
+      `SELECT id, categoria_formacion, institucion
+       FROM candidatos_formaciones
+       WHERE id = ?
+         AND candidato_id = ?
+         AND deleted_at IS NULL
+       LIMIT 1`,
+      [formacionId, candidatoId]
+    );
+    rows = queryRows.map((row) => ({
+      ...row,
+      centro_cliente_id: null
+    }));
+  }
+  if (!rows.length) return 0;
+
+  const current = rows[0];
   const keys = Object.keys(payload);
   if (!keys.length) return 0;
 
-  const setSql = keys.map((key) => `${key} = ?`).join(', ');
+  const hasCategoria = Object.prototype.hasOwnProperty.call(payload, 'categoria_formacion');
+  const hasCentroClienteId = Object.prototype.hasOwnProperty.call(payload, 'centro_cliente_id');
+  const hasInstitucion = Object.prototype.hasOwnProperty.call(payload, 'institucion');
+  const mustResolveCenter = hasCategoria || hasCentroClienteId || hasInstitucion;
+
+  if (mustResolveCenter) {
+    const categoriaFormacion = hasCategoria ? payload.categoria_formacion : current.categoria_formacion;
+    const centroClienteId = hasCentroClienteId ? payload.centro_cliente_id : current.centro_cliente_id;
+    const institucion = hasInstitucion ? payload.institucion : current.institucion;
+    const resolvedCenter = await resolveCentroCapacitacionForFormacion({
+      categoriaFormacion,
+      centroClienteId,
+      institucion,
+      allowCenterCreate: true,
+      centerOrigin: 'externo'
+    });
+    payload.centro_cliente_id = resolvedCenter.centro_cliente_id;
+    payload.institucion = resolvedCenter.institucion;
+  }
+
+  if (!hasCenterColumn) {
+    delete payload.centro_cliente_id;
+  }
+
+  const payloadKeys = Object.keys(payload);
+  if (!payloadKeys.length) return 0;
+  const setSql = payloadKeys.map((key) => `${key} = ?`).join(', ');
   const [result] = await db.query(
     `UPDATE candidatos_formaciones
      SET ${setSql}
      WHERE id = ?
        AND candidato_id = ?
        AND deleted_at IS NULL`,
-    [...keys.map((key) => payload[key]), formacionId, candidatoId]
+    [...payloadKeys.map((key) => payload[key]), formacionId, candidatoId]
   );
   return result.affectedRows;
 }
@@ -893,6 +1212,7 @@ module.exports = {
   createExperienciaCertificado,
   updateExperienciaCertificado,
   deleteExperienciaCertificado,
+  listCentrosCapacitacion,
   listFormacion,
   createFormacion,
   updateFormacion,

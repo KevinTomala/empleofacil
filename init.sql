@@ -369,12 +369,24 @@ CREATE TABLE candidatos_experiencia (
   INDEX idx_candidatos_experiencia_actual (actualmente_trabaja)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE centros_capacitacion (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(200) NOT NULL,
+  origen ENUM('ademy','externo','mixto') NOT NULL DEFAULT 'externo',
+  activo TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_centros_capacitacion_nombre (nombre),
+  INDEX idx_centros_capacitacion_origen_activo (origen, activo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Exportar de ademy con nuevos campos, tabla limpia
 CREATE TABLE candidatos_formaciones (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   candidato_id BIGINT NOT NULL,
   categoria_formacion ENUM('externa') NULL,
   subtipo_formacion ENUM('curso','ministerio','chofer_profesional') NULL,
+  centro_cliente_id BIGINT NULL,
   institucion VARCHAR(200) NULL,
   nombre_programa VARCHAR(200) NULL,
   titulo_obtenido VARCHAR(200) NULL,
@@ -387,7 +399,9 @@ CREATE TABLE candidatos_formaciones (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL,
   deleted_at DATETIME NULL,
-  CONSTRAINT fk_candidatos_formaciones_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE
+  INDEX idx_candidatos_formaciones_centro_cliente_id (centro_cliente_id),
+  CONSTRAINT fk_candidatos_formaciones_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
+  CONSTRAINT fk_candidatos_formaciones_centro FOREIGN KEY (centro_cliente_id) REFERENCES centros_capacitacion(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE candidatos_experiencia_certificados (
@@ -435,6 +449,19 @@ CREATE TABLE candidatos_formaciones_origen (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_origen_formacion (origen, origen_formacion_id),
   CONSTRAINT fk_candidatos_formaciones_origen_formacion FOREIGN KEY (candidato_formacion_id) REFERENCES candidatos_formaciones(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE integracion_ademy_promociones_institucion (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  promocion_id BIGINT NOT NULL,
+  centro_cliente_id BIGINT NOT NULL,
+  activo TINYINT(1) NOT NULL DEFAULT 1,
+  notas VARCHAR(255) NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_integracion_ademy_promocion (promocion_id),
+  INDEX idx_integracion_ademy_promocion_activo (promocion_id, activo),
+  CONSTRAINT fk_integracion_ademy_promocion_centro FOREIGN KEY (centro_cliente_id) REFERENCES centros_capacitacion(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -------------------------------------------------------------

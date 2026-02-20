@@ -7,6 +7,7 @@ import {
   createMyFormacion,
   deleteMyEducacionGeneralItem,
   deleteMyFormacion,
+  getCentrosCapacitacion,
   getMyEducacionGeneralItems,
   getMyFormacion,
   getPerfilErrorMessage,
@@ -35,6 +36,7 @@ const subtipoExternaOptions = [
 function getInitialExternaForm() {
   return {
     subtipo_formacion: 'curso',
+    centro_cliente_id: null,
     institucion: '',
     nombre_programa: '',
     titulo_obtenido: '',
@@ -59,6 +61,7 @@ export default function ProfileFormacion() {
   const [editingAcademicaId, setEditingAcademicaId] = useState(null)
 
   const [formaciones, setFormaciones] = useState([])
+  const [centrosCapacitacion, setCentrosCapacitacion] = useState([])
   const [editingExternaId, setEditingExternaId] = useState(null)
   const [externaForm, setExternaForm] = useState(getInitialExternaForm())
 
@@ -73,13 +76,15 @@ export default function ProfileFormacion() {
   }, [academicaItems, externaItems])
 
   async function loadData() {
-    const [educacionResponse, formacionResponse] = await Promise.all([
+    const [educacionResponse, formacionResponse, centrosResponse] = await Promise.all([
       getMyEducacionGeneralItems(),
-      getMyFormacion()
+      getMyFormacion(),
+      getCentrosCapacitacion({ limit: 100 })
     ])
 
     setAcademicaItems(educacionResponse?.items || [])
     setFormaciones(formacionResponse?.items || [])
+    setCentrosCapacitacion(centrosResponse?.items || [])
   }
 
   useEffect(() => {
@@ -110,6 +115,16 @@ export default function ProfileFormacion() {
   const resetExternaForm = () => {
     setExternaForm(getInitialExternaForm())
     setEditingExternaId(null)
+  }
+
+  const handleExternaInstitucionChange = (value) => {
+    const text = value || ''
+    const matched = centrosCapacitacion.find((item) => item.nombre?.toLowerCase() === text.trim().toLowerCase())
+    setExternaForm((prev) => ({
+      ...prev,
+      institucion: text,
+      centro_cliente_id: matched?.id || null,
+    }))
   }
 
   const resetAcademicaForm = () => {
@@ -179,10 +194,15 @@ export default function ProfileFormacion() {
       showToast({ type: 'warning', message: 'Selecciona un subtipo de formacion externa.' })
       return
     }
+    if (!externaForm.centro_cliente_id && !externaForm.institucion.trim()) {
+      showToast({ type: 'warning', message: 'Debes indicar institucion o seleccionar un centro.' })
+      return
+    }
 
     const payload = {
       categoria_formacion: 'externa',
       subtipo_formacion: externaForm.subtipo_formacion,
+      centro_cliente_id: externaForm.centro_cliente_id || null,
       institucion: externaForm.institucion.trim() || null,
       nombre_programa: externaForm.nombre_programa.trim() || null,
       titulo_obtenido: externaForm.titulo_obtenido.trim() || null,
@@ -215,6 +235,7 @@ export default function ProfileFormacion() {
     setActiveTab('externa')
     setExternaForm({
       subtipo_formacion: item.subtipo_formacion || 'curso',
+      centro_cliente_id: item.centro_cliente_id || null,
       institucion: item.institucion || '',
       nombre_programa: item.nombre_programa || '',
       titulo_obtenido: item.titulo_obtenido || '',
@@ -357,7 +378,22 @@ export default function ProfileFormacion() {
                   </label>
                   <label className="space-y-1 text-sm font-medium text-foreground/80">
                     Institucion
-                    <input className="ef-control" type="text" value={externaForm.institucion} onChange={(event) => setExternaForm((prev) => ({ ...prev, institucion: event.target.value }))} />
+                    <input
+                      className="ef-control"
+                      type="text"
+                      list="centros-capacitacion-list"
+                      value={externaForm.institucion}
+                      onChange={(event) => handleExternaInstitucionChange(event.target.value)}
+                      placeholder="Ej: CENDCAP, CENDCAP SUCURSAL, CAPACITAREC"
+                    />
+                    <datalist id="centros-capacitacion-list">
+                      {centrosCapacitacion.map((item) => (
+                        <option key={item.id} value={item.nombre} />
+                      ))}
+                    </datalist>
+                    <p className="text-xs text-foreground/60">
+                      Puedes seleccionar una sugerencia o escribir una institucion nueva.
+                    </p>
                   </label>
                   <label className="space-y-1 text-sm font-medium text-foreground/80">
                     Programa

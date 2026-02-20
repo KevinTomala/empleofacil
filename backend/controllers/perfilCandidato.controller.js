@@ -21,6 +21,7 @@ const {
   createExperienciaCertificado,
   updateExperienciaCertificado,
   deleteExperienciaCertificado,
+  listCentrosCapacitacion,
   listFormacion,
   createFormacion,
   updateFormacion,
@@ -93,6 +94,16 @@ function parseNullableNumber(value) {
   if (typeof value === 'string' && value.trim() !== '') {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
+  }
+  return NaN;
+}
+
+function parseNullablePositiveInt(value) {
+  if (value === null) return null;
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed > 0) return parsed;
   }
   return NaN;
 }
@@ -361,6 +372,7 @@ function validateFormacionPayload(payload, { partial = false } = {}) {
     'activo',
     'categoria_formacion',
     'subtipo_formacion',
+    'centro_cliente_id',
     'institucion',
     'nombre_programa',
     'titulo_obtenido',
@@ -382,6 +394,10 @@ function validateFormacionPayload(payload, { partial = false } = {}) {
     } else if (['fecha_aprobacion', 'fecha_emision', 'fecha_vencimiento'].includes(key)) {
       if (!isNullableDate(value)) return null;
       normalized[key] = value;
+    } else if (key === 'centro_cliente_id') {
+      const parsed = parseNullablePositiveInt(value);
+      if (Number.isNaN(parsed)) return null;
+      normalized.centro_cliente_id = parsed;
     } else if (key === 'categoria_formacion') {
       if (!isEnum(value, FORMACION_CATEGORIAS)) return null;
       normalized.categoria_formacion = value;
@@ -465,6 +481,17 @@ function parsePositiveInt(value) {
   const n = Number(value);
   if (!Number.isInteger(n) || n <= 0) return null;
   return n;
+}
+
+function handleFormacionServiceError(res, error) {
+  const code = String(error?.code || '');
+  if (code === 'FORMACION_INSTITUCION_REQUIRED') {
+    return res.status(422).json({ error: 'FORMACION_INSTITUCION_REQUIRED' });
+  }
+  if (code === 'CENTRO_CAPACITACION_NOT_FOUND') {
+    return res.status(400).json({ error: 'CENTRO_CAPACITACION_NOT_FOUND' });
+  }
+  return null;
 }
 
 function resolveErrorCodeByAction(action) {
@@ -738,6 +765,13 @@ async function deleteExperienciaCertificadoHandler(req, res) {
   return res.json({ ok: true });
 }
 
+async function listCentrosCapacitacionHandler(req, res) {
+  const search = typeof req.query?.search === 'string' ? req.query.search : null;
+  const limit = parsePositiveInt(req.query?.limit) || 20;
+  const items = await listCentrosCapacitacion({ search, limit });
+  return res.json({ items });
+}
+
 async function listFormacionHandler(req, res) {
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
   const items = await listFormacion(req.candidatoId);
@@ -749,8 +783,14 @@ async function createFormacionHandler(req, res) {
   if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
 
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
-  const created = await createFormacion(req.candidatoId, payload);
-  return res.status(201).json({ ok: true, id: created.id });
+  try {
+    const created = await createFormacion(req.candidatoId, payload);
+    return res.status(201).json({ ok: true, id: created.id });
+  } catch (error) {
+    const handled = handleFormacionServiceError(res, error);
+    if (handled) return handled;
+    throw error;
+  }
 }
 
 async function updateFormacionHandler(req, res) {
@@ -761,9 +801,15 @@ async function updateFormacionHandler(req, res) {
   if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
 
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
-  const affected = await updateFormacion(req.candidatoId, formacionId, payload);
-  if (!affected) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
-  return res.json({ ok: true });
+  try {
+    const affected = await updateFormacion(req.candidatoId, formacionId, payload);
+    if (!affected) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
+    return res.json({ ok: true });
+  } catch (error) {
+    const handled = handleFormacionServiceError(res, error);
+    if (handled) return handled;
+    throw error;
+  }
 }
 
 async function deleteFormacionHandler(req, res) {
@@ -926,6 +972,7 @@ module.exports = {
   updateExperienciaCertificadoById: makeCandidateScopeHandler('id', updateExperienciaCertificadoHandler, 'update'),
   deleteExperienciaCertificadoById: makeCandidateScopeHandler('id', deleteExperienciaCertificadoHandler, 'update'),
 
+  listCentrosCapacitacion: listCentrosCapacitacionHandler,
   listMyFormacion: makeCandidateScopeHandler('me', listFormacionHandler, 'fetch'),
   createMyFormacion: makeCandidateScopeHandler('me', createFormacionHandler, 'update'),
   updateMyFormacion: makeCandidateScopeHandler('me', updateFormacionHandler, 'update'),

@@ -20,6 +20,8 @@ function parsePerfilError(error, fallbackMessage) {
   if (code === 'EXPERIENCIA_NOT_FOUND') return 'No se encontro la experiencia seleccionada.'
   if (code === 'INVALID_FORMACION_ID') return 'La formacion seleccionada no es valida.'
   if (code === 'FORMACION_NOT_FOUND') return 'No se encontro la formacion seleccionada.'
+  if (code === 'FORMACION_INSTITUCION_REQUIRED') return 'Para formacion externa debes indicar institucion o seleccionar un centro.'
+  if (code === 'CENTRO_CAPACITACION_NOT_FOUND') return 'El centro de capacitacion seleccionado no existe.'
   if (code === 'INVALID_EDUCACION_GENERAL_ID') return 'El registro de educacion general no es valido.'
   if (code === 'EDUCACION_GENERAL_NOT_FOUND') return 'No se encontro el registro de educacion general.'
   if (code === 'INVALID_CERTIFICADO_ID') return 'El certificado seleccionado no es valido.'
@@ -209,6 +211,18 @@ export async function getMyFormacion() {
   return {
     ...response,
     items: normalizeFormacionList(response?.items)
+  }
+}
+
+export async function getCentrosCapacitacion({ search = '', limit = 20 } = {}) {
+  const params = new URLSearchParams()
+  if (search && String(search).trim()) params.set('search', String(search).trim())
+  if (Number.isFinite(Number(limit))) params.set('limit', String(Number(limit)))
+  const query = params.toString()
+  const response = await apiRequest(`/api/perfil/centros-capacitacion${query ? `?${query}` : ''}`)
+  return {
+    ...response,
+    items: Array.isArray(response?.items) ? response.items : []
   }
 }
 
