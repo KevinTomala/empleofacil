@@ -58,10 +58,6 @@ const {
   createFormacionById,
   updateFormacionById,
   deleteFormacionById,
-  getMyFormacionResultado,
-  updateMyFormacionResultado,
-  getFormacionResultadoById,
-  updateFormacionResultadoById,
   listMyDocumentos,
   createMyDocumento,
   updateMyDocumento,
@@ -141,8 +137,6 @@ router.get('/me/formacion', authRequired, requireRole(['candidato']), listMyForm
 router.post('/me/formacion', authRequired, requireRole(['candidato']), createMyFormacion);
 router.put('/me/formacion/:formacionId', authRequired, requireRole(['candidato']), updateMyFormacion);
 router.delete('/me/formacion/:formacionId', authRequired, requireRole(['candidato']), deleteMyFormacion);
-router.get('/me/formacion/:formacionId/resultado', authRequired, requireRole(['candidato']), getMyFormacionResultado);
-router.put('/me/formacion/:formacionId/resultado', authRequired, requireRole(['candidato']), updateMyFormacionResultado);
 
 router.get('/me/documentos', authRequired, requireRole(['candidato']), listMyDocumentos);
 router.post('/me/documentos', authRequired, requireRole(['candidato']), uploadDocumento.single('archivo'), createMyDocumento);
@@ -179,8 +173,6 @@ router.get('/:candidatoId/formacion', authRequired, requireRole(['empresa', 'adm
 router.post('/:candidatoId/formacion', authRequired, requireRole(['administrador', 'superadmin']), createFormacionById);
 router.put('/:candidatoId/formacion/:formacionId', authRequired, requireRole(['administrador', 'superadmin']), updateFormacionById);
 router.delete('/:candidatoId/formacion/:formacionId', authRequired, requireRole(['administrador', 'superadmin']), deleteFormacionById);
-router.get('/:candidatoId/formacion/:formacionId/resultado', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), getFormacionResultadoById);
-router.put('/:candidatoId/formacion/:formacionId/resultado', authRequired, requireRole(['administrador', 'superadmin']), updateFormacionResultadoById);
 
 router.get('/:candidatoId/documentos', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), listDocumentosById);
 router.post('/:candidatoId/documentos', authRequired, requireRole(['administrador', 'superadmin']), uploadDocumento.single('archivo'), createDocumentoById);

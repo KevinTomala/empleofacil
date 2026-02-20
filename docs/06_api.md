@@ -188,8 +188,7 @@ Respuesta `GET` exitosa:
   "idiomas": [],
   "experiencia": [],
   "documentos": [],
-  "formacion_detalle": [],
-  "formacion_resultados": []
+  "formacion_detalle": []
 }
 ```
 
@@ -401,6 +400,8 @@ Errores esperados:
   - `categoria_formacion` (`externa`)
   - `subtipo_formacion`: `curso|ministerio|chofer_profesional`
   - `institucion`, `nombre_programa`, `titulo_obtenido`
+  - Regla de integracion Ademy:
+    - `institucion` debe representar empresa/sucursal cliente contratante (ej: `CENDCAP`, `CENDCAP SUCURSAL`, `CAPACITAREC`).
   - `entidad_emisora`, `numero_registro`, `fecha_aprobacion`, `fecha_emision`, `fecha_vencimiento`
 - Breaking change:
   - Ya no se aceptan ni se devuelven: `estado`, `fecha_inicio`, `fecha_fin`, `matricula_id`, `nivel_id`, `curso_id`, `formacion_origen_id`.
@@ -408,26 +409,6 @@ Errores esperados:
   - `400 INVALID_FORMACION_ID`
   - `404 FORMACION_NOT_FOUND`
   - `400 INVALID_PAYLOAD`
-
-### GET `/api/perfil/me/formacion/:formacionId/resultado`
-### PUT `/api/perfil/me/formacion/:formacionId/resultado`
-- Auth: requerido.
-- Roles: `candidato`.
-- Body permitido:
-  - `resultado_curso` (`aprobado|reprobado|pendiente`)
-  - `nota_curso`
-  - `fuente_curso` (`classroom|manual|externo`)
-  - `fecha_cierre_curso`
-  - `examen_estado` (`no_presentado|primera_oportunidad|segunda_oportunidad`)
-  - `nota_examen`
-  - `acreditado` (`0|1|false|true`)
-  - `fecha_examen`
-  - `documento_url`
-- Errores:
-  - `400 INVALID_FORMACION_ID`
-  - `404 FORMACION_NOT_FOUND`
-  - `400 INVALID_RESULTADO_PAYLOAD`
-  - `400 FORMACION_RESULTADO_NOT_ALLOWED` (resultado disponible solo para formacion externa)
 
 ### GET `/api/perfil/me/documentos`
 - Auth: requerido.
@@ -477,7 +458,6 @@ Errores esperados:
 ### GET `/api/perfil/:candidatoId/experiencia`
 ### GET `/api/perfil/:candidatoId/experiencia/:experienciaId/certificado`
 ### GET `/api/perfil/:candidatoId/formacion`
-### GET `/api/perfil/:candidatoId/formacion/:formacionId/resultado`
 ### GET `/api/perfil/:candidatoId/documentos`
 - Auth: requerido.
 - Roles: `empresa`, `administrador`, `superadmin`.
@@ -487,7 +467,6 @@ Errores esperados:
 ### POST|PUT|DELETE `/api/perfil/:candidatoId/experiencia*`
 ### POST|PUT|DELETE `/api/perfil/:candidatoId/experiencia/:experienciaId/certificado`
 ### POST|PUT|DELETE `/api/perfil/:candidatoId/formacion*`
-### PUT `/api/perfil/:candidatoId/formacion/:formacionId/resultado`
 ### POST|PUT|DELETE `/api/perfil/:candidatoId/documentos*`
 - Auth: requerido.
 - Roles: `administrador`, `superadmin`.

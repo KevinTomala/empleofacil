@@ -20,10 +20,8 @@ function parsePerfilError(error, fallbackMessage) {
   if (code === 'EXPERIENCIA_NOT_FOUND') return 'No se encontro la experiencia seleccionada.'
   if (code === 'INVALID_FORMACION_ID') return 'La formacion seleccionada no es valida.'
   if (code === 'FORMACION_NOT_FOUND') return 'No se encontro la formacion seleccionada.'
-  if (code === 'FORMACION_RESULTADO_NOT_ALLOWED') return 'Solo las formaciones externas permiten registrar resultados.'
   if (code === 'INVALID_EDUCACION_GENERAL_ID') return 'El registro de educacion general no es valido.'
   if (code === 'EDUCACION_GENERAL_NOT_FOUND') return 'No se encontro el registro de educacion general.'
-  if (code === 'INVALID_RESULTADO_PAYLOAD') return 'Los datos del resultado no son validos.'
   if (code === 'INVALID_CERTIFICADO_ID') return 'El certificado seleccionado no es valido.'
   if (code === 'CERTIFICADO_NOT_FOUND') return 'No se encontro el certificado seleccionado.'
   if (code === 'INVALID_DOCUMENTO_ID') return 'El documento seleccionado no es valido.'
@@ -231,17 +229,6 @@ export async function updateMyFormacion(formacionId, payload) {
 export async function deleteMyFormacion(formacionId) {
   return apiRequest(`/api/perfil/me/formacion/${formacionId}`, {
     method: 'DELETE'
-  })
-}
-
-export async function getMyFormacionResultado(formacionId) {
-  return apiRequest(`/api/perfil/me/formacion/${formacionId}/resultado`)
-}
-
-export async function updateMyFormacionResultado(formacionId, payload) {
-  return apiRequest(`/api/perfil/me/formacion/${formacionId}/resultado`, {
-    method: 'PUT',
-    body: JSON.stringify(payload)
   })
 }
 

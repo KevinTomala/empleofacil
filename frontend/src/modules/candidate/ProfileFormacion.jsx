@@ -12,7 +12,6 @@ import {
   getPerfilErrorMessage,
   updateMyEducacionGeneralItem,
   updateMyFormacion,
-  updateMyFormacionResultado,
 } from '../../services/perfilCandidato.api'
 import ProfileWizardLayout from './ProfileWizardLayout'
 
@@ -42,7 +41,6 @@ function getInitialExternaForm() {
     fecha_aprobacion: '',
     fecha_emision: '',
     fecha_vencimiento: '',
-    documento_url_resultado: '',
   }
 }
 
@@ -195,19 +193,11 @@ export default function ProfileFormacion() {
 
     try {
       setSaving(true)
-      let formacionId = editingExternaId
 
       if (editingExternaId) {
         await updateMyFormacion(editingExternaId, payload)
       } else {
-        const created = await createMyFormacion(payload)
-        formacionId = created?.id
-      }
-
-      if (formacionId && externaForm.documento_url_resultado.trim()) {
-        await updateMyFormacionResultado(formacionId, {
-          documento_url: externaForm.documento_url_resultado.trim(),
-        })
+        await createMyFormacion(payload)
       }
 
       await loadData()
@@ -231,7 +221,6 @@ export default function ProfileFormacion() {
       fecha_aprobacion: item.fecha_aprobacion || '',
       fecha_emision: item.fecha_emision || '',
       fecha_vencimiento: item.fecha_vencimiento || '',
-      documento_url_resultado: item?.resultado?.documento_url || '',
     })
   }
 
@@ -389,10 +378,6 @@ export default function ProfileFormacion() {
                   <label className="space-y-1 text-sm font-medium text-foreground/80">
                     Fecha vencimiento
                     <input className="ef-control" type="date" value={externaForm.fecha_vencimiento} onChange={(event) => setExternaForm((prev) => ({ ...prev, fecha_vencimiento: event.target.value }))} />
-                  </label>
-                  <label className="space-y-1 text-sm font-medium text-foreground/80 sm:col-span-2">
-                    Documento URL de resultado (opcional)
-                    <input className="ef-control" type="url" value={externaForm.documento_url_resultado} onChange={(event) => setExternaForm((prev) => ({ ...prev, documento_url_resultado: event.target.value }))} />
                   </label>
                 </div>
               )}

@@ -116,13 +116,6 @@ async function getPerfilByCandidatoId(candidatoId) {
     listFormacion(candidatoId)
   ]);
 
-  const formacionResultados = formacion
-    .filter((item) => item.resultado)
-    .map((item) => ({
-      candidato_formacion_id: item.id,
-      ...item.resultado
-    }));
-
   return {
     datos_basicos: {
       id: row.c_id,
@@ -178,8 +171,7 @@ async function getPerfilByCandidatoId(candidatoId) {
     idiomas,
     experiencia,
     documentos,
-    formacion_detalle: formacion,
-    formacion_resultados: formacionResultados
+    formacion_detalle: formacion
   };
 }
 
@@ -677,23 +669,8 @@ async function listFormacion(candidatoId) {
       f.fecha_emision,
       f.fecha_vencimiento,
       f.created_at,
-      f.updated_at,
-      fr.id AS fr_id,
-      fr.resultado_curso AS fr_resultado_curso,
-      fr.nota_curso AS fr_nota_curso,
-      fr.fuente_curso AS fr_fuente_curso,
-      fr.fecha_cierre_curso AS fr_fecha_cierre_curso,
-      fr.examen_estado AS fr_examen_estado,
-      fr.nota_examen AS fr_nota_examen,
-      fr.acreditado AS fr_acreditado,
-      fr.fecha_examen AS fr_fecha_examen,
-      fr.documento_url AS fr_documento_url,
-      fr.created_at AS fr_created_at,
-      fr.updated_at AS fr_updated_at
+      f.updated_at
      FROM candidatos_formaciones f
-     LEFT JOIN candidatos_formacion_resultados fr
-       ON fr.candidato_formacion_id = f.id
-      AND fr.deleted_at IS NULL
      WHERE f.candidato_id = ?
        AND f.deleted_at IS NULL
      ORDER BY f.created_at DESC`,
@@ -716,23 +693,7 @@ async function listFormacion(candidatoId) {
       fecha_emision: row.fecha_emision,
       fecha_vencimiento: row.fecha_vencimiento,
       created_at: row.created_at,
-      updated_at: row.updated_at,
-      resultado: row.fr_id
-        ? {
-            id: row.fr_id,
-            resultado_curso: row.fr_resultado_curso,
-            nota_curso: row.fr_nota_curso,
-            fuente_curso: row.fr_fuente_curso,
-            fecha_cierre_curso: row.fr_fecha_cierre_curso,
-            examen_estado: row.fr_examen_estado,
-            nota_examen: row.fr_nota_examen,
-            acreditado: row.fr_acreditado,
-            fecha_examen: row.fr_fecha_examen,
-            documento_url: row.fr_documento_url,
-            created_at: row.fr_created_at,
-            updated_at: row.fr_updated_at
-          }
-        : null
+      updated_at: row.updated_at
     };
   });
 }
@@ -810,94 +771,6 @@ async function existsFormacion(candidatoId, formacionId) {
     [formacionId, candidatoId]
   );
   return Boolean(rows.length);
-}
-
-async function getFormacionResultado(candidatoId, formacionId) {
-  const [rows] = await db.query(
-    `SELECT
-      fr.id,
-      fr.candidato_formacion_id,
-      fr.resultado_curso,
-      fr.nota_curso,
-      fr.fuente_curso,
-      fr.fecha_cierre_curso,
-      fr.examen_estado,
-      fr.nota_examen,
-      fr.acreditado,
-      fr.fecha_examen,
-      fr.documento_url,
-      fr.created_at,
-      fr.updated_at
-     FROM candidatos_formaciones f
-     LEFT JOIN candidatos_formacion_resultados fr
-       ON fr.candidato_formacion_id = f.id
-      AND fr.deleted_at IS NULL
-     WHERE f.id = ?
-       AND f.candidato_id = ?
-       AND f.deleted_at IS NULL
-     LIMIT 1`,
-    [formacionId, candidatoId]
-  );
-
-  const row = rows[0];
-  if (!row || !row.id) return null;
-
-  return {
-    id: row.id,
-    candidato_formacion_id: row.candidato_formacion_id,
-    resultado_curso: row.resultado_curso,
-    nota_curso: row.nota_curso,
-    fuente_curso: row.fuente_curso,
-    fecha_cierre_curso: row.fecha_cierre_curso,
-    examen_estado: row.examen_estado,
-    nota_examen: row.nota_examen,
-    acreditado: row.acreditado,
-    fecha_examen: row.fecha_examen,
-    documento_url: row.documento_url,
-    created_at: row.created_at,
-    updated_at: row.updated_at
-  };
-}
-
-async function canUseFormacionResultado(candidatoId, formacionId) {
-  const [rows] = await db.query(
-    `SELECT
-      id,
-      categoria_formacion
-     FROM candidatos_formaciones
-     WHERE id = ?
-       AND candidato_id = ?
-       AND deleted_at IS NULL
-     LIMIT 1`,
-    [formacionId, candidatoId]
-  );
-
-  const row = rows[0];
-  if (!row) return { exists: false, allowed: false };
-  return { exists: true, allowed: row.categoria_formacion === 'externa' };
-}
-
-async function upsertFormacionResultado(candidatoId, formacionId, payload) {
-  const state = await canUseFormacionResultado(candidatoId, formacionId);
-  if (!state.exists) return 0;
-  if (!state.allowed) return -1;
-
-  const keys = Object.keys(payload);
-  if (!keys.length) return 0;
-
-  const columns = ['candidato_formacion_id', ...keys];
-  const placeholders = columns.map(() => '?').join(', ');
-  const values = [formacionId, ...keys.map((key) => payload[key])];
-  const updateSql = [...keys.map((key) => `${key} = VALUES(${key})`), 'deleted_at = NULL'].join(', ');
-
-  await db.query(
-    `INSERT INTO candidatos_formacion_resultados (${columns.join(', ')})
-     VALUES (${placeholders})
-     ON DUPLICATE KEY UPDATE ${updateSql}`,
-    values
-  );
-
-  return 1;
 }
 
 async function listDocumentos(candidatoId) {
@@ -1025,9 +898,6 @@ module.exports = {
   updateFormacion,
   deleteFormacion,
   existsFormacion,
-  getFormacionResultado,
-  canUseFormacionResultado,
-  upsertFormacionResultado,
   listDocumentos,
   createDocumento,
   updateDocumento,

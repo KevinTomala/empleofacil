@@ -39,8 +39,6 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `GET|POST|PUT|DELETE /api/perfil/me/formacion*` validan CRUD por categoria/subtipo.
 - `POST|PUT /api/perfil/me/formacion*` rechazan payload legacy (`estado`, `fecha_inicio`, `fecha_fin`, `matricula_id`, `nivel_id`, `curso_id`, `formacion_origen_id`) con `400 INVALID_PAYLOAD`.
 - `GET|POST|PUT|DELETE /api/perfil/me/educacion-general*` permiten multiples registros academicos.
-- `PUT /api/perfil/me/formacion/:formacionId/resultado` hace upsert y valida `INVALID_RESULTADO_PAYLOAD`.
-- `PUT /api/perfil/me/formacion/:formacionId/resultado` en item no externa devuelve `FORMACION_RESULTADO_NOT_ALLOWED`.
 - `GET|POST|PUT|DELETE /api/perfil/me/experiencia/:experienciaId/certificado` respetan ownership.
 - `POST certificado` sin archivo devuelve `400 FILE_REQUIRED`.
 - Empresa solo lectura en `/:candidatoId/formacion*` y `/:candidatoId/experiencia/:experienciaId/certificado`.

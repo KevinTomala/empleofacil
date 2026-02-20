@@ -58,7 +58,6 @@ Rutas registradas actualmente:
   - `experiencia` (CRUD)
   - `experiencia/:experienciaId/certificado` (CRUD 1:1 + upload multipart)
   - `formacion` (CRUD relacional por item)
-  - `formacion/:formacionId/resultado` (upsert 1:1)
   - `documentos` (CRUD + upload multipart con `multer`)
 - Contrato actual de `formacion` (externa):
   - columnas legacy removidas en dominio (`matricula_id`, `nivel_id`, `curso_id`, `formacion_origen_id`, `estado`, `fecha_inicio`, `fecha_fin`).
@@ -124,7 +123,7 @@ Rutas registradas actualmente:
 - Respetar `deleted_at` cuando aplique.
 - Para tablas 1:1, usar upsert con PK `candidato_id`.
 - Para tablas 1:N de perfil (`idiomas`, `experiencia`, `documentos`), usar CRUD por item con soft delete.
-- Para relaciones 1:1 anidadas (`formacion_resultado`, `experiencia_certificado`), validar ownership del padre antes de operar.
+- Para relaciones 1:1 anidadas (`experiencia_certificado`), validar ownership del padre antes de operar.
 
 ## Jobs y operacion
 - Job actual: `jobs/ademySync.job.js`.

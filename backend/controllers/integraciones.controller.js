@@ -46,6 +46,137 @@ function toPositiveIntOrNull(value) {
   return Number.isInteger(num) && num > 0 ? num : null;
 }
 
+function isMissingTableError(error) {
+  if (!error) return false;
+  const code = String(error.code || '');
+  const errno = Number(error.errno || 0);
+  return code === 'ER_NO_SUCH_TABLE' || errno === 1146;
+}
+
+function toTextOrNull(value) {
+  if (!isPresent(value)) return null;
+  const text = String(value).trim();
+  return text || null;
+}
+
+function pickFirstText(candidates) {
+  for (const value of candidates) {
+    const text = toTextOrNull(value);
+    if (text) return text;
+  }
+  return null;
+}
+
+function extractNamedEntity(value) {
+  if (!isPresent(value)) return null;
+  if (typeof value === 'string' || typeof value === 'number') {
+    return toTextOrNull(value);
+  }
+  if (typeof value !== 'object') return null;
+  return pickFirstText([
+    value.nombre_completo,
+    value.nombre_comercial,
+    value.razon_social,
+    value.nombre,
+    value.descripcion,
+    value.label,
+    value.text
+  ]);
+}
+
+function joinEmpresaSucursal(empresa, sucursal) {
+  if (!empresa) return sucursal || null;
+  if (!sucursal) return empresa;
+  const empresaNorm = empresa.toLowerCase();
+  const sucursalNorm = sucursal.toLowerCase();
+  if (sucursalNorm.includes(empresaNorm)) return sucursal;
+  return `${empresa} ${sucursal}`;
+}
+
+function resolveFormacionInstitucion(item, formacion) {
+  const empresa = pickFirstText([
+    formacion?.empresa_cliente,
+    formacion?.empresa_nombre,
+    formacion?.cliente_empresa,
+    formacion?.cliente_nombre,
+    formacion?.centro_empresa,
+    formacion?.centro_nombre,
+    formacion?.promocion?.centro_nombre,
+    formacion?.promocion?.centro?.nombre,
+    formacion?.convocatoria?.centro_nombre,
+    formacion?.convocatoria?.centro?.nombre,
+    extractNamedEntity(formacion?.empresa),
+    extractNamedEntity(formacion?.cliente),
+    extractNamedEntity(formacion?.centro),
+    item?.empresa_cliente,
+    item?.empresa_nombre,
+    item?.cliente_empresa,
+    item?.cliente_nombre,
+    item?.centro_nombre,
+    item?.promocion?.centro_nombre,
+    item?.promocion?.centro?.nombre,
+    item?.convocatoria?.centro_nombre,
+    item?.convocatoria?.centro?.nombre,
+    extractNamedEntity(item?.empresa),
+    extractNamedEntity(item?.cliente),
+    extractNamedEntity(item?.centro)
+  ]);
+
+  const sucursal = pickFirstText([
+    formacion?.sucursal_nombre,
+    formacion?.nombre_sucursal,
+    formacion?.sede_nombre,
+    formacion?.centro_sucursal,
+    extractNamedEntity(formacion?.sucursal),
+    extractNamedEntity(formacion?.sede),
+    item?.sucursal_nombre,
+    item?.nombre_sucursal,
+    item?.sede_nombre,
+    extractNamedEntity(item?.sucursal),
+    extractNamedEntity(item?.sede)
+  ]);
+
+  const empresaSucursal = joinEmpresaSucursal(empresa, sucursal);
+  if (empresaSucursal) return empresaSucursal;
+
+  return pickFirstText([
+    formacion?.institucion_cliente,
+    formacion?.institucion_empresa,
+    formacion?.institucion_origen,
+    formacion?.institucion,
+    formacion?.entidad,
+    item?.institucion_cliente,
+    item?.institucion_empresa,
+    item?.institucion_origen,
+    item?.institucion,
+    item?.entidad
+  ]);
+}
+
+async function resolveInstitucionByPromocionMap(conn, promocionId, cache) {
+  const key = Number(promocionId || 0);
+  if (!key) return null;
+  if (cache.has(key)) return cache.get(key);
+
+  try {
+    const [rows] = await conn.query(
+      `SELECT institucion
+       FROM integracion_ademy_promociones_institucion
+       WHERE promocion_id = ?
+         AND activo = 1
+       LIMIT 1`,
+      [key]
+    );
+    const value = toTextOrNull(rows[0]?.institucion) || null;
+    cache.set(key, value);
+    return value;
+  } catch (error) {
+    if (!isMissingTableError(error)) throw error;
+    cache.set(key, null);
+    return null;
+  }
+}
+
 function resolveCandidatoIdentity(item) {
   const emailRaw = String(item?.email || item?.contacto?.email || '').trim();
   const documento = normalizeDocumento(item?.documento_identidad);
@@ -371,11 +502,17 @@ async function upsertDocumentos(conn, estudianteId, documentos) {
   }
 }
 
-async function upsertFormaciones(conn, estudianteId, item) {
+async function upsertFormaciones(conn, estudianteId, item, options = {}) {
+  const promocionInstitucionCache = options.promocionInstitucionCache || new Map();
   const formaciones = item.formaciones || (item.formacion ? [item.formacion] : []);
   for (const formacion of formaciones) {
     const origenFormacionId = formacion.formacion_id || formacion.id || item.formacion_id;
     if (!origenFormacionId) continue;
+    const promocionId = toPositiveIntOrNull(formacion.promocion_id || item.promocion_id);
+    let institucion = resolveFormacionInstitucion(item, formacion);
+    if (!institucion && promocionId) {
+      institucion = await resolveInstitucionByPromocionMap(conn, promocionId, promocionInstitucionCache);
+    }
 
     const [mapping] = await conn.query(
       'SELECT candidato_formacion_id FROM candidatos_formaciones_origen WHERE origen = ? AND origen_formacion_id = ? LIMIT 1',
@@ -398,7 +535,7 @@ async function upsertFormaciones(conn, estudianteId, item) {
         [
           'externa',
           formacion.subtipo_formacion || 'curso',
-          formacion.institucion || formacion.entidad || null,
+          institucion,
           formacion.nombre_programa || formacion.nombre || formacion.curso_nombre || null,
           formacion.titulo_obtenido || formacion.certificado || null,
           formacion.fecha_aprobacion || null,
@@ -422,7 +559,7 @@ async function upsertFormaciones(conn, estudianteId, item) {
         estudianteId,
         'externa',
         formacion.subtipo_formacion || 'curso',
-        formacion.institucion || formacion.entidad || null,
+        institucion,
         formacion.nombre_programa || formacion.nombre || formacion.curso_nombre || null,
         formacion.titulo_obtenido || formacion.certificado || null,
         formacion.fecha_aprobacion || null,
@@ -433,13 +570,12 @@ async function upsertFormaciones(conn, estudianteId, item) {
 
     await conn.query(
       `INSERT INTO candidatos_formaciones_origen (
-        candidato_formacion_id, origen, origen_formacion_id, origen_candidato_id, origen_updated_at
-      ) VALUES (?, ?, ?, ?, ?)`,
+        candidato_formacion_id, origen, origen_formacion_id, origen_updated_at
+      ) VALUES (?, ?, ?, ?)`,
       [
         insert.insertId,
         ORIGEN,
         origenFormacionId,
-        item.estudiante_id || null,
         formacion.updated_at || null
       ]
     );
@@ -515,6 +651,7 @@ async function runAcreditadosImport(rawParams = {}) {
       skipped: 0,
       errors: 0
     };
+    const promocionInstitucionCache = new Map();
 
     try {
       let page = 1;
@@ -567,7 +704,7 @@ async function runAcreditadosImport(rawParams = {}) {
                 : (item.experiencia ? [item.experiencia] : null));
             await replaceExperiencias(conn, estudianteId, experienciaHistorial);
             await upsertDocumentos(conn, estudianteId, item.documentos);
-            await upsertFormaciones(conn, estudianteId, item);
+            await upsertFormaciones(conn, estudianteId, item, { promocionInstitucionCache });
 
             await conn.commit();
           } catch (err) {

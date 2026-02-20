@@ -91,7 +91,6 @@ export default function CandidatoPerfilDrawer({
               <Section title="Educacion" data={perfil.educacion} />
               <Section title="Educacion general" data={perfil.educacion_general_items} />
               <Section title="Formacion" data={perfil.formacion_detalle} />
-              <Section title="Resultados formacion" data={perfil.formacion_resultados} />
               <Section title="Experiencia" data={perfil.experiencia} />
               <Section title="Documentos" data={perfil.documentos} />
             </>

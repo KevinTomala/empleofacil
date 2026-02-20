@@ -25,9 +25,6 @@ const {
   createFormacion,
   updateFormacion,
   deleteFormacion,
-  getFormacionResultado,
-  canUseFormacionResultado,
-  upsertFormacionResultado,
   listDocumentos,
   createDocumento,
   updateDocumento,
@@ -45,9 +42,6 @@ const FORMACION_SUBTIPOS = {
 const FORMACION_SUBTIPOS_ALL = [
   ...FORMACION_SUBTIPOS.externa
 ];
-const RESULTADO_CURSO = ['aprobado', 'reprobado', 'pendiente'];
-const FUENTE_CURSO = ['classroom', 'manual', 'externo'];
-const EXAMEN_ESTADO = ['no_presentado', 'primera_oportunidad', 'segunda_oportunidad'];
 const DOCUMENTO_TIPOS = [
   'documento_identidad',
   'carnet_tipo_sangre',
@@ -419,52 +413,6 @@ function validateFormacionPayload(payload, { partial = false } = {}) {
   return normalized;
 }
 
-function validateFormacionResultadoPayload(payload) {
-  const allowed = [
-    'resultado_curso',
-    'nota_curso',
-    'fuente_curso',
-    'fecha_cierre_curso',
-    'examen_estado',
-    'nota_examen',
-    'acreditado',
-    'fecha_examen',
-    'documento_url'
-  ];
-
-  if (!validatePayloadShape(payload, allowed)) return null;
-
-  const normalized = {};
-  for (const [key, raw] of Object.entries(payload)) {
-    const value = toNullIfEmptyString(raw);
-    if (key === 'resultado_curso') {
-      if (!isEnum(value, RESULTADO_CURSO)) return null;
-      normalized.resultado_curso = value;
-    } else if (key === 'fuente_curso') {
-      if (!isEnum(value, FUENTE_CURSO)) return null;
-      normalized.fuente_curso = value;
-    } else if (key === 'examen_estado') {
-      if (!isEnum(value, EXAMEN_ESTADO)) return null;
-      normalized.examen_estado = value;
-    } else if (key === 'acreditado') {
-      if (!isTinyIntLike(value)) return null;
-      normalized.acreditado = normalizeTinyInt(value);
-    } else if (['nota_curso', 'nota_examen'].includes(key)) {
-      const parsed = parseNullableNumber(value);
-      if (!isNullableNumber(parsed)) return null;
-      normalized[key] = parsed;
-    } else if (['fecha_cierre_curso', 'fecha_examen'].includes(key)) {
-      if (!isNullableDate(value)) return null;
-      normalized[key] = value;
-    } else if (key === 'documento_url') {
-      if (!isNullableString(value)) return null;
-      normalized.documento_url = normalizeString(value);
-    }
-  }
-
-  return Object.keys(normalized).length ? normalized : null;
-}
-
 function validateDocumentoMetaPayload(payload, { allowEstado = false } = {}) {
   const allowed = ['tipo_documento', 'fecha_emision', 'fecha_vencimiento', 'numero_documento', 'descripcion', 'observaciones'];
   if (allowEstado) allowed.push('estado');
@@ -828,37 +776,6 @@ async function deleteFormacionHandler(req, res) {
   return res.json({ ok: true });
 }
 
-async function getFormacionResultadoHandler(req, res) {
-  const formacionId = parsePositiveInt(req.params.formacionId);
-  if (!formacionId) return res.status(400).json({ error: 'INVALID_FORMACION_ID' });
-
-  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
-  const state = await canUseFormacionResultado(req.candidatoId, formacionId);
-  if (!state.exists) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
-  if (!state.allowed) return res.status(400).json({ error: 'FORMACION_RESULTADO_NOT_ALLOWED' });
-
-  const item = await getFormacionResultado(req.candidatoId, formacionId);
-  return res.json({ item });
-}
-
-async function updateFormacionResultadoHandler(req, res) {
-  const formacionId = parsePositiveInt(req.params.formacionId);
-  if (!formacionId) return res.status(400).json({ error: 'INVALID_FORMACION_ID' });
-
-  const payload = validateFormacionResultadoPayload(req.body || {});
-  if (!payload) return res.status(400).json({ error: 'INVALID_RESULTADO_PAYLOAD' });
-
-  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
-  const state = await canUseFormacionResultado(req.candidatoId, formacionId);
-  if (!state.exists) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
-  if (!state.allowed) return res.status(400).json({ error: 'FORMACION_RESULTADO_NOT_ALLOWED' });
-
-  const result = await upsertFormacionResultado(req.candidatoId, formacionId, payload);
-  if (result === -1) return res.status(400).json({ error: 'FORMACION_RESULTADO_NOT_ALLOWED' });
-  if (!result) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
-  return res.json({ ok: true });
-}
-
 async function listDocumentosHandler(req, res) {
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
   const items = await listDocumentos(req.candidatoId);
@@ -1017,11 +934,6 @@ module.exports = {
   createFormacionById: makeCandidateScopeHandler('id', createFormacionHandler, 'update'),
   updateFormacionById: makeCandidateScopeHandler('id', updateFormacionHandler, 'update'),
   deleteFormacionById: makeCandidateScopeHandler('id', deleteFormacionHandler, 'update'),
-
-  getMyFormacionResultado: makeCandidateScopeHandler('me', getFormacionResultadoHandler, 'fetch'),
-  updateMyFormacionResultado: makeCandidateScopeHandler('me', updateFormacionResultadoHandler, 'update'),
-  getFormacionResultadoById: makeCandidateScopeHandler('id', getFormacionResultadoHandler, 'fetch'),
-  updateFormacionResultadoById: makeCandidateScopeHandler('id', updateFormacionResultadoHandler, 'update'),
 
   listMyDocumentos: makeCandidateScopeHandler('me', listDocumentosHandler, 'fetch'),
   createMyDocumento: makeCandidateScopeHandler('me', createDocumentoHandler, 'update'),
