@@ -7,12 +7,6 @@ function isSchemaDriftError(error) {
   return code === 'ER_BAD_FIELD_ERROR' || code === 'ER_NO_SUCH_TABLE' || errno === 1054 || errno === 1146;
 }
 
-function isExternalLikeFormacion(row) {
-  if (row?.categoria_formacion === 'externa') return true;
-  if (row?.categoria_formacion) return false;
-  return Boolean(row?.matricula_id || row?.nivel_id || row?.curso_id || row?.formacion_origen_id);
-}
-
 async function findCandidatoIdByUserId(userId) {
   const [rows] = await db.query(
     `SELECT id
@@ -667,123 +661,52 @@ async function deleteExperienciaCertificado(candidatoId, experienciaId) {
 }
 
 async function listFormacion(candidatoId) {
-  let rows = [];
-  try {
-    const [rowsFull] = await db.query(
-      `SELECT
-        f.id,
-        f.candidato_id,
-        f.matricula_id,
-        f.nivel_id,
-        f.curso_id,
-        f.formacion_origen_id,
-        f.estado,
-        f.fecha_inicio,
-        f.fecha_fin,
-        f.fecha_aprobacion,
-        f.activo,
-        f.categoria_formacion,
-        f.subtipo_formacion,
-        f.institucion,
-        f.nombre_programa,
-        f.titulo_obtenido,
-        f.entidad_emisora,
-        f.numero_registro,
-        f.fecha_emision,
-        f.fecha_vencimiento,
-        f.created_at,
-        f.updated_at,
-        fr.id AS fr_id,
-        fr.resultado_curso AS fr_resultado_curso,
-        fr.nota_curso AS fr_nota_curso,
-        fr.fuente_curso AS fr_fuente_curso,
-        fr.fecha_cierre_curso AS fr_fecha_cierre_curso,
-        fr.examen_estado AS fr_examen_estado,
-        fr.nota_examen AS fr_nota_examen,
-        fr.acreditado AS fr_acreditado,
-        fr.fecha_examen AS fr_fecha_examen,
-        fr.documento_url AS fr_documento_url,
-        fr.created_at AS fr_created_at,
-        fr.updated_at AS fr_updated_at
-       FROM candidatos_formaciones f
-       LEFT JOIN candidatos_formacion_resultados fr
-         ON fr.candidato_formacion_id = f.id
-        AND fr.deleted_at IS NULL
-       WHERE f.candidato_id = ?
-         AND f.deleted_at IS NULL
-       ORDER BY f.created_at DESC`,
-      [candidatoId]
-    );
-    rows = rowsFull;
-  } catch (error) {
-    if (!isSchemaDriftError(error)) throw error;
-    try {
-      const [rowsLegacy] = await db.query(
-        `SELECT
-          f.id,
-          f.candidato_id,
-          f.matricula_id,
-          f.nivel_id,
-          f.curso_id,
-          f.formacion_origen_id,
-          f.estado,
-          f.fecha_inicio,
-          f.fecha_fin,
-          f.fecha_aprobacion,
-          f.activo,
-          NULL AS categoria_formacion,
-          NULL AS subtipo_formacion,
-          NULL AS institucion,
-          NULL AS nombre_programa,
-          NULL AS titulo_obtenido,
-          NULL AS entidad_emisora,
-          NULL AS numero_registro,
-          NULL AS fecha_emision,
-          NULL AS fecha_vencimiento,
-          f.created_at,
-          f.updated_at,
-          NULL AS fr_id,
-          NULL AS fr_resultado_curso,
-          NULL AS fr_nota_curso,
-          NULL AS fr_fuente_curso,
-          NULL AS fr_fecha_cierre_curso,
-          NULL AS fr_examen_estado,
-          NULL AS fr_nota_examen,
-          NULL AS fr_acreditado,
-          NULL AS fr_fecha_examen,
-          NULL AS fr_documento_url,
-          NULL AS fr_created_at,
-          NULL AS fr_updated_at
-         FROM candidatos_formaciones f
-         WHERE f.candidato_id = ?
-           AND f.deleted_at IS NULL
-         ORDER BY f.created_at DESC`,
-        [candidatoId]
-      );
-      rows = rowsLegacy;
-    } catch (fallbackError) {
-      if (!isSchemaDriftError(fallbackError)) throw fallbackError;
-      rows = [];
-    }
-  }
+  const [rows] = await db.query(
+    `SELECT
+      f.id,
+      f.candidato_id,
+      f.fecha_aprobacion,
+      f.activo,
+      f.categoria_formacion,
+      f.subtipo_formacion,
+      f.institucion,
+      f.nombre_programa,
+      f.titulo_obtenido,
+      f.entidad_emisora,
+      f.numero_registro,
+      f.fecha_emision,
+      f.fecha_vencimiento,
+      f.created_at,
+      f.updated_at,
+      fr.id AS fr_id,
+      fr.resultado_curso AS fr_resultado_curso,
+      fr.nota_curso AS fr_nota_curso,
+      fr.fuente_curso AS fr_fuente_curso,
+      fr.fecha_cierre_curso AS fr_fecha_cierre_curso,
+      fr.examen_estado AS fr_examen_estado,
+      fr.nota_examen AS fr_nota_examen,
+      fr.acreditado AS fr_acreditado,
+      fr.fecha_examen AS fr_fecha_examen,
+      fr.documento_url AS fr_documento_url,
+      fr.created_at AS fr_created_at,
+      fr.updated_at AS fr_updated_at
+     FROM candidatos_formaciones f
+     LEFT JOIN candidatos_formacion_resultados fr
+       ON fr.candidato_formacion_id = f.id
+      AND fr.deleted_at IS NULL
+     WHERE f.candidato_id = ?
+       AND f.deleted_at IS NULL
+     ORDER BY f.created_at DESC`,
+    [candidatoId]
+  );
 
   return rows.map((row) => {
-    const externalLike = isExternalLikeFormacion(row);
     return {
       id: row.id,
       candidato_id: row.candidato_id,
-      matricula_id: row.matricula_id,
-      nivel_id: row.nivel_id,
-      curso_id: row.curso_id,
-      formacion_origen_id: row.formacion_origen_id,
-      estado: row.estado,
-      fecha_inicio: row.fecha_inicio,
-      fecha_fin: row.fecha_fin,
       fecha_aprobacion: row.fecha_aprobacion,
       activo: row.activo,
       categoria_formacion: row.categoria_formacion,
-      categoria_ui: row.categoria_formacion || (externalLike ? 'externa' : null),
-      legacy_importado: !row.categoria_formacion && externalLike,
       subtipo_formacion: row.subtipo_formacion,
       institucion: row.institucion,
       nombre_programa: row.nombre_programa,
@@ -818,9 +741,7 @@ async function createFormacion(candidatoId, payload) {
   const [result] = await db.query(
     `INSERT INTO candidatos_formaciones (
       candidato_id,
-      estado,
-      fecha_inicio,
-      fecha_fin,
+      fecha_aprobacion,
       activo,
       categoria_formacion,
       subtipo_formacion,
@@ -831,12 +752,10 @@ async function createFormacion(candidatoId, payload) {
       numero_registro,
       fecha_emision,
       fecha_vencimiento
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       candidatoId,
-      payload.estado ?? 'inscrito',
-      payload.fecha_inicio ?? null,
-      payload.fecha_fin ?? null,
+      payload.fecha_aprobacion ?? null,
       payload.activo ?? 1,
       payload.categoria_formacion,
       payload.subtipo_formacion,
@@ -944,11 +863,7 @@ async function canUseFormacionResultado(candidatoId, formacionId) {
   const [rows] = await db.query(
     `SELECT
       id,
-      categoria_formacion,
-      matricula_id,
-      nivel_id,
-      curso_id,
-      formacion_origen_id
+      categoria_formacion
      FROM candidatos_formaciones
      WHERE id = ?
        AND candidato_id = ?
@@ -959,7 +874,7 @@ async function canUseFormacionResultado(candidatoId, formacionId) {
 
   const row = rows[0];
   if (!row) return { exists: false, allowed: false };
-  return { exists: true, allowed: isExternalLikeFormacion(row) };
+  return { exists: true, allowed: row.categoria_formacion === 'externa' };
 }
 
 async function upsertFormacionResultado(candidatoId, formacionId, payload) {

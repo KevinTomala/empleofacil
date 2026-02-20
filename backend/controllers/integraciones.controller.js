@@ -386,23 +386,21 @@ async function upsertFormaciones(conn, estudianteId, item) {
       const localId = mapping[0].candidato_formacion_id;
       await conn.query(
         `UPDATE candidatos_formaciones SET
-          matricula_id = COALESCE(?, matricula_id),
-          nivel_id = COALESCE(?, nivel_id),
-          curso_id = COALESCE(?, curso_id),
-          estado = COALESCE(?, estado),
-          fecha_inicio = COALESCE(?, fecha_inicio),
-          fecha_fin = COALESCE(?, fecha_fin),
+          categoria_formacion = COALESCE(?, categoria_formacion),
+          subtipo_formacion = COALESCE(?, subtipo_formacion),
+          institucion = COALESCE(?, institucion),
+          nombre_programa = COALESCE(?, nombre_programa),
+          titulo_obtenido = COALESCE(?, titulo_obtenido),
           fecha_aprobacion = COALESCE(?, fecha_aprobacion),
           activo = COALESCE(?, activo),
           updated_at = NOW()
         WHERE id = ?`,
         [
-          formacion.matricula_id || null,
-          formacion.nivel_id || null,
-          formacion.curso_id || null,
-          formacion.estado || null,
-          formacion.fecha_inicio || null,
-          formacion.fecha_fin || null,
+          'externa',
+          formacion.subtipo_formacion || 'curso',
+          formacion.institucion || formacion.entidad || null,
+          formacion.nombre_programa || formacion.nombre || formacion.curso_nombre || null,
+          formacion.titulo_obtenido || formacion.certificado || null,
           formacion.fecha_aprobacion || null,
           formacion.activo !== undefined ? (formacion.activo ? 1 : 0) : null,
           localId
@@ -418,16 +416,15 @@ async function upsertFormaciones(conn, estudianteId, item) {
 
     const [insert] = await conn.query(
       `INSERT INTO candidatos_formaciones (
-        candidato_id, matricula_id, nivel_id, curso_id, estado, fecha_inicio, fecha_fin, fecha_aprobacion, activo, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+        candidato_id, categoria_formacion, subtipo_formacion, institucion, nombre_programa, titulo_obtenido, fecha_aprobacion, activo, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
       [
         estudianteId,
-        formacion.matricula_id || null,
-        formacion.nivel_id || null,
-        formacion.curso_id || null,
-        formacion.estado || 'acreditado',
-        formacion.fecha_inicio || null,
-        formacion.fecha_fin || null,
+        'externa',
+        formacion.subtipo_formacion || 'curso',
+        formacion.institucion || formacion.entidad || null,
+        formacion.nombre_programa || formacion.nombre || formacion.curso_nombre || null,
+        formacion.titulo_obtenido || formacion.certificado || null,
         formacion.fecha_aprobacion || null,
         formacion.activo !== undefined ? (formacion.activo ? 1 : 0) : 1,
         formacion.updated_at || null

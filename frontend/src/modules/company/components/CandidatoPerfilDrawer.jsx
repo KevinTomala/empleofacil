@@ -8,7 +8,6 @@ function renderValue(value) {
 
 function Section({ title, data }) {
   if (Array.isArray(data)) {
-    const isFormacion = String(title || '').toLowerCase().includes('formacion')
     return (
       <section className="border border-border rounded-xl p-3 bg-white">
         <h3 className="text-sm font-semibold mb-2">{title}</h3>
@@ -17,9 +16,6 @@ function Section({ title, data }) {
           <div className="space-y-2">
             {data.map((item) => (
               <div key={item.id || JSON.stringify(item)} className="border border-border/70 rounded-lg px-2 py-1.5">
-                {isFormacion && item?.legacy_importado && (
-                  <p className="text-[11px] text-amber-700 mb-1">Externa (importada)</p>
-                )}
                 {Object.entries(item).map(([key, value]) => (
                   <p key={key} className="text-xs text-foreground/80">
                     <span className="text-foreground/50">{key}: </span>

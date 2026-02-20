@@ -27,15 +27,6 @@ const nivelEstudioOptions = [
   { value: 'Educacion Superior', label: 'Educacion Superior' },
 ]
 
-const estadoOptions = [
-  { value: 'inscrito', label: 'Inscrito' },
-  { value: 'cursando', label: 'Cursando' },
-  { value: 'egresado', label: 'Egresado' },
-  { value: 'acreditado', label: 'Acreditado' },
-  { value: 'anulado', label: 'Anulado' },
-  { value: 'reprobado', label: 'Reprobado' },
-]
-
 const subtipoExternaOptions = [
   { value: 'curso', label: 'Curso' },
   { value: 'ministerio', label: 'Ministerio' },
@@ -48,9 +39,9 @@ function getInitialExternaForm() {
     institucion: '',
     nombre_programa: '',
     titulo_obtenido: '',
-    fecha_inicio: '',
-    fecha_fin: '',
-    estado: 'inscrito',
+    fecha_aprobacion: '',
+    fecha_emision: '',
+    fecha_vencimiento: '',
     documento_url_resultado: '',
   }
 }
@@ -74,7 +65,7 @@ export default function ProfileFormacion() {
   const [externaForm, setExternaForm] = useState(getInitialExternaForm())
 
   const externaItems = useMemo(
-    () => formaciones.filter((item) => (item.categoria_ui || item.categoria_formacion) === 'externa'),
+    () => formaciones.filter((item) => item.categoria_formacion === 'externa'),
     [formaciones]
   )
 
@@ -197,9 +188,9 @@ export default function ProfileFormacion() {
       institucion: externaForm.institucion.trim() || null,
       nombre_programa: externaForm.nombre_programa.trim() || null,
       titulo_obtenido: externaForm.titulo_obtenido.trim() || null,
-      fecha_inicio: externaForm.fecha_inicio || null,
-      fecha_fin: externaForm.fecha_fin || null,
-      estado: externaForm.estado,
+      fecha_aprobacion: externaForm.fecha_aprobacion || null,
+      fecha_emision: externaForm.fecha_emision || null,
+      fecha_vencimiento: externaForm.fecha_vencimiento || null,
     }
 
     try {
@@ -237,9 +228,9 @@ export default function ProfileFormacion() {
       institucion: item.institucion || '',
       nombre_programa: item.nombre_programa || '',
       titulo_obtenido: item.titulo_obtenido || '',
-      fecha_inicio: item.fecha_inicio || '',
-      fecha_fin: item.fecha_fin || '',
-      estado: item.estado || 'inscrito',
+      fecha_aprobacion: item.fecha_aprobacion || '',
+      fecha_emision: item.fecha_emision || '',
+      fecha_vencimiento: item.fecha_vencimiento || '',
       documento_url_resultado: item?.resultado?.documento_url || '',
     })
   }
@@ -376,14 +367,6 @@ export default function ProfileFormacion() {
                     />
                   </label>
                   <label className="space-y-1 text-sm font-medium text-foreground/80">
-                    Estado
-                    <FormDropdown
-                      value={externaForm.estado}
-                      options={estadoOptions}
-                      onChange={(value) => setExternaForm((prev) => ({ ...prev, estado: value }))}
-                    />
-                  </label>
-                  <label className="space-y-1 text-sm font-medium text-foreground/80">
                     Institucion
                     <input className="ef-control" type="text" value={externaForm.institucion} onChange={(event) => setExternaForm((prev) => ({ ...prev, institucion: event.target.value }))} />
                   </label>
@@ -396,12 +379,16 @@ export default function ProfileFormacion() {
                     <input className="ef-control" type="text" value={externaForm.titulo_obtenido} onChange={(event) => setExternaForm((prev) => ({ ...prev, titulo_obtenido: event.target.value }))} />
                   </label>
                   <label className="space-y-1 text-sm font-medium text-foreground/80">
-                    Fecha inicio
-                    <input className="ef-control" type="date" value={externaForm.fecha_inicio} onChange={(event) => setExternaForm((prev) => ({ ...prev, fecha_inicio: event.target.value }))} />
+                    Fecha aprobacion
+                    <input className="ef-control" type="date" value={externaForm.fecha_aprobacion} onChange={(event) => setExternaForm((prev) => ({ ...prev, fecha_aprobacion: event.target.value }))} />
                   </label>
                   <label className="space-y-1 text-sm font-medium text-foreground/80">
-                    Fecha fin
-                    <input className="ef-control" type="date" value={externaForm.fecha_fin} onChange={(event) => setExternaForm((prev) => ({ ...prev, fecha_fin: event.target.value }))} />
+                    Fecha emision
+                    <input className="ef-control" type="date" value={externaForm.fecha_emision} onChange={(event) => setExternaForm((prev) => ({ ...prev, fecha_emision: event.target.value }))} />
+                  </label>
+                  <label className="space-y-1 text-sm font-medium text-foreground/80">
+                    Fecha vencimiento
+                    <input className="ef-control" type="date" value={externaForm.fecha_vencimiento} onChange={(event) => setExternaForm((prev) => ({ ...prev, fecha_vencimiento: event.target.value }))} />
                   </label>
                   <label className="space-y-1 text-sm font-medium text-foreground/80 sm:col-span-2">
                     Documento URL de resultado (opcional)
@@ -431,10 +418,7 @@ export default function ProfileFormacion() {
                     <article key={item.id} className="border border-border rounded-lg px-3 py-2 flex items-center justify-between gap-4">
                       <div>
                         <p className="text-sm font-medium">{item.nombre_programa || item.titulo_obtenido || item.subtipo_formacion || 'Registro externo'}</p>
-                        <p className="text-xs text-foreground/60">{item.institucion || 'Institucion no especificada'} | {item.estado || 'Sin estado'}</p>
-                        {item.legacy_importado && (
-                          <p className="text-[11px] text-amber-700 mt-1">Externa (importada)</p>
-                        )}
+                        <p className="text-xs text-foreground/60">{item.institucion || 'Institucion no especificada'} | Aprobacion: {item.fecha_aprobacion || 'N/D'}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <button type="button" className="px-3 py-1.5 text-xs border border-border rounded-lg" onClick={() => handleEditExterna(item)}>

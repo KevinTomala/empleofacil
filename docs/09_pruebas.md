@@ -37,6 +37,7 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `POST /api/perfil/me/documentos` con mime invalido devuelve `400 INVALID_FILE_TYPE`.
 - `POST /api/perfil/me/documentos` con archivo grande devuelve `400 FILE_TOO_LARGE`.
 - `GET|POST|PUT|DELETE /api/perfil/me/formacion*` validan CRUD por categoria/subtipo.
+- `POST|PUT /api/perfil/me/formacion*` rechazan payload legacy (`estado`, `fecha_inicio`, `fecha_fin`, `matricula_id`, `nivel_id`, `curso_id`, `formacion_origen_id`) con `400 INVALID_PAYLOAD`.
 - `GET|POST|PUT|DELETE /api/perfil/me/educacion-general*` permiten multiples registros academicos.
 - `PUT /api/perfil/me/formacion/:formacionId/resultado` hace upsert y valida `INVALID_RESULTADO_PAYLOAD`.
 - `PUT /api/perfil/me/formacion/:formacionId/resultado` en item no externa devuelve `FORMACION_RESULTADO_NOT_ALLOWED`.
@@ -101,7 +102,7 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
   - `Academica` permite CRUD multiple en `candidatos_educacion_general`.
   - `Externa` usa CRUD de `/api/perfil/me/formacion`.
   - `Certificacion` redirige operacion a `ProfileExperiencia` (certificado laboral por experiencia).
-- En `Externa`, registros legacy importados sin categoria se muestran como `Externa (importada)`.
+- En `Externa`, solo se muestran campos del contrato limpio (`categoria_formacion`, `subtipo_formacion`, `institucion`, `nombre_programa`, `titulo_obtenido`, `fecha_aprobacion`, `fecha_emision`, `fecha_vencimiento`).
 - El dashboard de perfil actualiza progreso total al completar secciones de Fase 2.
 - El drawer de empresa muestra `idiomas`, `experiencia`, `formacion` y `documentos` del candidato.
 

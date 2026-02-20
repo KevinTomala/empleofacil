@@ -41,16 +41,9 @@ export function getPerfilErrorMessage(error, fallbackMessage = 'Ocurrio un error
 }
 
 export function normalizeFormacionItem(item) {
-  const hasExternalSignal = Boolean(
-    item?.matricula_id || item?.nivel_id || item?.curso_id || item?.formacion_origen_id
-  )
-  const categoriaUi = item?.categoria_ui || item?.categoria_formacion || (hasExternalSignal ? 'externa' : null)
-  const legacyImportado = item?.legacy_importado ?? (!item?.categoria_formacion && hasExternalSignal)
-
   return {
     ...item,
-    categoria_ui: categoriaUi,
-    legacy_importado: Boolean(legacyImportado),
+    categoria_ui: item?.categoria_formacion || null,
   }
 }
 

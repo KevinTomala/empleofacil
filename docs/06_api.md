@@ -400,11 +400,10 @@ Errores esperados:
 - Body formacion (externa):
   - `categoria_formacion` (`externa`)
   - `subtipo_formacion`: `curso|ministerio|chofer_profesional`
-  - `estado` (`inscrito|cursando|egresado|acreditado|anulado|reprobado`)
-  - `institucion`, `nombre_programa`, `titulo_obtenido`, `fecha_inicio`, `fecha_fin`
-  - `entidad_emisora`, `numero_registro`, `fecha_emision`, `fecha_vencimiento`
-- Nota compatibilidad:
-  - Registros legacy importados pueden venir sin `categoria_formacion`; se exponen como `categoria_ui = externa`.
+  - `institucion`, `nombre_programa`, `titulo_obtenido`
+  - `entidad_emisora`, `numero_registro`, `fecha_aprobacion`, `fecha_emision`, `fecha_vencimiento`
+- Breaking change:
+  - Ya no se aceptan ni se devuelven: `estado`, `fecha_inicio`, `fecha_fin`, `matricula_id`, `nivel_id`, `curso_id`, `formacion_origen_id`.
 - Errores:
   - `400 INVALID_FORMACION_ID`
   - `404 FORMACION_NOT_FOUND`

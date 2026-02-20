@@ -60,6 +60,9 @@ Rutas registradas actualmente:
   - `formacion` (CRUD relacional por item)
   - `formacion/:formacionId/resultado` (upsert 1:1)
   - `documentos` (CRUD + upload multipart con `multer`)
+- Contrato actual de `formacion` (externa):
+  - columnas legacy removidas en dominio (`matricula_id`, `nivel_id`, `curso_id`, `formacion_origen_id`, `estado`, `fecha_inicio`, `fecha_fin`).
+  - fechas vigentes: `fecha_aprobacion`, `fecha_emision`, `fecha_vencimiento`.
 - Archivos de documentos:
   - destino local: `backend/uploads/candidatos/`
   - acceso publico interno: `/uploads/*` (servido por Express)

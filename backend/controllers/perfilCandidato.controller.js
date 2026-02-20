@@ -38,18 +38,13 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const IDIOMA_NIVELES = ['Basico', 'Intermedio', 'Avanzado', 'Nativo'];
 const CONTRATO_TIPOS = ['temporal', 'indefinido', 'practicante', 'otro'];
-const FORMACION_CATEGORIAS = ['academica', 'externa', 'certificacion'];
+const FORMACION_CATEGORIAS = ['externa'];
 const FORMACION_SUBTIPOS = {
-  academica: ['escuela', 'colegio', 'universidad', 'tecnologico'],
-  externa: ['curso', 'ministerio', 'chofer_profesional'],
-  certificacion: ['certificacion']
+  externa: ['curso', 'ministerio', 'chofer_profesional']
 };
 const FORMACION_SUBTIPOS_ALL = [
-  ...FORMACION_SUBTIPOS.academica,
-  ...FORMACION_SUBTIPOS.externa,
-  ...FORMACION_SUBTIPOS.certificacion
+  ...FORMACION_SUBTIPOS.externa
 ];
-const FORMACION_ESTADOS = ['inscrito', 'cursando', 'egresado', 'acreditado', 'anulado', 'reprobado'];
 const RESULTADO_CURSO = ['aprobado', 'reprobado', 'pendiente'];
 const FUENTE_CURSO = ['classroom', 'manual', 'externo'];
 const EXAMEN_ESTADO = ['no_presentado', 'primera_oportunidad', 'segunda_oportunidad'];
@@ -368,9 +363,7 @@ function validateExperienciaPayload(payload, { partial = false } = {}) {
 
 function validateFormacionPayload(payload, { partial = false } = {}) {
   const allowed = [
-    'estado',
-    'fecha_inicio',
-    'fecha_fin',
+    'fecha_aprobacion',
     'activo',
     'categoria_formacion',
     'subtipo_formacion',
@@ -389,13 +382,10 @@ function validateFormacionPayload(payload, { partial = false } = {}) {
   for (const [key, raw] of Object.entries(payload)) {
     const value = toNullIfEmptyString(raw);
 
-    if (key === 'estado') {
-      if (!isEnum(value, FORMACION_ESTADOS)) return null;
-      normalized.estado = value;
-    } else if (key === 'activo') {
+    if (key === 'activo') {
       if (!isTinyIntLike(value)) return null;
       normalized.activo = normalizeTinyInt(value);
-    } else if (['fecha_inicio', 'fecha_fin', 'fecha_emision', 'fecha_vencimiento'].includes(key)) {
+    } else if (['fecha_aprobacion', 'fecha_emision', 'fecha_vencimiento'].includes(key)) {
       if (!isNullableDate(value)) return null;
       normalized[key] = value;
     } else if (key === 'categoria_formacion') {

@@ -10,13 +10,10 @@ async function listCandidatos(req, res) {
     SELECT 1
     FROM candidatos_formaciones f
     WHERE f.candidato_id = e.id
-      AND f.estado = "acreditado"
+      AND f.categoria_formacion = "externa"
       AND f.activo = 1
       AND f.deleted_at IS NULL
-      AND (
-        f.fecha_aprobacion IS NOT NULL
-        OR (f.fecha_fin IS NOT NULL AND f.fecha_fin <= CURDATE())
-      )
+      AND f.fecha_aprobacion IS NOT NULL
   )`;
   const params = [];
   if (q) {

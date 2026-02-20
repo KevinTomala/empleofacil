@@ -369,19 +369,12 @@ CREATE TABLE candidatos_experiencia (
   INDEX idx_candidatos_experiencia_actual (actualmente_trabaja)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Exportar de ademy con nuevos campos, tabla limpia
 CREATE TABLE candidatos_formaciones (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   candidato_id BIGINT NOT NULL,
-  matricula_id BIGINT NULL,
-  nivel_id BIGINT NULL,
-  curso_id BIGINT NULL,
-  formacion_origen_id BIGINT NULL,
-  estado ENUM('inscrito','cursando','egresado','acreditado','anulado','reprobado') DEFAULT 'inscrito',
-  fecha_inicio DATE,
-  fecha_fin DATE,
-  fecha_aprobacion DATE NULL,
-  categoria_formacion ENUM('academica','externa','certificacion') NULL,
-  subtipo_formacion ENUM('escuela','colegio','universidad','tecnologico','curso','ministerio','chofer_profesional','certificacion') NULL,
+  categoria_formacion ENUM('externa') NULL,
+  subtipo_formacion ENUM('curso','ministerio','chofer_profesional') NULL,
   institucion VARCHAR(200) NULL,
   nombre_programa VARCHAR(200) NULL,
   titulo_obtenido VARCHAR(200) NULL,
@@ -389,12 +382,12 @@ CREATE TABLE candidatos_formaciones (
   numero_registro VARCHAR(120) NULL,
   fecha_emision DATE NULL,
   fecha_vencimiento DATE NULL,
+  fecha_aprobacion DATE NULL,
   activo TINYINT(1) DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL,
   deleted_at DATETIME NULL,
-  CONSTRAINT fk_candidatos_formaciones_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
-  CONSTRAINT fk_candidatos_formaciones_self FOREIGN KEY (formacion_origen_id) REFERENCES candidatos_formaciones(id) ON DELETE SET NULL
+  CONSTRAINT fk_candidatos_formaciones_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE candidatos_formacion_resultados (

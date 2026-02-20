@@ -143,10 +143,11 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId) {
     ),
     db.query(
       `SELECT
-        id, matricula_id, nivel_id, curso_id, estado, fecha_inicio, fecha_fin, fecha_aprobacion, activo
+        id, categoria_formacion, subtipo_formacion, institucion, nombre_programa, titulo_obtenido,
+        fecha_emision, fecha_vencimiento, fecha_aprobacion, activo
       FROM candidatos_formaciones
       WHERE candidato_id = ? AND deleted_at IS NULL
-      ORDER BY COALESCE(fecha_aprobacion, fecha_fin, fecha_inicio) DESC, id DESC`,
+      ORDER BY COALESCE(fecha_aprobacion, fecha_emision, fecha_vencimiento) DESC, id DESC`,
       [estudianteId]
     ),
     db.query(
@@ -251,9 +252,10 @@ async function generarHojaVidaPdfPorEstudianteId(estudianteId) {
           (item, idx) => `
           <div class="item">
             <div class="item-title">${idx + 1}. Formacion #${escapeHtml(textOrDash(item.id))}</div>
-            <div>Estado: ${escapeHtml(textOrDash(item.estado))}</div>
-            <div>Nivel ID: ${escapeHtml(textOrDash(item.nivel_id))} | Curso ID: ${escapeHtml(textOrDash(item.curso_id))} | Matricula ID: ${escapeHtml(textOrDash(item.matricula_id))}</div>
-            <div>Fechas: ${escapeHtml(formatDate(item.fecha_inicio))} - ${escapeHtml(formatDate(item.fecha_fin))} | Aprobacion: ${escapeHtml(formatDate(item.fecha_aprobacion))}</div>
+            <div>Categoria: ${escapeHtml(textOrDash(item.categoria_formacion))} | Subtipo: ${escapeHtml(textOrDash(item.subtipo_formacion))}</div>
+            <div>Institucion: ${escapeHtml(textOrDash(item.institucion))} | Programa: ${escapeHtml(textOrDash(item.nombre_programa))}</div>
+            <div>Titulo: ${escapeHtml(textOrDash(item.titulo_obtenido))}</div>
+            <div>Fechas: Aprobacion ${escapeHtml(formatDate(item.fecha_aprobacion))} | Emision ${escapeHtml(formatDate(item.fecha_emision))} | Vencimiento ${escapeHtml(formatDate(item.fecha_vencimiento))}</div>
           </div>
         `
         )
