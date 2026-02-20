@@ -26,6 +26,26 @@ function normalizeDocumento(value) {
   return String(value || '').trim().replace(/[^0-9A-Za-z]/g, '');
 }
 
+function toDateOnly(value) {
+  if (!isPresent(value)) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+}
+
+function toTinyInt(value) {
+  return value === 1 || value === '1' || value === true ? 1 : 0;
+}
+
+function toPositiveIntOrNull(value) {
+  if (!isPresent(value)) return null;
+  const num = Number(value);
+  return Number.isInteger(num) && num > 0 ? num : null;
+}
+
 function resolveCandidatoIdentity(item) {
   const emailRaw = String(item?.email || item?.contacto?.email || '').trim();
   const documento = normalizeDocumento(item?.documento_identidad);
@@ -256,23 +276,54 @@ async function upsertSimpleByLatest(conn, table, estudianteId, data, allowedKeys
   );
 }
 
+async function replaceEducacionGeneral(conn, estudianteId, educacionItems) {
+  if (!Array.isArray(educacionItems)) return;
+  await conn.query('DELETE FROM candidatos_educacion_general WHERE candidato_id = ?', [estudianteId]);
+  for (const edu of educacionItems) {
+    const nivelEstudio = isPresent(edu?.nivel_estudio) ? String(edu.nivel_estudio).trim() : null;
+    const institucion = isPresent(edu?.institucion) ? String(edu.institucion).trim() : null;
+    const tituloObtenido = isPresent(edu?.titulo_obtenido) ? String(edu.titulo_obtenido).trim() : null;
+
+    if (!nivelEstudio && !institucion && !tituloObtenido) continue;
+
+    await conn.query(
+      `INSERT INTO candidatos_educacion_general (
+        candidato_id, nivel_estudio, institucion, titulo_obtenido
+      ) VALUES (?, ?, ?, ?)`,
+      [estudianteId, nivelEstudio, institucion, tituloObtenido]
+    );
+  }
+}
+
 async function replaceExperiencias(conn, estudianteId, experiencias) {
   if (!Array.isArray(experiencias)) return;
   await conn.query('DELETE FROM candidatos_experiencia WHERE candidato_id = ?', [estudianteId]);
   for (const exp of experiencias) {
+    const empresaId = toPositiveIntOrNull(exp?.empresa_id ?? exp?.empresaId ?? null);
+    const cargo = isPresent(exp?.cargo) ? String(exp.cargo).trim() : null;
+    const fechaInicio = toDateOnly(exp?.fecha_inicio ?? exp?.fechaInicio ?? null);
+    const fechaFin = toDateOnly(exp?.fecha_fin ?? exp?.fechaFin ?? null);
+    const actualmenteTrabaja = toTinyInt(exp?.actualmente_trabaja ?? exp?.actualmenteTrabaja ?? 0);
+    const tipoContrato = isPresent(exp?.tipo_contrato) ? String(exp.tipo_contrato).trim() : null;
+    const descripcion = isPresent(exp?.descripcion) ? String(exp.descripcion).trim() : null;
+
+    if (!empresaId && !cargo && !fechaInicio && !fechaFin && !tipoContrato && !descripcion && !actualmenteTrabaja) {
+      continue;
+    }
+
     await conn.query(
       `INSERT INTO candidatos_experiencia (
         candidato_id, empresa_id, cargo, fecha_inicio, fecha_fin, actualmente_trabaja, tipo_contrato, descripcion
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         estudianteId,
-        exp.empresa_id || null,
-        exp.cargo || null,
-        exp.fecha_inicio || null,
-        exp.fecha_fin || null,
-        exp.actualmente_trabaja ? 1 : 0,
-        exp.tipo_contrato || null,
-        exp.descripcion || null
+        empresaId,
+        cargo,
+        fechaInicio,
+        fechaFin,
+        actualmenteTrabaja,
+        tipoContrato,
+        descripcion
       ]
     );
   }
@@ -507,11 +558,17 @@ async function runAcreditadosImport(rawParams = {}) {
               'movilizacion', 'tipo_vehiculo', 'licencia', 'disp_viajar', 'disp_turnos', 'disp_fines_semana'
             ]);
 
-            await upsertSimpleByLatest(conn, 'candidatos_educacion_general', estudianteId, item.educacion_general, [
-              'nivel_estudio', 'institucion', 'titulo_obtenido'
-            ]);
+            const educacionHistorial = Array.isArray(item.educacion_general_historial)
+              ? item.educacion_general_historial
+              : (item.educacion_general ? [item.educacion_general] : null);
+            await replaceEducacionGeneral(conn, estudianteId, educacionHistorial);
 
-            await replaceExperiencias(conn, estudianteId, item.experiencia);
+            const experienciaHistorial = Array.isArray(item.experiencia)
+              ? item.experiencia
+              : (Array.isArray(item.experiencia_historial)
+                ? item.experiencia_historial
+                : (item.experiencia ? [item.experiencia] : null));
+            await replaceExperiencias(conn, estudianteId, experienciaHistorial);
             await upsertDocumentos(conn, estudianteId, item.documentos);
             await upsertFormaciones(conn, estudianteId, item);
 
