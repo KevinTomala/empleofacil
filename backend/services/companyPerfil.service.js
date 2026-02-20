@@ -1,5 +1,49 @@
 const db = require('../db');
 
+const VALID_ROLES_EMPRESA = ['admin', 'reclutador', 'visor'];
+const VALID_ESTADOS_EMPRESA_USUARIO = ['activo', 'inactivo'];
+const VALID_MODALIDADES = ['presencial', 'hibrido', 'remoto'];
+const VALID_NIVELES_EXPERIENCIA = ['junior', 'semi_senior', 'senior'];
+
+let ensuredPreferenciasTable = false;
+
+function createServiceError(code, message) {
+  const error = new Error(message || code);
+  error.code = code;
+  return error;
+}
+
+function parseJsonArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function normalizeStringArray(values) {
+  return Array.from(
+    new Set(
+      (Array.isArray(values) ? values : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function sanitizeModalidades(values) {
+  const normalized = normalizeStringArray(values).filter((item) => VALID_MODALIDADES.includes(item));
+  return normalized;
+}
+
+function sanitizeNivelesExperiencia(values) {
+  const normalized = normalizeStringArray(values).filter((item) => VALID_NIVELES_EXPERIENCIA.includes(item));
+  return normalized;
+}
+
 async function findEmpresaIdByUserId(userId) {
   const [rows] = await db.query(
     `SELECT e.id
@@ -122,17 +166,6 @@ async function resolveEmpresaIdForUser(userId, { autoCreate = false } = {}) {
   if (attached) return attached;
 
   return createEmpresaForUser(userId);
-}
-
-function parseJsonArray(value) {
-  if (!value) return [];
-  if (Array.isArray(value)) return value;
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (_error) {
-    return [];
-  }
 }
 
 function buildResumen(empresa, perfil) {
@@ -296,10 +329,311 @@ async function saveResumenPerfil(empresaId, resumen) {
   });
 }
 
+async function ensureEmpresasPreferenciasTable() {
+  if (ensuredPreferenciasTable) return;
+
+  await db.query(
+    `CREATE TABLE IF NOT EXISTS empresas_preferencias (
+      empresa_id BIGINT PRIMARY KEY,
+      modalidades_permitidas JSON NULL,
+      niveles_experiencia JSON NULL,
+      observaciones TEXT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT fk_empresas_preferencias_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  );
+
+  ensuredPreferenciasTable = true;
+}
+
+async function getEmpresaPreferenciasById(empresaId) {
+  await ensureEmpresasPreferenciasTable();
+
+  const [rows] = await db.query(
+    `SELECT empresa_id, modalidades_permitidas, niveles_experiencia, observaciones
+     FROM empresas_preferencias
+     WHERE empresa_id = ?
+     LIMIT 1`,
+    [empresaId]
+  );
+
+  const row = rows[0];
+  if (!row) {
+    return {
+      empresa_id: empresaId,
+      modalidades_permitidas: [],
+      niveles_experiencia: [],
+      observaciones: null
+    };
+  }
+
+  return {
+    empresa_id: row.empresa_id,
+    modalidades_permitidas: sanitizeModalidades(parseJsonArray(row.modalidades_permitidas)),
+    niveles_experiencia: sanitizeNivelesExperiencia(parseJsonArray(row.niveles_experiencia)),
+    observaciones: row.observaciones || null
+  };
+}
+
+async function upsertEmpresaPreferenciasById(empresaId, patch) {
+  await ensureEmpresasPreferenciasTable();
+
+  const modalidades = sanitizeModalidades(patch.modalidades_permitidas);
+  const niveles = sanitizeNivelesExperiencia(patch.niveles_experiencia);
+  const observaciones = patch.observaciones ?? null;
+
+  await db.query(
+    `INSERT INTO empresas_preferencias (empresa_id, modalidades_permitidas, niveles_experiencia, observaciones)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       modalidades_permitidas = VALUES(modalidades_permitidas),
+       niveles_experiencia = VALUES(niveles_experiencia),
+       observaciones = VALUES(observaciones)`,
+    [
+      empresaId,
+      JSON.stringify(modalidades),
+      JSON.stringify(niveles),
+      observaciones
+    ]
+  );
+
+  return getEmpresaPreferenciasById(empresaId);
+}
+
+async function listEmpresaUsuariosByEmpresaId(empresaId) {
+  const [rows] = await db.query(
+    `SELECT
+      eu.id,
+      eu.empresa_id,
+      eu.usuario_id,
+      eu.rol_empresa,
+      eu.principal,
+      eu.estado,
+      u.nombre_completo AS nombre,
+      u.email
+     FROM empresas_usuarios eu
+     INNER JOIN usuarios u
+       ON u.id = eu.usuario_id
+     INNER JOIN empresas e
+       ON e.id = eu.empresa_id
+     WHERE eu.empresa_id = ?
+       AND e.deleted_at IS NULL
+     ORDER BY eu.principal DESC, eu.id ASC`,
+    [empresaId]
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    empresa_id: row.empresa_id,
+    usuario_id: row.usuario_id,
+    rol_empresa: row.rol_empresa,
+    principal: Number(row.principal) === 1,
+    estado: row.estado,
+    nombre: row.nombre,
+    email: row.email
+  }));
+}
+
+async function countActiveAdmins(empresaId, connection = db) {
+  const [rows] = await connection.query(
+    `SELECT COUNT(*) AS total
+     FROM empresas_usuarios
+     WHERE empresa_id = ?
+       AND estado = 'activo'
+       AND rol_empresa = 'admin'`,
+    [empresaId]
+  );
+  return Number(rows[0]?.total || 0);
+}
+
+async function getEmpresaUsuarioById(empresaId, empresaUsuarioId, connection = db) {
+  const [rows] = await connection.query(
+    `SELECT id, empresa_id, usuario_id, rol_empresa, principal, estado
+     FROM empresas_usuarios
+     WHERE id = ?
+       AND empresa_id = ?
+     LIMIT 1`,
+    [empresaUsuarioId, empresaId]
+  );
+
+  return rows[0] || null;
+}
+
+async function findUsuarioByEmail(email, connection = db) {
+  const [rows] = await connection.query(
+    `SELECT id, email, nombre_completo, estado
+     FROM usuarios
+     WHERE LOWER(email) = LOWER(?)
+     LIMIT 1`,
+    [email]
+  );
+
+  return rows[0] || null;
+}
+
+async function createEmpresaUsuarioByEmail(empresaId, { email, rolEmpresa = 'reclutador', principal = false }) {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const usuario = await findUsuarioByEmail(email, connection);
+    if (!usuario) {
+      throw createServiceError('USER_NOT_FOUND');
+    }
+
+    const [existing] = await connection.query(
+      `SELECT id
+       FROM empresas_usuarios
+       WHERE empresa_id = ?
+         AND usuario_id = ?
+       LIMIT 1`,
+      [empresaId, usuario.id]
+    );
+
+    if (existing.length) {
+      throw createServiceError('USER_ALREADY_LINKED');
+    }
+
+    if (principal) {
+      await connection.query(
+        `UPDATE empresas_usuarios
+         SET principal = 0
+         WHERE empresa_id = ?`,
+        [empresaId]
+      );
+    }
+
+    await connection.query(
+      `INSERT INTO empresas_usuarios (empresa_id, usuario_id, rol_empresa, principal, estado)
+       VALUES (?, ?, ?, ?, 'activo')`,
+      [empresaId, usuario.id, rolEmpresa, principal ? 1 : 0]
+    );
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  return listEmpresaUsuariosByEmpresaId(empresaId);
+}
+
+async function updateEmpresaUsuarioById(empresaId, empresaUsuarioId, patch) {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const current = await getEmpresaUsuarioById(empresaId, empresaUsuarioId, connection);
+    if (!current) {
+      throw createServiceError('LINK_NOT_FOUND');
+    }
+
+    const nextRol = patch.rol_empresa ?? current.rol_empresa;
+    const nextEstado = patch.estado ?? current.estado;
+    const nextPrincipal = patch.principal === undefined ? Number(current.principal) === 1 : Boolean(patch.principal);
+
+    const activeAdmins = await countActiveAdmins(empresaId, connection);
+    const isCurrentActiveAdmin = current.estado === 'activo' && current.rol_empresa === 'admin';
+    const willRemainActiveAdmin = nextEstado === 'activo' && nextRol === 'admin';
+
+    if (isCurrentActiveAdmin && !willRemainActiveAdmin && activeAdmins <= 1) {
+      throw createServiceError('LAST_ADMIN_REQUIRED');
+    }
+
+    if (patch.principal === true) {
+      await connection.query(
+        `UPDATE empresas_usuarios
+         SET principal = 0
+         WHERE empresa_id = ?`,
+        [empresaId]
+      );
+    }
+
+    await connection.query(
+      `UPDATE empresas_usuarios
+       SET rol_empresa = ?,
+           estado = ?,
+           principal = ?
+       WHERE id = ?
+         AND empresa_id = ?`,
+      [nextRol, nextEstado, nextPrincipal ? 1 : 0, empresaUsuarioId, empresaId]
+    );
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  return listEmpresaUsuariosByEmpresaId(empresaId);
+}
+
+async function deactivateEmpresaUsuarioById(empresaId, empresaUsuarioId) {
+  return updateEmpresaUsuarioById(empresaId, empresaUsuarioId, { estado: 'inactivo' });
+}
+
+async function softDeleteEmpresaById(empresaId) {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query(
+      `SELECT id
+       FROM empresas
+       WHERE id = ?
+         AND deleted_at IS NULL
+       LIMIT 1`,
+      [empresaId]
+    );
+
+    if (!rows.length) {
+      throw createServiceError('EMPRESA_NOT_FOUND');
+    }
+
+    await connection.query(
+      `UPDATE empresas
+       SET activo = 0,
+           deleted_at = NOW()
+       WHERE id = ?`,
+      [empresaId]
+    );
+
+    await connection.query(
+      `UPDATE empresas_usuarios
+       SET estado = 'inactivo'
+       WHERE empresa_id = ?`,
+      [empresaId]
+    );
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 module.exports = {
+  VALID_ROLES_EMPRESA,
+  VALID_ESTADOS_EMPRESA_USUARIO,
+  VALID_MODALIDADES,
+  VALID_NIVELES_EXPERIENCIA,
   resolveEmpresaIdForUser,
   getPerfilByEmpresaId,
   updateEmpresa,
   upsertPerfilEmpresa,
-  saveResumenPerfil
+  saveResumenPerfil,
+  getEmpresaPreferenciasById,
+  upsertEmpresaPreferenciasById,
+  listEmpresaUsuariosByEmpresaId,
+  createEmpresaUsuarioByEmail,
+  updateEmpresaUsuarioById,
+  deactivateEmpresaUsuarioById,
+  softDeleteEmpresaById
 };

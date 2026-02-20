@@ -24,9 +24,9 @@ empleofacil/
 Estructura real en `backend/`:
 - `index.js`: arranque HTTP, CORS, rutas y scheduler.
 - `db.js`: pool MySQL, retries de conexion (`waitForConnection`).
-- `routes/`: `auth`, `candidatos`, `perfilCandidato`, `hojaVida`, `integraciones`.
+- `routes/`: `auth`, `candidatos`, `perfilCandidato`, `hojaVida`, `companyPerfil`, `verificaciones`, `integraciones`.
 - `controllers/`: logica HTTP por modulo.
-- `services/`: perfil candidato, integracion Ademy y armado/PDF de hoja de vida.
+- `services/`: perfil candidato, perfil empresa, verificaciones, integracion Ademy y armado/PDF de hoja de vida.
 - `middlewares/`: autenticacion y control de rol.
 - `jobs/ademySync.job.js`: cron de importacion incremental.
 
@@ -36,6 +36,16 @@ Estructura real en `backend/`:
 3. `auth.middleware` valida JWT y `requireRole` bloquea accesos por rol.
 4. Integraciones usa un lock MySQL (`GET_LOCK`) para evitar sync concurrentes.
 5. Si `ADEMY_SYNC_ENABLED=true`, corre cron y opcionalmente un sync al iniciar.
+
+### Perfil empresa
+- El modulo `/api/company/perfil/me` concentra:
+  - datos generales del perfil de empresa,
+  - gestion de logo,
+  - resumen de completitud calculado en backend,
+  - gestion de usuarios/reclutadores (`empresas_usuarios`),
+  - preferencias de contratacion (`empresas_preferencias`),
+  - baja logica de empresa (`soft delete`).
+- El frontend en `/app/company/empresa` consume este modulo y no maneja facturacion en el alcance actual.
 
 ## Frontend
 - Stack: React + Vite + Tailwind CSS v4.

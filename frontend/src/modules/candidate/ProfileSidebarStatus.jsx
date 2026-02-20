@@ -1,4 +1,4 @@
-﻿import { AlertCircle, CheckCircle2, Lock } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Lock } from 'lucide-react'
 import {
   buildProfileSections,
   getProfileProgressMetrics,

@@ -1,4 +1,4 @@
-﻿import { AlertCircle, CheckCircle2, Lock } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Lock } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Header from '../../components/Header'

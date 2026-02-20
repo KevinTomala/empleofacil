@@ -86,7 +86,7 @@
 - Seccion Vacantes (empresa) en `/app/company/vacantes` incluye listado con estado, filtros clave, acciones rapidas y metricas por vacante.
 - Seccion Candidatos (empresa) en `/app/company/candidatos` incluye listado por vacante, estados del proceso, filtros potentes y acciones en lista.
 - Seccion Mensajes (empresa) en `/app/company/mensajes` incluye bandeja, conversacion rapida y plantillas (invitacion, seguimiento, descarte) con contexto visible de vacante.
-- Seccion Perfil (empresa) en `/app/company/empresa` agrupa perfil, usuarios, preferencias, verificacion y facturacion, con indicador de avance (40/70/100).
+- Seccion Perfil (empresa) en `/app/company/empresa` agrupa perfil, usuarios, preferencias y verificacion, con indicador de avance desde backend.
 - Modulo `dashboard` reservado en `src/modules/dashboard/` (pendiente de contenido).
 - Perfil candidato (frontend):
 - Ruta principal: `/app/candidate/perfil`.

@@ -1,4 +1,4 @@
-﻿const {
+const {
   findCandidatoIdByUserId,
   existsCandidato,
   getPerfilByCandidatoId,

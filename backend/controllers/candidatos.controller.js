@@ -1,4 +1,4 @@
-﻿const db = require('../db');
+const db = require('../db');
 
 async function listCandidatos(req, res) {
   const page = Math.max(Number(req.query.page || 1), 1);

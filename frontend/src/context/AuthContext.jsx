@@ -8,6 +8,8 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState('')
   const [loading, setLoading] = useState(false)
   const [ready, setReady] = useState(false)
+  const [hasCompanyAccess, setHasCompanyAccess] = useState(false)
+  const [companyAccessReady, setCompanyAccessReady] = useState(false)
 
   useEffect(() => {
     const storedUser = sessionStorage.getItem('auth_user')
@@ -31,6 +33,37 @@ export function AuthProvider({ children }) {
     }
     setReady(true)
   }, [])
+
+  const refreshCompanyAccess = async () => {
+    if (!user || !token) {
+      setHasCompanyAccess(false)
+      setCompanyAccessReady(true)
+      return false
+    }
+
+    setCompanyAccessReady(false)
+    try {
+      await apiRequest('/api/company/perfil/me')
+      setHasCompanyAccess(true)
+      setCompanyAccessReady(true)
+      return true
+    } catch (error) {
+      if (error?.status === 403 || error?.status === 404) {
+        setHasCompanyAccess(false)
+        setCompanyAccessReady(true)
+        return false
+      }
+      setHasCompanyAccess(false)
+      setCompanyAccessReady(true)
+      return false
+    }
+  }
+
+  useEffect(() => {
+    if (!ready) return
+    refreshCompanyAccess()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, token, user?.id])
 
   const login = async (identifier, password) => {
     try {
@@ -78,13 +111,24 @@ export function AuthProvider({ children }) {
   const logout = () => {
     setUser(null)
     setToken('')
+    setHasCompanyAccess(false)
+    setCompanyAccessReady(true)
     sessionStorage.removeItem('auth_user')
     sessionStorage.removeItem('auth_token')
   }
 
   const value = useMemo(
-    () => ({ user, token, login, logout, loading, ready }),
-    [user, token, loading, ready]
+    () => ({
+      user,
+      token,
+      login,
+      logout,
+      loading,
+      ready,
+      hasCompanyAccess,
+      companyAccessReady
+    }),
+    [user, token, loading, ready, hasCompanyAccess, companyAccessReady]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -148,7 +148,7 @@ function App() {
           <Route
             path="/app/company"
             element={
-              <ProtectedRoute roles={['empresa', 'superadmin']}>
+              <ProtectedRoute>
                 <CompanyHome />
               </ProtectedRoute>
             }
@@ -156,7 +156,7 @@ function App() {
           <Route
             path="/app/company/vacantes"
             element={
-              <ProtectedRoute roles={['empresa', 'superadmin']}>
+              <ProtectedRoute>
                 <CompanyVacantes />
               </ProtectedRoute>
             }
@@ -164,7 +164,7 @@ function App() {
           <Route
             path="/app/company/candidatos"
             element={
-              <ProtectedRoute roles={['empresa', 'superadmin']}>
+              <ProtectedRoute>
                 <CompanyCandidatos />
               </ProtectedRoute>
             }
@@ -172,7 +172,7 @@ function App() {
           <Route
             path="/app/company/mensajes"
             element={
-              <ProtectedRoute roles={['empresa', 'superadmin']}>
+              <ProtectedRoute>
                 <CompanyMensajes />
               </ProtectedRoute>
             }
@@ -180,7 +180,7 @@ function App() {
           <Route
             path="/app/company/empresa"
             element={
-              <ProtectedRoute roles={['empresa', 'superadmin']}>
+              <ProtectedRoute>
                 <CompanyPerfil />
               </ProtectedRoute>
             }
