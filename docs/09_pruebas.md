@@ -32,6 +32,11 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `GET /api/perfil/me/experiencia` responde `200` con `{ items: [] }`.
 - `POST /api/perfil/me/experiencia` crea experiencia y devuelve `201`.
 - `PUT/DELETE /api/perfil/me/experiencia/:experienciaId` validan ownership y responden `404` si no existe.
+- En experiencia importada ADEMY:
+  - `empresa_origen='ademy'` y `empresa_origen_id` deben persistirse.
+  - `empresa_id` debe quedar `NULL` si no existe mapeo manual local.
+  - no deben crearse empresas/usuarios locales automaticamente.
+- Si existe mapeo en `integracion_ademy_empresas_empleofacil`, `empresa_id` debe llenarse en reimportacion.
 - `POST /api/perfil/me/documentos` (multipart) crea metadata + archivo.
 - `POST /api/perfil/me/documentos` sin archivo devuelve `400 FILE_REQUIRED`.
 - `POST /api/perfil/me/documentos` con mime invalido devuelve `400 INVALID_FILE_TYPE`.

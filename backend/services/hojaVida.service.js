@@ -135,7 +135,7 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId) {
     ),
     db.query(
       `SELECT
-        id, empresa_id, cargo, fecha_inicio, fecha_fin, actualmente_trabaja, tipo_contrato, descripcion
+        id, empresa_id, empresa_origen, empresa_origen_id, empresa_nombre, cargo, fecha_inicio, fecha_fin, actualmente_trabaja, tipo_contrato, descripcion
       FROM candidatos_experiencia
       WHERE candidato_id = ? AND deleted_at IS NULL
       ORDER BY COALESCE(fecha_fin, CURDATE()) DESC, fecha_inicio DESC, id DESC`,
@@ -236,7 +236,8 @@ async function generarHojaVidaPdfPorEstudianteId(estudianteId) {
           (exp, idx) => `
           <div class="item">
             <div class="item-title">${idx + 1}. ${escapeHtml(textOrDash(exp.cargo))}</div>
-            <div>Empresa ID: ${escapeHtml(textOrDash(exp.empresa_id))}</div>
+            <div>Empresa: ${escapeHtml(textOrDash(exp.empresa_nombre || exp.empresa_id))}</div>
+            <div>Origen empresa: ${escapeHtml(textOrDash(exp.empresa_origen))} | ID origen: ${escapeHtml(textOrDash(exp.empresa_origen_id))}</div>
             <div>Tipo de contrato: ${escapeHtml(textOrDash(exp.tipo_contrato))}</div>
             <div>Periodo: ${escapeHtml(formatDate(exp.fecha_inicio))} - ${escapeHtml(exp.actualmente_trabaja ? 'Actual' : formatDate(exp.fecha_fin))}</div>
             <div>Descripcion: ${escapeHtml(textOrDash(exp.descripcion))}</div>

@@ -38,11 +38,21 @@ docker compose exec -T mysql mysql -u root -p"$MYSQL_ROOT_PASSWORD" empleof_db <
 ```bash
 docker compose exec -T mysql mysql -u root -p"$MYSQL_ROOT_PASSWORD" empleof_db < docs/sql/2026-02-20_integracion_ademy_promociones_institucion.sql
 ```
-3. Validar estructura minima:
+3. Ejecutar migracion de experiencia ADEMY (origen empresa + mapeo manual):
+```bash
+docker compose exec -T mysql mysql -u root -p"$MYSQL_ROOT_PASSWORD" empleof_db < docs/sql/2026-02-21_alter_candidatos_experiencia_origen_ademy.sql
+```
+4. Opcional: cargar vinculos manuales `origen_empresa_id -> empresa_id`:
+```bash
+docker compose exec -T mysql mysql -u root -p"$MYSQL_ROOT_PASSWORD" empleof_db < docs/sql/2026-02-21_integracion_ademy_empresas_empleofacil.sql
+```
+5. Validar estructura minima:
 ```sql
 SHOW COLUMNS FROM candidatos_formaciones LIKE 'centro_cliente_id';
 SHOW TABLES LIKE 'centros_capacitacion';
 SHOW TABLES LIKE 'integracion_ademy_promociones_institucion';
+SHOW COLUMNS FROM candidatos_experiencia LIKE 'empresa_origen_id';
+SHOW TABLES LIKE 'integracion_ademy_empresas_empleofacil';
 ```
 
 ## Logs utiles

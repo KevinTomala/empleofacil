@@ -25,6 +25,7 @@ import AdminHome from './modules/admin/AdminHome'
 import AdminRolesPermisos from './modules/admin/AdminRolesPermisos'
 import AdminCuentas from './modules/admin/AdminCuentas'
 import AdminAuditoria from './modules/admin/AdminAuditoria'
+import AdminEmpresasMapeo from './modules/admin/AdminEmpresasMapeo'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -214,6 +215,14 @@ function App() {
             element={
               <ProtectedRoute roles={['administrador', 'superadmin']}>
                 <AdminAuditoria />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/admin/mapeo-empresas"
+            element={
+              <ProtectedRoute roles={['administrador', 'superadmin']}>
+                <AdminEmpresasMapeo />
               </ProtectedRoute>
             }
           />

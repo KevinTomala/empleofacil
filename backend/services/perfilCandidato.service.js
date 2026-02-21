@@ -371,6 +371,9 @@ async function listExperiencias(candidatoId) {
         e.id,
         e.candidato_id,
         e.empresa_id,
+        e.empresa_origen,
+        e.empresa_origen_id,
+        e.empresa_nombre,
         e.cargo,
         e.fecha_inicio,
         e.fecha_fin,
@@ -404,6 +407,9 @@ async function listExperiencias(candidatoId) {
       id: row.id,
       candidato_id: row.candidato_id,
       empresa_id: row.empresa_id,
+      empresa_origen: row.empresa_origen,
+      empresa_origen_id: row.empresa_origen_id,
+      empresa_nombre: row.empresa_nombre,
       cargo: row.cargo,
       fecha_inicio: row.fecha_inicio,
       fecha_fin: row.fecha_fin,
@@ -436,6 +442,9 @@ async function listExperiencias(candidatoId) {
           e.id,
           e.candidato_id,
           e.empresa_id,
+          NULL AS empresa_origen,
+          NULL AS empresa_origen_id,
+          NULL AS empresa_nombre,
           e.cargo,
           e.fecha_inicio,
           e.fecha_fin,
@@ -462,21 +471,42 @@ async function listExperiencias(candidatoId) {
 }
 
 async function createExperiencia(candidatoId, payload) {
-  const [result] = await db.query(
-    `INSERT INTO candidatos_experiencia (
-      candidato_id, empresa_id, cargo, fecha_inicio, fecha_fin, actualmente_trabaja, tipo_contrato, descripcion
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      candidatoId,
-      payload.empresa_id ?? null,
-      payload.cargo ?? null,
-      payload.fecha_inicio ?? null,
-      payload.fecha_fin ?? null,
-      payload.actualmente_trabaja ?? 0,
-      payload.tipo_contrato ?? null,
-      payload.descripcion ?? null
-    ]
-  );
+  let result;
+  try {
+    [result] = await db.query(
+      `INSERT INTO candidatos_experiencia (
+        candidato_id, empresa_id, empresa_nombre, cargo, fecha_inicio, fecha_fin, actualmente_trabaja, tipo_contrato, descripcion
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        candidatoId,
+        payload.empresa_id ?? null,
+        payload.empresa_nombre ?? null,
+        payload.cargo ?? null,
+        payload.fecha_inicio ?? null,
+        payload.fecha_fin ?? null,
+        payload.actualmente_trabaja ?? 0,
+        payload.tipo_contrato ?? null,
+        payload.descripcion ?? null
+      ]
+    );
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    [result] = await db.query(
+      `INSERT INTO candidatos_experiencia (
+        candidato_id, empresa_id, cargo, fecha_inicio, fecha_fin, actualmente_trabaja, tipo_contrato, descripcion
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        candidatoId,
+        payload.empresa_id ?? null,
+        payload.cargo ?? null,
+        payload.fecha_inicio ?? null,
+        payload.fecha_fin ?? null,
+        payload.actualmente_trabaja ?? 0,
+        payload.tipo_contrato ?? null,
+        payload.descripcion ?? null
+      ]
+    );
+  }
   return { id: result.insertId };
 }
 

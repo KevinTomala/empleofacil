@@ -331,7 +331,7 @@ function validateEducacionGeneralItemPayload(payload, { partial = false } = {}) 
 }
 
 function validateExperienciaPayload(payload, { partial = false } = {}) {
-  const allowed = ['empresa_id', 'cargo', 'fecha_inicio', 'fecha_fin', 'actualmente_trabaja', 'tipo_contrato', 'descripcion'];
+  const allowed = ['empresa_id', 'empresa_nombre', 'cargo', 'fecha_inicio', 'fecha_fin', 'actualmente_trabaja', 'tipo_contrato', 'descripcion'];
   if (!validatePayloadShape(payload, allowed)) return null;
 
   const normalized = {};
@@ -341,6 +341,9 @@ function validateExperienciaPayload(payload, { partial = false } = {}) {
     if (key === 'empresa_id') {
       if (!(value === null || Number.isInteger(value))) return null;
       normalized.empresa_id = value;
+    } else if (key === 'empresa_nombre') {
+      if (!isNullableString(value)) return null;
+      normalized.empresa_nombre = normalizeString(value);
     } else if (key === 'cargo') {
       if (!isNullableString(value)) return null;
       normalized.cargo = normalizeString(value);

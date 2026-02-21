@@ -343,6 +343,12 @@ Errores esperados:
 ```json
 { "items": [] }
 ```
+- Campos relevantes por item:
+  - `empresa_id`: empresa local de EmpleoFacil (si existe mapeo).
+  - `empresa_origen`: origen externo (`ademy`) cuando la experiencia viene importada.
+  - `empresa_origen_id`: id de empresa en origen externo.
+  - `empresa_nombre`: snapshot del nombre de empresa reportado por origen externo.
+  - Importante: el importador no crea empresas ni usuarios de empresa automaticamente.
 
 ### POST `/api/perfil/me/experiencia`
 - Auth: requerido.
@@ -911,6 +917,126 @@ Base: `/api/verificaciones`
 - Errores:
   - `400 CURSO_ID_REQUIRED`
   - `500 CATALOGO_ERROR`
+
+### GET `/api/integraciones/ademy/empresas-mapeo`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Query params:
+  - `estado` (`pendiente|vinculada|descartada`, opcional)
+  - `q` (busqueda por nombre origen, empresa local o id origen)
+  - `page` (default `1`)
+  - `page_size` (default `20`, max `100`)
+- Respuesta `200`:
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "origen": "ademy",
+      "origen_empresa_id": 120001,
+      "nombre_origen": "Seguridad Ecuatoriana S.A.",
+      "empresa_id": 8,
+      "estado": "vinculada",
+      "empresa_local_nombre": "Seguridad Ecuatoriana S.A.",
+      "experiencias_total": 30,
+      "experiencias_sin_vinculo": 0
+    }
+  ],
+  "page": 1,
+  "page_size": 20,
+  "total": 1
+}
+```
+- Errores:
+  - `409 MAPPING_TABLE_NOT_FOUND`
+  - `409 MAPPING_SCHEMA_OUTDATED`
+  - `500 MAPPING_LIST_FAILED`
+
+### GET `/api/integraciones/ademy/empresas-locales?q=<texto>&limit=20`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Respuesta `200`:
+```json
+{
+  "items": [
+    { "id": 8, "nombre": "Seguridad Ecuatoriana S.A.", "ruc": "099...", "email": "rrhh@empresa.com", "tipo": "externa" }
+  ]
+}
+```
+- Error `500 EMPRESAS_SEARCH_FAILED`.
+
+### PUT `/api/integraciones/ademy/empresas-mapeo/:origenEmpresaId/vincular`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Body:
+```json
+{
+  "empresa_id": 8,
+  "nombre_origen": "Seguridad Ecuatoriana S.A."
+}
+```
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "mapping": {},
+  "experiencias_actualizadas": 30
+}
+```
+- Errores:
+  - `400 INVALID_ORIGEN_EMPRESA_ID`
+  - `400 EMPRESA_ID_REQUIRED`
+  - `404 EMPRESA_NOT_FOUND`
+  - `409 MAPPING_TABLE_NOT_FOUND`
+  - `409 MAPPING_SCHEMA_OUTDATED`
+  - `500 MAPPING_UPDATE_FAILED`
+
+### PUT `/api/integraciones/ademy/empresas-mapeo/:origenEmpresaId/nombre`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Body:
+```json
+{
+  "nombre_origen": "Sesep Cia. Ltda."
+}
+```
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "mapping": {},
+  "experiencias_actualizadas": 1
+}
+```
+- Errores:
+  - `400 INVALID_ORIGEN_EMPRESA_ID`
+  - `400 NOMBRE_ORIGEN_REQUIRED`
+  - `409 MAPPING_TABLE_NOT_FOUND`
+  - `409 MAPPING_SCHEMA_OUTDATED`
+  - `500 MAPPING_NAME_UPDATE_FAILED`
+
+### PUT `/api/integraciones/ademy/empresas-mapeo/:origenEmpresaId/descartar`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Body opcional:
+```json
+{
+  "nombre_origen": "Empresa desconocida"
+}
+```
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "mapping": {},
+  "experiencias_actualizadas": 30
+}
+```
+- Errores:
+  - `400 INVALID_ORIGEN_EMPRESA_ID`
+  - `409 MAPPING_TABLE_NOT_FOUND`
+  - `409 MAPPING_SCHEMA_OUTDATED`
+  - `500 MAPPING_DISCARD_FAILED`
 
 ## Lineamiento de archivos (R2 dual bucket)
 - EmpleoFacil opera con 2 buckets R2:

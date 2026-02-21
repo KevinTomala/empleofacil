@@ -356,6 +356,9 @@ CREATE TABLE candidatos_experiencia (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   candidato_id BIGINT NOT NULL,
   empresa_id BIGINT NULL,
+  empresa_origen ENUM('ademy') NULL,
+  empresa_origen_id BIGINT NULL,
+  empresa_nombre VARCHAR(200) NULL,
   cargo VARCHAR(150) NULL,
   fecha_inicio DATE NULL,
   fecha_fin DATE NULL,
@@ -366,7 +369,8 @@ CREATE TABLE candidatos_experiencia (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at DATETIME NULL,
   CONSTRAINT fk_candidatos_experiencia_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
-  INDEX idx_candidatos_experiencia_actual (actualmente_trabaja)
+  INDEX idx_candidatos_experiencia_actual (actualmente_trabaja),
+  INDEX idx_candidatos_experiencia_empresa_origen (empresa_origen, empresa_origen_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE centros_capacitacion (
@@ -462,6 +466,21 @@ CREATE TABLE integracion_ademy_promociones_institucion (
   UNIQUE KEY uq_integracion_ademy_promocion (promocion_id),
   INDEX idx_integracion_ademy_promocion_activo (promocion_id, activo),
   CONSTRAINT fk_integracion_ademy_promocion_centro FOREIGN KEY (centro_cliente_id) REFERENCES centros_capacitacion(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE integracion_ademy_empresas_empleofacil (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  origen ENUM('ademy') NOT NULL DEFAULT 'ademy',
+  origen_empresa_id BIGINT NOT NULL,
+  empresa_id BIGINT NULL,
+  nombre_origen VARCHAR(200) NULL,
+  estado ENUM('pendiente','vinculada','descartada') NOT NULL DEFAULT 'pendiente',
+  activo TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_integracion_ademy_empresa_origen (origen, origen_empresa_id),
+  INDEX idx_integracion_ademy_empresa_local (empresa_id, activo),
+  CONSTRAINT fk_integracion_ademy_empresa_local FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -------------------------------------------------------------
