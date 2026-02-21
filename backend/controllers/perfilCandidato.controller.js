@@ -22,6 +22,7 @@ const {
   updateExperienciaCertificado,
   deleteExperienciaCertificado,
   listCentrosCapacitacion,
+  listEmpresasExperiencia,
   listFormacion,
   createFormacion,
   updateFormacion,
@@ -364,6 +365,7 @@ function validateExperienciaPayload(payload, { partial = false } = {}) {
 
   if (!partial) {
     if (!normalized.cargo) return null;
+    if (!normalized.empresa_id && !normalized.empresa_nombre) return null;
   }
 
   return normalized;
@@ -775,6 +777,13 @@ async function listCentrosCapacitacionHandler(req, res) {
   return res.json({ items });
 }
 
+async function listEmpresasExperienciaHandler(req, res) {
+  const search = typeof req.query?.search === 'string' ? req.query.search : null;
+  const limit = parsePositiveInt(req.query?.limit) || 30;
+  const items = await listEmpresasExperiencia({ search, limit });
+  return res.json({ items });
+}
+
 async function listFormacionHandler(req, res) {
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
   const items = await listFormacion(req.candidatoId);
@@ -976,6 +985,7 @@ module.exports = {
   deleteExperienciaCertificadoById: makeCandidateScopeHandler('id', deleteExperienciaCertificadoHandler, 'update'),
 
   listCentrosCapacitacion: listCentrosCapacitacionHandler,
+  listEmpresasExperiencia: listEmpresasExperienciaHandler,
   listMyFormacion: makeCandidateScopeHandler('me', listFormacionHandler, 'fetch'),
   createMyFormacion: makeCandidateScopeHandler('me', createFormacionHandler, 'update'),
   updateMyFormacion: makeCandidateScopeHandler('me', updateFormacionHandler, 'update'),

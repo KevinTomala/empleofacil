@@ -344,10 +344,11 @@ Errores esperados:
 { "items": [] }
 ```
 - Campos relevantes por item:
-  - `empresa_id`: empresa local de EmpleoFacil (si existe mapeo).
+  - `empresa_id`: empresa local de EmpleoFacil (si existe vinculo).
+  - `empresa_local_nombre`: nombre local resuelto desde `empresas` por `empresa_id`.
   - `empresa_origen`: origen externo (`ademy`) cuando la experiencia viene importada.
   - `empresa_origen_id`: id de empresa en origen externo.
-  - `empresa_nombre`: snapshot del nombre de empresa reportado por origen externo.
+  - `empresa_nombre`: snapshot del nombre de empresa (origen ADEMY o ingreso manual del candidato).
   - Importante: el importador no crea empresas ni usuarios de empresa automaticamente.
 
 ### POST `/api/perfil/me/experiencia`
@@ -356,6 +357,8 @@ Errores esperados:
 - Body ejemplo:
 ```json
 {
+  "empresa_id": 8,
+  "empresa_nombre": "Seguridad Ecuatoriana S.A.",
   "cargo": "Supervisor",
   "fecha_inicio": "2022-01-01",
   "fecha_fin": "2024-01-31",
@@ -364,6 +367,8 @@ Errores esperados:
   "descripcion": "Gestion de equipos"
 }
 ```
+- Regla de validacion:
+  - Se requiere al menos uno: `empresa_id` o `empresa_nombre`.
 - Respuesta `201`:
 ```json
 { "ok": true, "id": 10 }
@@ -441,6 +446,30 @@ Errores esperados:
   ]
 }
 ```
+
+### GET `/api/perfil/empresas-experiencia`
+- Auth: requerido.
+- Roles: `candidato`, `administrador`, `superadmin`.
+- Query opcional:
+  - `search` (texto parcial por nombre/ruc/email)
+  - `limit` (default `30`, max `100`)
+- Respuesta `200`:
+```json
+{
+  "items": [
+    {
+      "id": 8,
+      "nombre": "Seguridad Ecuatoriana S.A.",
+      "ruc": "099...",
+      "email": "rrhh@empresa.com",
+      "tipo": "externa"
+    }
+  ]
+}
+```
+- Uso operativo:
+  - alimenta autocomplete del formulario de experiencia.
+  - si no hay coincidencia, la experiencia puede guardarse solo con `empresa_nombre` (texto libre).
 
 ### GET `/api/perfil/me/documentos`
 - Auth: requerido.
@@ -540,6 +569,8 @@ Nota:
 - Regla de completitud:
   - Obligatorios para el porcentaje: `nombre`, `industria`, `ubicacion_principal`, `tamano_empleados`, `descripcion`, `sitio_web`, `instagram_url`, `facebook_url`, `logo_url`.
   - Opcional para el porcentaje: `linkedin_url`.
+- Regla operativa adicional:
+  - si cambia `nombre`, backend intenta autovincular experiencias historicas donde `candidatos_experiencia.empresa_nombre` coincide exactamente (normalizado) y `empresa_id` aun es `NULL`.
 - Respuesta `200`:
 ```json
 {
@@ -863,6 +894,8 @@ Base: `/api/verificaciones`
 Nota operativa:
 - El importador de acreditados intenta enriquecer `experiencia.empresa_id` con nombre de empresa via `GET /api/empresas/s2s` en ADEMY.
 - Si ese endpoint S2S no existe/no autoriza, se usa fallback `Empresa ADEMY #<id>` hasta mapear nombre manual o habilitar el endpoint.
+- El modulo `empresas-mapeo` de esta seccion solo aplica a origen `ademy`.
+- Empresas digitadas manualmente por candidatos en EmpleoFacil (`empresa_origen IS NULL`) no aparecen en este mapeo.
 
 ### POST `/api/integraciones/ademy/acreditados/import`
 - Auth: requerido.

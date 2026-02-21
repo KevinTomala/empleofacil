@@ -30,7 +30,9 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `POST /api/perfil/me/idiomas` crea idioma y devuelve `201`.
 - `PUT/DELETE /api/perfil/me/idiomas/:idiomaId` validan ownership y responden `404` si no existe.
 - `GET /api/perfil/me/experiencia` responde `200` con `{ items: [] }`.
+- `GET /api/perfil/empresas-experiencia?search=aguapen` responde `200` con `items` (catalogo local activo).
 - `POST /api/perfil/me/experiencia` crea experiencia y devuelve `201`.
+- `POST /api/perfil/me/experiencia` sin `empresa_id` y sin `empresa_nombre` devuelve `400 INVALID_PAYLOAD`.
 - `PUT/DELETE /api/perfil/me/experiencia/:experienciaId` validan ownership y responden `404` si no existe.
 - En experiencia importada ADEMY:
   - `empresa_origen='ademy'` y `empresa_origen_id` deben persistirse.
@@ -66,6 +68,9 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `GET /api/company/perfil/me/preferencias` responde `200` con preferencias 1:1.
 - `PUT /api/company/perfil/me/preferencias` persiste arrays normalizados.
 - `DELETE /api/company/perfil/me` aplica soft delete y luego `GET /api/company/perfil/me` devuelve `404 EMPRESA_NOT_FOUND`.
+- Autovinculacion historica no ADEMY:
+  - crear o renombrar empresa con nombre igual a `candidatos_experiencia.empresa_nombre` debe llenar `empresa_id` en esas experiencias.
+  - experiencias con `empresa_origen='ademy'` no deben autovincularse por este mecanismo.
 
 ## Checklist de regresion rapida
 - Login funciona por email.
@@ -104,6 +109,9 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 ### 6) Perfil candidato Fase 2 (frontend)
 - `ProfileIdiomas` permite crear, editar y eliminar items.
 - `ProfileExperiencia` permite crear, editar y eliminar items.
+- `ProfileExperiencia` usa un solo input de empresa con autocomplete (`datalist`) contra `/api/perfil/empresas-experiencia`.
+- Si el texto coincide con una empresa existente, debe seleccionar/vincular `empresa_id`.
+- Si no coincide, debe guardar como texto libre en `empresa_nombre`.
 - `ProfileExperiencia` permite crear/actualizar/eliminar certificado laboral por experiencia.
 - `ProfileDocumentos` permite subir archivo y actualizar metadatos.
 - `ProfileFormacion` usa tabs:

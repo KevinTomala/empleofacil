@@ -56,9 +56,13 @@ Rutas registradas actualmente:
 - Fase 2 activa en el mismo modulo:
   - `idiomas` (CRUD)
   - `experiencia` (CRUD)
+  - `empresas-experiencia` (catalogo para autocomplete en experiencia)
   - `experiencia/:experienciaId/certificado` (CRUD 1:1 + upload multipart)
   - `formacion` (CRUD relacional por item)
   - `documentos` (CRUD + upload multipart con `multer`)
+- Regla de experiencia:
+  - para crear experiencia se exige al menos `empresa_id` o `empresa_nombre`.
+  - cuando llega `empresa_id`, backend persiste snapshot consistente en `empresa_nombre`.
 - Contrato actual de `formacion` (externa):
   - columnas legacy removidas en dominio (`matricula_id`, `nivel_id`, `curso_id`, `formacion_origen_id`, `estado`, `fecha_inicio`, `fecha_fin`).
   - fechas vigentes: `fecha_aprobacion`, `fecha_emision`, `fecha_vencimiento`.
@@ -88,6 +92,10 @@ Rutas registradas actualmente:
   - `GET|PUT /api/company/perfil/me/preferencias`
 - Baja logica de empresa:
   - `DELETE /api/company/perfil/me`
+- Vinculacion automatica de experiencia historica:
+  - al crear/adjuntar/renombrar empresa, backend intenta llenar `candidatos_experiencia.empresa_id`
+    para filas manuales con `empresa_origen IS NULL` cuyo `empresa_nombre` coincide con `empresas.nombre` (normalizado).
+  - no aplica a experiencias de origen ADEMY.
 
 ### Verificaciones
 - Empresa/candidato:

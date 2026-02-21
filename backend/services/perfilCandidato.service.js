@@ -374,6 +374,7 @@ async function listExperiencias(candidatoId) {
         e.empresa_origen,
         e.empresa_origen_id,
         e.empresa_nombre,
+        em.nombre AS empresa_local_nombre,
         e.cargo,
         e.fecha_inicio,
         e.fecha_fin,
@@ -394,6 +395,9 @@ async function listExperiencias(candidatoId) {
         ec.created_at AS cert_created_at,
         ec.updated_at AS cert_updated_at
        FROM candidatos_experiencia e
+       LEFT JOIN empresas em
+         ON em.id = e.empresa_id
+        AND em.deleted_at IS NULL
        LEFT JOIN candidatos_experiencia_certificados ec
          ON ec.experiencia_id = e.id
         AND ec.deleted_at IS NULL
@@ -410,6 +414,7 @@ async function listExperiencias(candidatoId) {
       empresa_origen: row.empresa_origen,
       empresa_origen_id: row.empresa_origen_id,
       empresa_nombre: row.empresa_nombre,
+      empresa_local_nombre: row.empresa_local_nombre || null,
       cargo: row.cargo,
       fecha_inicio: row.fecha_inicio,
       fecha_fin: row.fecha_fin,
@@ -442,9 +447,10 @@ async function listExperiencias(candidatoId) {
           e.id,
           e.candidato_id,
           e.empresa_id,
-          NULL AS empresa_origen,
-          NULL AS empresa_origen_id,
-          NULL AS empresa_nombre,
+          e.empresa_origen,
+          e.empresa_origen_id,
+          e.empresa_nombre,
+          em.nombre AS empresa_local_nombre,
           e.cargo,
           e.fecha_inicio,
           e.fecha_fin,
@@ -454,6 +460,9 @@ async function listExperiencias(candidatoId) {
           e.created_at,
           e.updated_at
          FROM candidatos_experiencia e
+         LEFT JOIN empresas em
+           ON em.id = e.empresa_id
+          AND em.deleted_at IS NULL
          WHERE e.candidato_id = ?
            AND e.deleted_at IS NULL
          ORDER BY e.created_at DESC`,
@@ -465,12 +474,63 @@ async function listExperiencias(candidatoId) {
       }));
     } catch (fallbackError) {
       if (!isSchemaDriftError(fallbackError)) throw fallbackError;
-      return [];
+      try {
+        const [rows] = await db.query(
+          `SELECT
+            e.id,
+            e.candidato_id,
+            e.empresa_id,
+            NULL AS empresa_origen,
+            NULL AS empresa_origen_id,
+            NULL AS empresa_nombre,
+            NULL AS empresa_local_nombre,
+            e.cargo,
+            e.fecha_inicio,
+            e.fecha_fin,
+            e.actualmente_trabaja,
+            e.tipo_contrato,
+            e.descripcion,
+            e.created_at,
+            e.updated_at
+           FROM candidatos_experiencia e
+           WHERE e.candidato_id = ?
+             AND e.deleted_at IS NULL
+           ORDER BY e.created_at DESC`,
+          [candidatoId]
+        );
+        return rows.map((row) => ({
+          ...row,
+          certificado_laboral: null
+        }));
+      } catch (legacyError) {
+        if (!isSchemaDriftError(legacyError)) throw legacyError;
+        return [];
+      }
     }
   }
 }
 
+async function findEmpresaNombreById(empresaId) {
+  const normalizedId = normalizePositiveInt(empresaId);
+  if (!normalizedId) return null;
+  const [rows] = await db.query(
+    `SELECT nombre
+     FROM empresas
+     WHERE id = ?
+       AND deleted_at IS NULL
+     LIMIT 1`,
+    [normalizedId]
+  );
+  return rows[0]?.nombre || null;
+}
+
 async function createExperiencia(candidatoId, payload) {
+  let empresaNombre = payload.empresa_nombre ?? null;
+  if (payload.empresa_id) {
+    const nombreLocal = await findEmpresaNombreById(payload.empresa_id);
+    if (nombreLocal) empresaNombre = nombreLocal;
+  }
+
   let result;
   try {
     [result] = await db.query(
@@ -480,7 +540,7 @@ async function createExperiencia(candidatoId, payload) {
       [
         candidatoId,
         payload.empresa_id ?? null,
-        payload.empresa_nombre ?? null,
+        empresaNombre,
         payload.cargo ?? null,
         payload.fecha_inicio ?? null,
         payload.fecha_fin ?? null,
@@ -511,19 +571,48 @@ async function createExperiencia(candidatoId, payload) {
 }
 
 async function updateExperiencia(candidatoId, experienciaId, payload) {
-  const keys = Object.keys(payload);
+  const normalizedPayload = { ...payload };
+  if (Object.prototype.hasOwnProperty.call(normalizedPayload, 'empresa_id')) {
+    if (normalizedPayload.empresa_id) {
+      const nombreLocal = await findEmpresaNombreById(normalizedPayload.empresa_id);
+      if (nombreLocal) normalizedPayload.empresa_nombre = nombreLocal;
+    } else if (!Object.prototype.hasOwnProperty.call(normalizedPayload, 'empresa_nombre')) {
+      normalizedPayload.empresa_nombre = null;
+    }
+  }
+
+  const keys = Object.keys(normalizedPayload);
   if (!keys.length) return 0;
 
   const setSql = keys.map((key) => `${key} = ?`).join(', ');
-  const [result] = await db.query(
-    `UPDATE candidatos_experiencia
-     SET ${setSql}
-     WHERE id = ?
-       AND candidato_id = ?
-       AND deleted_at IS NULL`,
-    [...keys.map((key) => payload[key]), experienciaId, candidatoId]
-  );
-  return result.affectedRows;
+  try {
+    const [result] = await db.query(
+      `UPDATE candidatos_experiencia
+       SET ${setSql}
+       WHERE id = ?
+         AND candidato_id = ?
+         AND deleted_at IS NULL`,
+      [...keys.map((key) => normalizedPayload[key]), experienciaId, candidatoId]
+    );
+    return result.affectedRows;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+
+    const fallbackPayload = { ...normalizedPayload };
+    delete fallbackPayload.empresa_nombre;
+    const fallbackKeys = Object.keys(fallbackPayload);
+    if (!fallbackKeys.length) return 0;
+    const fallbackSetSql = fallbackKeys.map((key) => `${key} = ?`).join(', ');
+    const [result] = await db.query(
+      `UPDATE candidatos_experiencia
+       SET ${fallbackSetSql}
+       WHERE id = ?
+         AND candidato_id = ?
+         AND deleted_at IS NULL`,
+      [...fallbackKeys.map((key) => fallbackPayload[key]), experienciaId, candidatoId]
+    );
+    return result.affectedRows;
+  }
 }
 
 async function deleteExperiencia(candidatoId, experienciaId) {
@@ -695,6 +784,12 @@ function normalizeCenterName(value) {
   return normalized || null;
 }
 
+function toTextOrNull(value) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized || null;
+}
+
 function normalizePositiveInt(value) {
   const num = Number(value);
   if (!Number.isInteger(num) || num <= 0) return null;
@@ -857,6 +952,29 @@ async function listCentrosCapacitacion({ search = null, limit = 20 } = {}) {
     if (!isSchemaDriftError(error)) throw error;
     return [];
   }
+}
+
+async function listEmpresasExperiencia({ search = null, limit = 30 } = {}) {
+  const term = toTextOrNull(search);
+  const safeLimit = Math.min(Math.max(Number(limit || 30), 1), 100);
+  const like = term ? `%${term}%` : null;
+  const [rows] = await db.query(
+    `SELECT id, nombre, ruc, email, tipo
+     FROM empresas
+     WHERE deleted_at IS NULL
+       AND activo = 1
+       AND (? IS NULL OR nombre LIKE ? OR ruc LIKE ? OR email LIKE ?)
+     ORDER BY
+       CASE
+         WHEN ? IS NOT NULL AND nombre = ? THEN 0
+         WHEN ? IS NOT NULL AND nombre LIKE ? THEN 1
+         ELSE 2
+       END,
+       nombre ASC
+     LIMIT ?`,
+    [term, like, like, like, term, term, term, term ? `${term}%` : null, safeLimit]
+  );
+  return rows;
 }
 
 async function listFormacion(candidatoId) {
@@ -1243,6 +1361,7 @@ module.exports = {
   updateExperienciaCertificado,
   deleteExperienciaCertificado,
   listCentrosCapacitacion,
+  listEmpresasExperiencia,
   listFormacion,
   createFormacion,
   updateFormacion,

@@ -158,6 +158,18 @@ export async function getMyExperiencia() {
   return apiRequest('/api/perfil/me/experiencia')
 }
 
+export async function getEmpresasExperiencia({ search = '', limit = 30 } = {}) {
+  const params = new URLSearchParams()
+  if (search && String(search).trim()) params.set('search', String(search).trim())
+  if (Number.isFinite(Number(limit))) params.set('limit', String(Number(limit)))
+  const query = params.toString()
+  const response = await apiRequest(`/api/perfil/empresas-experiencia${query ? `?${query}` : ''}`)
+  return {
+    ...response,
+    items: Array.isArray(response?.items) ? response.items : []
+  }
+}
+
 export async function createMyExperiencia(payload) {
   return apiRequest('/api/perfil/me/experiencia', {
     method: 'POST',
