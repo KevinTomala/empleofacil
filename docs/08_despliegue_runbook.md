@@ -78,6 +78,7 @@ docker compose logs -f frontend
 - Cron: `ADEMY_SYNC_CRON` (default `*/10 * * * *`).
 - Zona horaria: `ADEMY_SYNC_TZ`.
 - Ejecucion al inicio: `ADEMY_SYNC_RUN_ON_START=true|false`.
+- Para resolver nombre de empresa en experiencia por `empresa_id`, ADEMY debe exponer `GET /api/empresas/s2s` con `verifyServiceToken`.
 
 ## Reinicio y parada
 - Reiniciar backend:

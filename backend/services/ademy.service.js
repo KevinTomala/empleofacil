@@ -81,9 +81,15 @@ async function fetchPromocionesPorConvocatoriaCurso(convocatoriaId, cursoId) {
   return Array.isArray(payload) ? payload : payload?.items || [];
 }
 
+async function fetchEmpresasS2S(params) {
+  const payload = await fetchJson('/api/empresas/s2s', params);
+  return Array.isArray(payload) ? payload : payload?.items || [];
+}
+
 module.exports = {
   fetchAcreditados,
   fetchConvocatorias,
   fetchCursosPorConvocatoria,
-  fetchPromocionesPorConvocatoriaCurso
+  fetchPromocionesPorConvocatoriaCurso,
+  fetchEmpresasS2S
 };

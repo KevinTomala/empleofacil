@@ -4,7 +4,8 @@ const {
   fetchAcreditados,
   fetchConvocatorias,
   fetchCursosPorConvocatoria,
-  fetchPromocionesPorConvocatoriaCurso
+  fetchPromocionesPorConvocatoriaCurso,
+  fetchEmpresasS2S
 } = require('../services/ademy.service');
 
 const ORIGEN = 'ademy';
@@ -338,12 +339,19 @@ function buildEmpresaOrigenFallbackName(origenEmpresaId) {
   return `Empresa ADEMY #${key}`;
 }
 
+function isEmpresaOrigenPlaceholder(value) {
+  const text = toTextOrNull(value);
+  if (!text) return false;
+  return /^Empresa ADEMY #\d+$/i.test(text);
+}
+
 async function resolveEmpresaMapByOrigen(conn, origenEmpresaId, empresaNombre, cache) {
   const key = Number(origenEmpresaId || 0);
   if (!key) return { empresaId: null, nombreOrigen: null };
   if (cache.has(key)) return cache.get(key);
 
-  const fallbackNombre = normalizeCompanyName(empresaNombre) || buildEmpresaOrigenFallbackName(key);
+  const incomingNombre = normalizeCompanyName(empresaNombre);
+  const fallbackNombre = buildEmpresaOrigenFallbackName(key);
 
   try {
     const [rows] = await conn.query(
@@ -380,7 +388,10 @@ async function resolveEmpresaMapByOrigen(conn, origenEmpresaId, empresaNombre, c
     const row = rows[0];
     const empresaLocalId = row.empresa_local_id || null;
     const nombreOriginal = toTextOrNull(row.nombre_origen);
-    const nombreResolved = nombreOriginal || fallbackNombre;
+    const nombreResolved =
+      (incomingNombre && (!nombreOriginal || isEmpresaOrigenPlaceholder(nombreOriginal)))
+        ? incomingNombre
+        : (nombreOriginal || incomingNombre || fallbackNombre);
     const patchNombre = nombreResolved && nombreResolved !== nombreOriginal;
     const desiredEstado = empresaLocalId ? 'vinculada' : 'pendiente';
     const patchEstado = row.estado !== desiredEstado;
@@ -659,11 +670,13 @@ async function replaceEducacionGeneral(conn, estudianteId, educacionItems) {
 
 async function replaceExperiencias(conn, estudianteId, experiencias, options = {}) {
   const empresaMapCache = options.empresaMapCache || new Map();
+  const empresaNombreByOrigenId = options.empresaNombreByOrigenId || new Map();
   if (!Array.isArray(experiencias)) return;
   await conn.query('DELETE FROM candidatos_experiencia WHERE candidato_id = ?', [estudianteId]);
   for (const exp of experiencias) {
     const empresaOrigenId = toPositiveIntOrNull(exp?.empresa_id ?? exp?.empresaId ?? null);
-    const empresaNombrePayload = resolveExperienciaEmpresaNombre(exp);
+    const empresaNombreCatalogo = empresaOrigenId ? toTextOrNull(empresaNombreByOrigenId.get(empresaOrigenId)) : null;
+    const empresaNombrePayload = resolveExperienciaEmpresaNombre(exp) || empresaNombreCatalogo;
     const empresaMapping = await resolveEmpresaMapByOrigen(conn, empresaOrigenId, empresaNombrePayload, empresaMapCache);
     const empresaId = empresaMapping?.empresaId || null;
     const empresaNombre = empresaNombrePayload || empresaMapping?.nombreOrigen || null;
@@ -958,6 +971,55 @@ function normalizeImportParams(rawParams = {}) {
   return { pageSize, params };
 }
 
+function extractExperienciasFromItem(item) {
+  if (Array.isArray(item?.experiencia)) return item.experiencia;
+  if (Array.isArray(item?.experiencia_historial)) return item.experiencia_historial;
+  if (item?.experiencia) return [item.experiencia];
+  return [];
+}
+
+function collectEmpresaOrigenIdsFromItems(items) {
+  const ids = new Set();
+  for (const item of items || []) {
+    const experiencias = extractExperienciasFromItem(item);
+    for (const exp of experiencias) {
+      const empresaOrigenId = toPositiveIntOrNull(exp?.empresa_id ?? exp?.empresaId ?? null);
+      if (empresaOrigenId) ids.add(empresaOrigenId);
+    }
+  }
+  return [...ids];
+}
+
+async function hydrateEmpresaNombreCacheByOrigenId(ids, cache) {
+  if (!Array.isArray(ids) || !ids.length) return;
+  const pendingIds = ids.filter((id) => !cache.has(id));
+  if (!pendingIds.length) return;
+
+  const chunkSize = 200;
+  for (let i = 0; i < pendingIds.length; i += chunkSize) {
+    const chunk = pendingIds.slice(i, i + chunkSize);
+    try {
+      const empresas = await fetchEmpresasS2S({ ids: chunk.join(',') });
+      const rows = Array.isArray(empresas) ? empresas : [];
+      rows.forEach((empresa) => {
+        const empresaId = toPositiveIntOrNull(empresa?.id);
+        const nombre = normalizeCompanyName(empresa?.nombre);
+        if (empresaId && nombre) {
+          cache.set(empresaId, nombre);
+        }
+      });
+      chunk.forEach((id) => {
+        if (!cache.has(id)) cache.set(id, null);
+      });
+    } catch (error) {
+      chunk.forEach((id) => {
+        if (!cache.has(id)) cache.set(id, null);
+      });
+      console.warn(`[ADEMY] No se pudo cargar nombre de empresas por S2S: ${error.message}`);
+    }
+  }
+}
+
 async function runAcreditadosImport(rawParams = {}) {
   return withSyncLock(async () => {
     const { pageSize, params } = normalizeImportParams(rawParams);
@@ -976,6 +1038,7 @@ async function runAcreditadosImport(rawParams = {}) {
     };
     const promocionCentroCache = new Map();
     const empresaMapCache = new Map();
+    const empresaNombreByOrigenId = new Map();
 
     try {
       let page = 1;
@@ -983,6 +1046,8 @@ async function runAcreditadosImport(rawParams = {}) {
       while (hasMore) {
         const { items, nextPage } = await fetchAcreditados({ ...params, page });
         if (!items.length) break;
+        const empresaOrigenIds = collectEmpresaOrigenIdsFromItems(items);
+        await hydrateEmpresaNombreCacheByOrigenId(empresaOrigenIds, empresaNombreByOrigenId);
 
         for (const item of items) {
           totals.total += 1;
@@ -1021,12 +1086,11 @@ async function runAcreditadosImport(rawParams = {}) {
               : (item.educacion_general ? [item.educacion_general] : null);
             await replaceEducacionGeneral(conn, estudianteId, educacionHistorial);
 
-            const experienciaHistorial = Array.isArray(item.experiencia)
-              ? item.experiencia
-              : (Array.isArray(item.experiencia_historial)
-                ? item.experiencia_historial
-                : (item.experiencia ? [item.experiencia] : null));
-            await replaceExperiencias(conn, estudianteId, experienciaHistorial, { empresaMapCache });
+            const experienciaHistorial = extractExperienciasFromItem(item);
+            await replaceExperiencias(conn, estudianteId, experienciaHistorial, {
+              empresaMapCache,
+              empresaNombreByOrigenId
+            });
             await upsertDocumentos(conn, estudianteId, item.documentos);
             await upsertFormaciones(conn, estudianteId, item, { promocionCentroCache });
 

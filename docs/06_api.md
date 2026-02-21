@@ -860,6 +860,10 @@ Base: `/api/verificaciones`
 
 ## Integraciones (Ademy)
 
+Nota operativa:
+- El importador de acreditados intenta enriquecer `experiencia.empresa_id` con nombre de empresa via `GET /api/empresas/s2s` en ADEMY.
+- Si ese endpoint S2S no existe/no autoriza, se usa fallback `Empresa ADEMY #<id>` hasta mapear nombre manual o habilitar el endpoint.
+
 ### POST `/api/integraciones/ademy/acreditados/import`
 - Auth: requerido.
 - Roles: `administrador`, `superadmin`.
