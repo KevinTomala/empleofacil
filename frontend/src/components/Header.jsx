@@ -117,6 +117,12 @@ export default function Header() {
     }
   }
 
+  const goToChangePassword = () => {
+    setIsProfileOpen(false)
+    setIsMenuOpen(false)
+    navigate('/app/change-password')
+  }
+
   const initials = user?.nombre_completo
     ? user.nombre_completo
         .split(' ')
@@ -200,6 +206,12 @@ export default function Header() {
                     >
                       <button
                         className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-muted rounded-md"
+                        onClick={goToChangePassword}
+                      >
+                        Cambiar contrasena
+                      </button>
+                      <button
+                        className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-muted rounded-md"
                         onClick={handleLogout}
                       >
                         Salir
@@ -281,6 +293,12 @@ export default function Header() {
                         {user?.nombre_completo || 'Usuario'}
                       </span>
                     </div>
+                    <button
+                      className="px-4 py-2 text-sm font-medium text-foreground border border-border rounded-lg hover:bg-muted transition-colors text-left"
+                      onClick={goToChangePassword}
+                    >
+                      Cambiar contrasena
+                    </button>
                     <button
                       className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-left"
                       onClick={() => {
