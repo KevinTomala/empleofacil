@@ -62,6 +62,10 @@ export default function CandidateProfile() {
       ? 'Agrega secciones recomendadas para aumentar tu nivel de coincidencia.'
       : 'Tu perfil basico ya esta optimizado. Puedes preparar el perfil avanzado.'
 
+  const pendingSectionsPreview = useMemo(() => {
+    return sections.filter((section) => section.status === 'pending').slice(0, 3)
+  }, [sections])
+
   const fotoPerfilUrl = useMemo(() => {
     const documentos = Array.isArray(perfil?.documentos) ? perfil.documentos : []
     const foto = documentos.find((doc) => doc?.tipo_documento === 'foto' && doc?.ruta_archivo)
@@ -212,6 +216,38 @@ export default function CandidateProfile() {
                 <p>Perfil fase 1: {progressFase1}% | Perfil total: {progressGeneral}%</p>
               </div>
               <p className="text-xs text-foreground/70 pt-1">{recommendationText}</p>
+            </div>
+
+            <div className="rounded-xl border border-border bg-white p-4 space-y-3">
+              <h2 className="text-sm font-semibold text-foreground">Estado de avance</h2>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg border border-border bg-slate-50 px-3 py-2">
+                  <p className="text-[11px] text-foreground/60">Obligatorias</p>
+                  <p className="text-sm font-semibold text-foreground">{completedRequired}/{requiredSections.length}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-slate-50 px-3 py-2">
+                  <p className="text-[11px] text-foreground/60">Recomendadas</p>
+                  <p className="text-sm font-semibold text-foreground">{completedRecommended}/{recommendedSections.length}</p>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-foreground/80">Proximos pasos</p>
+                {pendingSectionsPreview.length > 0 ? (
+                  pendingSectionsPreview.map((section) => (
+                    <button
+                      key={section.id}
+                      type="button"
+                      onClick={() => navigate(section.route)}
+                      className="w-full text-left rounded-lg border border-border px-3 py-2 text-xs text-foreground/80 hover:bg-slate-50"
+                    >
+                      {section.title}
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-xs text-emerald-700">No tienes secciones pendientes en fase actual.</p>
+                )}
+              </div>
             </div>
           </div>
 
