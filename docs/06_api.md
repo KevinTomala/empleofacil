@@ -197,8 +197,7 @@ Respuesta `GET` exitosa:
   "idiomas": [],
   "experiencia": [],
   "documentos": [],
-  "formacion_detalle": [],
-  "formacion_resultados": []
+  "formacion_detalle": []
 }
 ```
 
@@ -353,6 +352,13 @@ Errores esperados:
 ```json
 { "items": [] }
 ```
+- Campos relevantes por item:
+  - `empresa_id`: empresa local de EmpleoFacil (si existe vinculo).
+  - `empresa_local_nombre`: nombre local resuelto desde `empresas` por `empresa_id`.
+  - `empresa_origen`: origen externo (`ademy`) cuando la experiencia viene importada.
+  - `empresa_origen_id`: id de empresa en origen externo.
+  - `empresa_nombre`: snapshot del nombre de empresa (origen ADEMY o ingreso manual del candidato).
+  - Importante: el importador no crea empresas ni usuarios de empresa automaticamente.
 
 ### POST `/api/perfil/me/experiencia`
 - Auth: requerido.
@@ -360,6 +366,8 @@ Errores esperados:
 - Body ejemplo:
 ```json
 {
+  "empresa_id": 8,
+  "empresa_nombre": "Seguridad Ecuatoriana S.A.",
   "cargo": "Supervisor",
   "fecha_inicio": "2022-01-01",
   "fecha_fin": "2024-01-31",
@@ -368,6 +376,8 @@ Errores esperados:
   "descripcion": "Gestion de equipos"
 }
 ```
+- Regla de validacion:
+  - Se requiere al menos uno: `empresa_id` o `empresa_nombre`.
 - Respuesta `201`:
 ```json
 { "ok": true, "id": 10 }
@@ -409,37 +419,42 @@ Errores esperados:
 - Body formacion (externa):
   - `categoria_formacion` (`externa`)
   - `subtipo_formacion`: `curso|ministerio|ministerio_i|chofer_profesional`
+  - `centro_cliente_id` (opcional)
   - `institucion`, `nombre_programa`, `titulo_obtenido`
+  - Regla de integracion Ademy:
+    - `institucion` debe representar empresa/sucursal cliente contratante (ej: `CENDCAP`, `CENDCAP SUCURSAL`, `CAPACITAREC`).
+    - si llega `centro_cliente_id`, backend completa `institucion` con el nombre del catalogo.
+  - Regla de validacion:
+    - para `categoria_formacion=externa` se requiere al menos uno: `institucion` o `centro_cliente_id`.
   - `entidad_emisora`, `numero_registro`, `fecha_aprobacion`, `fecha_emision`, `fecha_vencimiento`
 - Breaking change:
   - Ya no se aceptan ni se devuelven: `estado`, `fecha_inicio`, `fecha_fin`, `matricula_id`, `nivel_id`, `curso_id`, `formacion_origen_id`.
 - Errores:
   - `400 INVALID_FORMACION_ID`
+  - `400 CENTRO_CAPACITACION_NOT_FOUND`
   - `404 FORMACION_NOT_FOUND`
+  - `422 FORMACION_INSTITUCION_REQUIRED`
   - `400 INVALID_PAYLOAD`
 
-### GET `/api/perfil/me/formacion/:formacionId/resultado`
-### PUT `/api/perfil/me/formacion/:formacionId/resultado`
+### GET `/api/perfil/centros-capacitacion`
 - Auth: requerido.
-- Roles: `candidato`.
-- Body permitido:
-  - `resultado_curso` (`aprobado|reprobado|pendiente`)
-  - `nota_curso`
-  - `fuente_curso` (`classroom|manual|externo`)
-  - `fecha_cierre_curso`
-  - `examen_estado` (`no_presentado|primera_oportunidad|segunda_oportunidad`)
-  - `nota_examen`
-  - `acreditado` (`0|1|false|true`)
-  - `fecha_examen`
-  - `documento_url`
-- Errores:
-  - `400 INVALID_FORMACION_ID`
-  - `404 FORMACION_NOT_FOUND`
-  - `400 INVALID_RESULTADO_PAYLOAD`
-  - `400 FORMACION_RESULTADO_NOT_ALLOWED` (resultado disponible solo para formacion externa)
-- Pendiente (fase futura):
-  - Automatizar extraccion de campos desde certificado (OCR/parsing) usando `estado_extraccion` y `datos_extraidos_json`.
-
+- Roles: `candidato`, `administrador`, `superadmin`.
+- Query opcional:
+  - `search` (texto parcial por nombre)
+  - `limit` (default `20`, max `100`)
+- Respuesta `200`:
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "nombre": "CENDCAP",
+      "origen": "ademy",
+      "activo": 1
+    }
+  ]
+}
+```
 ### GET `/api/perfil/me/formacion/:formacionId/certificado`
 ### POST `/api/perfil/me/formacion/:formacionId/certificado`
 ### PUT `/api/perfil/me/formacion/:formacionId/certificado`
@@ -459,6 +474,30 @@ Errores esperados:
 - Equivalentes por `:candidatoId`:
   - `GET /api/perfil/:candidatoId/formacion/:formacionId/certificado` (empresa|administrador|superadmin lectura)
   - `POST|PUT|DELETE /api/perfil/:candidatoId/formacion/:formacionId/certificado` (administrador|superadmin edicion)
+  
+### GET `/api/perfil/empresas-experiencia`
+- Auth: requerido.
+- Roles: `candidato`, `administrador`, `superadmin`.
+- Query opcional:
+  - `search` (texto parcial por nombre/ruc/email)
+  - `limit` (default `30`, max `100`)
+- Respuesta `200`:
+```json
+{
+  "items": [
+    {
+      "id": 8,
+      "nombre": "Seguridad Ecuatoriana S.A.",
+      "ruc": "099...",
+      "email": "rrhh@empresa.com",
+      "tipo": "externa"
+    }
+  ]
+}
+```
+- Uso operativo:
+  - alimenta autocomplete del formulario de experiencia.
+  - si no hay coincidencia, la experiencia puede guardarse solo con `empresa_nombre` (texto libre).
 
 ### GET `/api/perfil/me/documentos`
 - Auth: requerido.
@@ -508,7 +547,6 @@ Errores esperados:
 ### GET `/api/perfil/:candidatoId/experiencia`
 ### GET `/api/perfil/:candidatoId/experiencia/:experienciaId/certificado`
 ### GET `/api/perfil/:candidatoId/formacion`
-### GET `/api/perfil/:candidatoId/formacion/:formacionId/resultado`
 ### GET `/api/perfil/:candidatoId/documentos`
 - Auth: requerido.
 - Roles: `empresa`, `administrador`, `superadmin`.
@@ -518,7 +556,6 @@ Errores esperados:
 ### POST|PUT|DELETE `/api/perfil/:candidatoId/experiencia*`
 ### POST|PUT|DELETE `/api/perfil/:candidatoId/experiencia/:experienciaId/certificado`
 ### POST|PUT|DELETE `/api/perfil/:candidatoId/formacion*`
-### PUT `/api/perfil/:candidatoId/formacion/:formacionId/resultado`
 ### POST|PUT|DELETE `/api/perfil/:candidatoId/documentos*`
 - Auth: requerido.
 - Roles: `administrador`, `superadmin`.
@@ -560,6 +597,8 @@ Nota:
 - Regla de completitud:
   - Obligatorios para el porcentaje: `nombre`, `industria`, `ubicacion_principal`, `tamano_empleados`, `descripcion`, `sitio_web`, `instagram_url`, `facebook_url`, `logo_url`.
   - Opcional para el porcentaje: `linkedin_url`.
+- Regla operativa adicional:
+  - si cambia `nombre`, backend intenta autovincular experiencias historicas donde `candidatos_experiencia.empresa_nombre` coincide exactamente (normalizado) y `empresa_id` aun es `NULL`.
 - Respuesta `200`:
 ```json
 {
@@ -880,6 +919,12 @@ Base: `/api/verificaciones`
 
 ## Integraciones (Ademy)
 
+Nota operativa:
+- El importador de acreditados intenta enriquecer `experiencia.empresa_id` con nombre de empresa via `GET /api/empresas/s2s` en ADEMY.
+- Si ese endpoint S2S no existe/no autoriza, se usa fallback `Empresa ADEMY #<id>` hasta mapear nombre manual o habilitar el endpoint.
+- El modulo `empresas-mapeo` de esta seccion solo aplica a origen `ademy`.
+- Empresas digitadas manualmente por candidatos en EmpleoFacil (`empresa_origen IS NULL`) no aparecen en este mapeo.
+
 ### POST `/api/integraciones/ademy/acreditados/import`
 - Auth: requerido.
 - Roles: `administrador`, `superadmin`.
@@ -941,6 +986,126 @@ Base: `/api/verificaciones`
 - Errores:
   - `400 CURSO_ID_REQUIRED`
   - `500 CATALOGO_ERROR`
+
+### GET `/api/integraciones/ademy/empresas-mapeo`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Query params:
+  - `estado` (`pendiente|vinculada|descartada`, opcional)
+  - `q` (busqueda por nombre origen, empresa local o id origen)
+  - `page` (default `1`)
+  - `page_size` (default `20`, max `100`)
+- Respuesta `200`:
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "origen": "ademy",
+      "origen_empresa_id": 120001,
+      "nombre_origen": "Seguridad Ecuatoriana S.A.",
+      "empresa_id": 8,
+      "estado": "vinculada",
+      "empresa_local_nombre": "Seguridad Ecuatoriana S.A.",
+      "experiencias_total": 30,
+      "experiencias_sin_vinculo": 0
+    }
+  ],
+  "page": 1,
+  "page_size": 20,
+  "total": 1
+}
+```
+- Errores:
+  - `409 MAPPING_TABLE_NOT_FOUND`
+  - `409 MAPPING_SCHEMA_OUTDATED`
+  - `500 MAPPING_LIST_FAILED`
+
+### GET `/api/integraciones/ademy/empresas-locales?q=<texto>&limit=20`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Respuesta `200`:
+```json
+{
+  "items": [
+    { "id": 8, "nombre": "Seguridad Ecuatoriana S.A.", "ruc": "099...", "email": "rrhh@empresa.com", "tipo": "externa" }
+  ]
+}
+```
+- Error `500 EMPRESAS_SEARCH_FAILED`.
+
+### PUT `/api/integraciones/ademy/empresas-mapeo/:origenEmpresaId/vincular`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Body:
+```json
+{
+  "empresa_id": 8,
+  "nombre_origen": "Seguridad Ecuatoriana S.A."
+}
+```
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "mapping": {},
+  "experiencias_actualizadas": 30
+}
+```
+- Errores:
+  - `400 INVALID_ORIGEN_EMPRESA_ID`
+  - `400 EMPRESA_ID_REQUIRED`
+  - `404 EMPRESA_NOT_FOUND`
+  - `409 MAPPING_TABLE_NOT_FOUND`
+  - `409 MAPPING_SCHEMA_OUTDATED`
+  - `500 MAPPING_UPDATE_FAILED`
+
+### PUT `/api/integraciones/ademy/empresas-mapeo/:origenEmpresaId/nombre`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Body:
+```json
+{
+  "nombre_origen": "Sesep Cia. Ltda."
+}
+```
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "mapping": {},
+  "experiencias_actualizadas": 1
+}
+```
+- Errores:
+  - `400 INVALID_ORIGEN_EMPRESA_ID`
+  - `400 NOMBRE_ORIGEN_REQUIRED`
+  - `409 MAPPING_TABLE_NOT_FOUND`
+  - `409 MAPPING_SCHEMA_OUTDATED`
+  - `500 MAPPING_NAME_UPDATE_FAILED`
+
+### PUT `/api/integraciones/ademy/empresas-mapeo/:origenEmpresaId/descartar`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Body opcional:
+```json
+{
+  "nombre_origen": "Empresa desconocida"
+}
+```
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "mapping": {},
+  "experiencias_actualizadas": 30
+}
+```
+- Errores:
+  - `400 INVALID_ORIGEN_EMPRESA_ID`
+  - `409 MAPPING_TABLE_NOT_FOUND`
+  - `409 MAPPING_SCHEMA_OUTDATED`
+  - `500 MAPPING_DISCARD_FAILED`
 
 ## Lineamiento de archivos (R2 dual bucket)
 - EmpleoFacil opera con 2 buckets R2:

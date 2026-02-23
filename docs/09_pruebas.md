@@ -32,17 +32,27 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `POST /api/perfil/me/idiomas` crea idioma y devuelve `201`.
 - `PUT/DELETE /api/perfil/me/idiomas/:idiomaId` validan ownership y responden `404` si no existe.
 - `GET /api/perfil/me/experiencia` responde `200` con `{ items: [] }`.
+- `GET /api/perfil/empresas-experiencia?search=aguapen` responde `200` con `items` (catalogo local activo).
 - `POST /api/perfil/me/experiencia` crea experiencia y devuelve `201`.
+- `POST /api/perfil/me/experiencia` sin `empresa_id` y sin `empresa_nombre` devuelve `400 INVALID_PAYLOAD`.
 - `PUT/DELETE /api/perfil/me/experiencia/:experienciaId` validan ownership y responden `404` si no existe.
+- En experiencia importada ADEMY:
+  - `empresa_origen='ademy'` y `empresa_origen_id` deben persistirse.
+  - `empresa_id` debe quedar `NULL` si no existe mapeo manual local.
+  - no deben crearse empresas/usuarios locales automaticamente.
+- Si existe mapeo en `integracion_ademy_empresas_empleofacil`, `empresa_id` debe llenarse en reimportacion.
 - `POST /api/perfil/me/documentos` (multipart) crea metadata + archivo.
 - `POST /api/perfil/me/documentos` sin archivo devuelve `400 FILE_REQUIRED`.
 - `POST /api/perfil/me/documentos` con mime invalido devuelve `400 INVALID_FILE_TYPE`.
 - `POST /api/perfil/me/documentos` con archivo grande devuelve `400 FILE_TOO_LARGE`.
 - `GET|POST|PUT|DELETE /api/perfil/me/formacion*` validan CRUD por categoria/subtipo.
+- `GET /api/perfil/centros-capacitacion` devuelve catalogo para autocomplete.
+- `POST /api/perfil/me/formacion` con `institucion` solamente crea/usa centro y guarda `centro_cliente_id` + snapshot `institucion`.
+- `POST /api/perfil/me/formacion` con `centro_cliente_id` solamente completa `institucion` desde catalogo.
+- `POST /api/perfil/me/formacion` sin `institucion` y sin `centro_cliente_id` devuelve `422 FORMACION_INSTITUCION_REQUIRED`.
+- `POST /api/perfil/me/formacion` con `centro_cliente_id` inexistente devuelve `400 CENTRO_CAPACITACION_NOT_FOUND`.
 - `POST|PUT /api/perfil/me/formacion*` rechazan payload legacy (`estado`, `fecha_inicio`, `fecha_fin`, `matricula_id`, `nivel_id`, `curso_id`, `formacion_origen_id`) con `400 INVALID_PAYLOAD`.
 - `GET|POST|PUT|DELETE /api/perfil/me/educacion-general*` permiten multiples registros academicos.
-- `PUT /api/perfil/me/formacion/:formacionId/resultado` hace upsert y valida `INVALID_RESULTADO_PAYLOAD`.
-- `PUT /api/perfil/me/formacion/:formacionId/resultado` en item no externa devuelve `FORMACION_RESULTADO_NOT_ALLOWED`.
 - `GET|POST|PUT|DELETE /api/perfil/me/formacion/:formacionId/certificado` permite upload/reemplazo/borrado de certificado de curso.
 - `POST /api/perfil/me/formacion/:formacionId/certificado` en item no externa devuelve `FORMACION_CERTIFICADO_NOT_ALLOWED`.
 - `GET|POST|PUT|DELETE /api/perfil/me/experiencia/:experienciaId/certificado` respetan ownership.
@@ -62,6 +72,9 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `GET /api/company/perfil/me/preferencias` responde `200` con preferencias 1:1.
 - `PUT /api/company/perfil/me/preferencias` persiste arrays normalizados.
 - `DELETE /api/company/perfil/me` aplica soft delete y luego `GET /api/company/perfil/me` devuelve `404 EMPRESA_NOT_FOUND`.
+- Autovinculacion historica no ADEMY:
+  - crear o renombrar empresa con nombre igual a `candidatos_experiencia.empresa_nombre` debe llenar `empresa_id` en esas experiencias.
+  - experiencias con `empresa_origen='ademy'` no deben autovincularse por este mecanismo.
 
 ## Checklist de regresion rapida
 - Login funciona por email.
@@ -112,6 +125,9 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 ### 6) Perfil candidato Fase 2 (frontend)
 - `ProfileIdiomas` permite crear, editar y eliminar items.
 - `ProfileExperiencia` permite crear, editar y eliminar items.
+- `ProfileExperiencia` usa un solo input de empresa con autocomplete (`datalist`) contra `/api/perfil/empresas-experiencia`.
+- Si el texto coincide con una empresa existente, debe seleccionar/vincular `empresa_id`.
+- Si no coincide, debe guardar como texto libre en `empresa_nombre`.
 - `ProfileExperiencia` permite crear/actualizar/eliminar certificado laboral por experiencia.
 - `ProfileDocumentos` permite subir archivo y actualizar metadatos.
 - `ProfileFormacion` usa tabs:
@@ -120,6 +136,7 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
   - `Externa` permite subir/reemplazar/eliminar certificado de curso (pdf/imagen) por cada formacion.
   - `Certificacion` redirige operacion a `ProfileExperiencia` (certificado laboral por experiencia).
 - En `Externa`, solo se muestran campos del contrato limpio (`categoria_formacion`, `subtipo_formacion`, `institucion`, `nombre_programa`, `titulo_obtenido`, `fecha_aprobacion`, `fecha_emision`, `fecha_vencimiento`).
+- En `Externa`, el campo `Institucion` muestra sugerencias del catalogo (`/api/perfil/centros-capacitacion`) y permite texto libre.
 - El dashboard de perfil actualiza progreso total al completar secciones de Fase 2.
 - El drawer de empresa muestra `idiomas`, `experiencia`, `formacion` y `documentos` del candidato.
 

@@ -42,6 +42,8 @@ const {
   createMyExperienciaCertificado,
   updateMyExperienciaCertificado,
   deleteMyExperienciaCertificado,
+  listEmpresasExperiencia,
+  listCentrosCapacitacion,
   listExperienciaById,
   createExperienciaById,
   updateExperienciaById,
@@ -58,10 +60,6 @@ const {
   createFormacionById,
   updateFormacionById,
   deleteFormacionById,
-  getMyFormacionResultado,
-  updateMyFormacionResultado,
-  getFormacionResultadoById,
-  updateFormacionResultadoById,
   getMyFormacionCertificado,
   createMyFormacionCertificado,
   updateMyFormacionCertificado,
@@ -117,6 +115,8 @@ const uploadDocumento = multer({
   }
 });
 
+router.get('/centros-capacitacion', authRequired, requireRole(['candidato', 'administrador', 'superadmin']), listCentrosCapacitacion);
+router.get('/empresas-experiencia', authRequired, requireRole(['candidato', 'administrador', 'superadmin']), listEmpresasExperiencia);
 router.get('/me', authRequired, requireRole(['candidato']), getMyPerfil);
 router.get('/me/verificacion', authRequired, requireRole(['candidato']), getMyCandidateVerification);
 router.post('/me/verificacion/solicitar', authRequired, requireRole(['candidato']), requestMyCandidateVerification);
@@ -149,8 +149,6 @@ router.get('/me/formacion', authRequired, requireRole(['candidato']), listMyForm
 router.post('/me/formacion', authRequired, requireRole(['candidato']), createMyFormacion);
 router.put('/me/formacion/:formacionId', authRequired, requireRole(['candidato']), updateMyFormacion);
 router.delete('/me/formacion/:formacionId', authRequired, requireRole(['candidato']), deleteMyFormacion);
-router.get('/me/formacion/:formacionId/resultado', authRequired, requireRole(['candidato']), getMyFormacionResultado);
-router.put('/me/formacion/:formacionId/resultado', authRequired, requireRole(['candidato']), updateMyFormacionResultado);
 router.get('/me/formacion/:formacionId/certificado', authRequired, requireRole(['candidato']), getMyFormacionCertificado);
 router.post('/me/formacion/:formacionId/certificado', authRequired, requireRole(['candidato']), uploadDocumento.single('archivo'), createMyFormacionCertificado);
 router.put('/me/formacion/:formacionId/certificado', authRequired, requireRole(['candidato']), uploadDocumento.single('archivo'), updateMyFormacionCertificado);
@@ -191,8 +189,6 @@ router.get('/:candidatoId/formacion', authRequired, requireRole(['empresa', 'adm
 router.post('/:candidatoId/formacion', authRequired, requireRole(['administrador', 'superadmin']), createFormacionById);
 router.put('/:candidatoId/formacion/:formacionId', authRequired, requireRole(['administrador', 'superadmin']), updateFormacionById);
 router.delete('/:candidatoId/formacion/:formacionId', authRequired, requireRole(['administrador', 'superadmin']), deleteFormacionById);
-router.get('/:candidatoId/formacion/:formacionId/resultado', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), getFormacionResultadoById);
-router.put('/:candidatoId/formacion/:formacionId/resultado', authRequired, requireRole(['administrador', 'superadmin']), updateFormacionResultadoById);
 router.get('/:candidatoId/formacion/:formacionId/certificado', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), getFormacionCertificadoById);
 router.post('/:candidatoId/formacion/:formacionId/certificado', authRequired, requireRole(['administrador', 'superadmin']), uploadDocumento.single('archivo'), createFormacionCertificadoById);
 router.put('/:candidatoId/formacion/:formacionId/certificado', authRequired, requireRole(['administrador', 'superadmin']), uploadDocumento.single('archivo'), updateFormacionCertificadoById);

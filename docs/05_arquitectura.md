@@ -47,6 +47,19 @@ Estructura real en `backend/`:
   - baja logica de empresa (`soft delete`).
 - El frontend en `/app/company/empresa` consume este modulo y no maneja facturacion en el alcance actual.
 
+### Modelo hibrido de empresa en experiencia
+- `candidatos_experiencia` soporta 3 escenarios al mismo tiempo:
+  - empresa local vinculada: `empresa_id` + resolucion de `empresa_local_nombre`.
+  - empresa externa importada ADEMY: `empresa_origen='ademy'`, `empresa_origen_id`, `empresa_nombre`.
+  - empresa digitada manualmente en EmpleoFacil: `empresa_origen IS NULL`, `empresa_id IS NULL`, `empresa_nombre` con texto libre.
+- El admin mapea origen ADEMY con `integracion_ademy_empresas_empleofacil` (scope solo ADEMY).
+- Para experiencias manuales (no ADEMY), backend intenta autovincular historicos por nombre exacto normalizado cuando:
+  - se crea una empresa local nueva por flujo de cuenta empresa,
+  - se adjunta una cuenta empresa a una empresa existente por email,
+  - se actualiza el nombre de empresa en `/api/company/perfil/me/datos-generales`.
+- Regla de seguridad:
+  - la autovinculacion automatica solo aplica a filas con `empresa_origen IS NULL` para no contaminar el mapeo ADEMY.
+
 ## Frontend
 - Stack: React + Vite + Tailwind CSS v4.
 - Routing: `react-router-dom` en `frontend/src/App.jsx`.

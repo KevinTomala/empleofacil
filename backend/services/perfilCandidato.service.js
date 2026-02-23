@@ -116,13 +116,6 @@ async function getPerfilByCandidatoId(candidatoId) {
     listFormacion(candidatoId)
   ]);
 
-  const formacionResultados = formacion
-    .filter((item) => item.resultado)
-    .map((item) => ({
-      candidato_formacion_id: item.id,
-      ...item.resultado
-    }));
-
   return {
     datos_basicos: {
       id: row.c_id,
@@ -178,8 +171,7 @@ async function getPerfilByCandidatoId(candidatoId) {
     idiomas,
     experiencia,
     documentos,
-    formacion_detalle: formacion,
-    formacion_resultados: formacionResultados
+    formacion_detalle: formacion
   };
 }
 
@@ -379,6 +371,10 @@ async function listExperiencias(candidatoId) {
         e.id,
         e.candidato_id,
         e.empresa_id,
+        e.empresa_origen,
+        e.empresa_origen_id,
+        e.empresa_nombre,
+        em.nombre AS empresa_local_nombre,
         e.cargo,
         e.fecha_inicio,
         e.fecha_fin,
@@ -399,6 +395,9 @@ async function listExperiencias(candidatoId) {
         ec.created_at AS cert_created_at,
         ec.updated_at AS cert_updated_at
        FROM candidatos_experiencia e
+       LEFT JOIN empresas em
+         ON em.id = e.empresa_id
+        AND em.deleted_at IS NULL
        LEFT JOIN candidatos_experiencia_certificados ec
          ON ec.experiencia_id = e.id
         AND ec.deleted_at IS NULL
@@ -412,6 +411,10 @@ async function listExperiencias(candidatoId) {
       id: row.id,
       candidato_id: row.candidato_id,
       empresa_id: row.empresa_id,
+      empresa_origen: row.empresa_origen,
+      empresa_origen_id: row.empresa_origen_id,
+      empresa_nombre: row.empresa_nombre,
+      empresa_local_nombre: row.empresa_local_nombre || null,
       cargo: row.cargo,
       fecha_inicio: row.fecha_inicio,
       fecha_fin: row.fecha_fin,
@@ -444,6 +447,10 @@ async function listExperiencias(candidatoId) {
           e.id,
           e.candidato_id,
           e.empresa_id,
+          e.empresa_origen,
+          e.empresa_origen_id,
+          e.empresa_nombre,
+          em.nombre AS empresa_local_nombre,
           e.cargo,
           e.fecha_inicio,
           e.fecha_fin,
@@ -453,6 +460,9 @@ async function listExperiencias(candidatoId) {
           e.created_at,
           e.updated_at
          FROM candidatos_experiencia e
+         LEFT JOIN empresas em
+           ON em.id = e.empresa_id
+          AND em.deleted_at IS NULL
          WHERE e.candidato_id = ?
            AND e.deleted_at IS NULL
          ORDER BY e.created_at DESC`,
@@ -464,44 +474,145 @@ async function listExperiencias(candidatoId) {
       }));
     } catch (fallbackError) {
       if (!isSchemaDriftError(fallbackError)) throw fallbackError;
-      return [];
+      try {
+        const [rows] = await db.query(
+          `SELECT
+            e.id,
+            e.candidato_id,
+            e.empresa_id,
+            NULL AS empresa_origen,
+            NULL AS empresa_origen_id,
+            NULL AS empresa_nombre,
+            NULL AS empresa_local_nombre,
+            e.cargo,
+            e.fecha_inicio,
+            e.fecha_fin,
+            e.actualmente_trabaja,
+            e.tipo_contrato,
+            e.descripcion,
+            e.created_at,
+            e.updated_at
+           FROM candidatos_experiencia e
+           WHERE e.candidato_id = ?
+             AND e.deleted_at IS NULL
+           ORDER BY e.created_at DESC`,
+          [candidatoId]
+        );
+        return rows.map((row) => ({
+          ...row,
+          certificado_laboral: null
+        }));
+      } catch (legacyError) {
+        if (!isSchemaDriftError(legacyError)) throw legacyError;
+        return [];
+      }
     }
   }
 }
 
-async function createExperiencia(candidatoId, payload) {
-  const [result] = await db.query(
-    `INSERT INTO candidatos_experiencia (
-      candidato_id, empresa_id, cargo, fecha_inicio, fecha_fin, actualmente_trabaja, tipo_contrato, descripcion
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      candidatoId,
-      payload.empresa_id ?? null,
-      payload.cargo ?? null,
-      payload.fecha_inicio ?? null,
-      payload.fecha_fin ?? null,
-      payload.actualmente_trabaja ?? 0,
-      payload.tipo_contrato ?? null,
-      payload.descripcion ?? null
-    ]
+async function findEmpresaNombreById(empresaId) {
+  const normalizedId = normalizePositiveInt(empresaId);
+  if (!normalizedId) return null;
+  const [rows] = await db.query(
+    `SELECT nombre
+     FROM empresas
+     WHERE id = ?
+       AND deleted_at IS NULL
+     LIMIT 1`,
+    [normalizedId]
   );
+  return rows[0]?.nombre || null;
+}
+
+async function createExperiencia(candidatoId, payload) {
+  let empresaNombre = payload.empresa_nombre ?? null;
+  if (payload.empresa_id) {
+    const nombreLocal = await findEmpresaNombreById(payload.empresa_id);
+    if (nombreLocal) empresaNombre = nombreLocal;
+  }
+
+  let result;
+  try {
+    [result] = await db.query(
+      `INSERT INTO candidatos_experiencia (
+        candidato_id, empresa_id, empresa_nombre, cargo, fecha_inicio, fecha_fin, actualmente_trabaja, tipo_contrato, descripcion
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        candidatoId,
+        payload.empresa_id ?? null,
+        empresaNombre,
+        payload.cargo ?? null,
+        payload.fecha_inicio ?? null,
+        payload.fecha_fin ?? null,
+        payload.actualmente_trabaja ?? 0,
+        payload.tipo_contrato ?? null,
+        payload.descripcion ?? null
+      ]
+    );
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    [result] = await db.query(
+      `INSERT INTO candidatos_experiencia (
+        candidato_id, empresa_id, cargo, fecha_inicio, fecha_fin, actualmente_trabaja, tipo_contrato, descripcion
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        candidatoId,
+        payload.empresa_id ?? null,
+        payload.cargo ?? null,
+        payload.fecha_inicio ?? null,
+        payload.fecha_fin ?? null,
+        payload.actualmente_trabaja ?? 0,
+        payload.tipo_contrato ?? null,
+        payload.descripcion ?? null
+      ]
+    );
+  }
   return { id: result.insertId };
 }
 
 async function updateExperiencia(candidatoId, experienciaId, payload) {
-  const keys = Object.keys(payload);
+  const normalizedPayload = { ...payload };
+  if (Object.prototype.hasOwnProperty.call(normalizedPayload, 'empresa_id')) {
+    if (normalizedPayload.empresa_id) {
+      const nombreLocal = await findEmpresaNombreById(normalizedPayload.empresa_id);
+      if (nombreLocal) normalizedPayload.empresa_nombre = nombreLocal;
+    } else if (!Object.prototype.hasOwnProperty.call(normalizedPayload, 'empresa_nombre')) {
+      normalizedPayload.empresa_nombre = null;
+    }
+  }
+
+  const keys = Object.keys(normalizedPayload);
   if (!keys.length) return 0;
 
   const setSql = keys.map((key) => `${key} = ?`).join(', ');
-  const [result] = await db.query(
-    `UPDATE candidatos_experiencia
-     SET ${setSql}
-     WHERE id = ?
-       AND candidato_id = ?
-       AND deleted_at IS NULL`,
-    [...keys.map((key) => payload[key]), experienciaId, candidatoId]
-  );
-  return result.affectedRows;
+  try {
+    const [result] = await db.query(
+      `UPDATE candidatos_experiencia
+       SET ${setSql}
+       WHERE id = ?
+         AND candidato_id = ?
+         AND deleted_at IS NULL`,
+      [...keys.map((key) => normalizedPayload[key]), experienciaId, candidatoId]
+    );
+    return result.affectedRows;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+
+    const fallbackPayload = { ...normalizedPayload };
+    delete fallbackPayload.empresa_nombre;
+    const fallbackKeys = Object.keys(fallbackPayload);
+    if (!fallbackKeys.length) return 0;
+    const fallbackSetSql = fallbackKeys.map((key) => `${key} = ?`).join(', ');
+    const [result] = await db.query(
+      `UPDATE candidatos_experiencia
+       SET ${fallbackSetSql}
+       WHERE id = ?
+         AND candidato_id = ?
+         AND deleted_at IS NULL`,
+      [...fallbackKeys.map((key) => fallbackPayload[key]), experienciaId, candidatoId]
+    );
+    return result.affectedRows;
+  }
 }
 
 async function deleteExperiencia(candidatoId, experienciaId) {
@@ -660,10 +771,216 @@ async function deleteExperienciaCertificado(candidatoId, experienciaId) {
   return result.affectedRows;
 }
 
+function buildServiceError(code, status) {
+  const error = new Error(code);
+  error.code = code;
+  error.status = status;
+  return error;
+}
+
+function normalizeCenterName(value) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  return normalized || null;
+}
+
+function toTextOrNull(value) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+function normalizePositiveInt(value) {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num <= 0) return null;
+  return num;
+}
+
+function mergeCenterOrigin(currentOrigin, incomingOrigin) {
+  if (!currentOrigin) return incomingOrigin;
+  if (currentOrigin === incomingOrigin) return currentOrigin;
+  return 'mixto';
+}
+
+async function findCentroCapacitacionById(centroId) {
+  try {
+    const [rows] = await db.query(
+      `SELECT id, nombre, origen, activo
+       FROM centros_capacitacion
+       WHERE id = ?
+       LIMIT 1`,
+      [centroId]
+    );
+    return rows[0] || null;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    return null;
+  }
+}
+
+async function findCentroCapacitacionByNombre(nombre) {
+  try {
+    const [rows] = await db.query(
+      `SELECT id, nombre, origen, activo
+       FROM centros_capacitacion
+       WHERE nombre = ?
+       LIMIT 1`,
+      [nombre]
+    );
+    return rows[0] || null;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    return null;
+  }
+}
+
+async function findOrCreateCentroCapacitacionByNombre(nombre, origen = 'externo') {
+  const existing = await findCentroCapacitacionByNombre(nombre);
+  if (existing) {
+    const mergedOrigin = mergeCenterOrigin(existing.origen, origen);
+    if (mergedOrigin !== existing.origen) {
+      await db.query(
+        `UPDATE centros_capacitacion
+         SET origen = ?, updated_at = NOW()
+         WHERE id = ?`,
+        [mergedOrigin, existing.id]
+      );
+      existing.origen = mergedOrigin;
+    }
+    return existing;
+  }
+
+  try {
+    const [insert] = await db.query(
+      `INSERT INTO centros_capacitacion (nombre, origen, activo)
+       VALUES (?, ?, 1)`,
+      [nombre, origen]
+    );
+    return {
+      id: insert.insertId,
+      nombre,
+      origen,
+      activo: 1
+    };
+  } catch (error) {
+    if (isSchemaDriftError(error)) {
+      return {
+        id: null,
+        nombre,
+        origen,
+        activo: 1
+      };
+    }
+    if (String(error.code || '') !== 'ER_DUP_ENTRY') throw error;
+    const duplicate = await findCentroCapacitacionByNombre(nombre);
+    if (!duplicate) throw error;
+    const mergedOrigin = mergeCenterOrigin(duplicate.origen, origen);
+    if (mergedOrigin !== duplicate.origen) {
+      await db.query(
+        `UPDATE centros_capacitacion
+         SET origen = ?, updated_at = NOW()
+         WHERE id = ?`,
+        [mergedOrigin, duplicate.id]
+      );
+      duplicate.origen = mergedOrigin;
+    }
+    return duplicate;
+  }
+}
+
+async function resolveCentroCapacitacionForFormacion({
+  categoriaFormacion,
+  centroClienteId,
+  institucion,
+  allowCenterCreate = true,
+  centerOrigin = 'externo'
+}) {
+  if (categoriaFormacion !== 'externa') {
+    return {
+      centro_cliente_id: centroClienteId ?? null,
+      institucion: normalizeCenterName(institucion)
+    };
+  }
+
+  const centroId = normalizePositiveInt(centroClienteId);
+  if (centroId) {
+    const centro = await findCentroCapacitacionById(centroId);
+    if (centro) {
+      return {
+        centro_cliente_id: centro.id,
+        institucion: centro.nombre
+      };
+    }
+  }
+
+  const institucionNorm = normalizeCenterName(institucion);
+  if (!institucionNorm && centroId) {
+    throw buildServiceError('CENTRO_CAPACITACION_NOT_FOUND', 400);
+  }
+  if (institucionNorm) {
+    if (!allowCenterCreate) {
+      return {
+        centro_cliente_id: null,
+        institucion: institucionNorm
+      };
+    }
+    const centro = await findOrCreateCentroCapacitacionByNombre(institucionNorm, centerOrigin);
+    return {
+      centro_cliente_id: centro.id,
+      institucion: centro.nombre
+    };
+  }
+
+  throw buildServiceError('FORMACION_INSTITUCION_REQUIRED', 422);
+}
+
+async function listCentrosCapacitacion({ search = null, limit = 20 } = {}) {
+  const term = normalizeCenterName(search);
+  const safeLimit = Math.min(Math.max(Number(limit || 20), 1), 100);
+  try {
+    const [rows] = await db.query(
+      `SELECT id, nombre, origen, activo
+       FROM centros_capacitacion
+       WHERE activo = 1
+         AND (? IS NULL OR nombre LIKE ?)
+       ORDER BY nombre ASC
+       LIMIT ?`,
+      [term, term ? `%${term}%` : null, safeLimit]
+    );
+    return rows;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    return [];
+  }
+}
+
+async function listEmpresasExperiencia({ search = null, limit = 30 } = {}) {
+  const term = toTextOrNull(search);
+  const safeLimit = Math.min(Math.max(Number(limit || 30), 1), 100);
+  const like = term ? `%${term}%` : null;
+  const [rows] = await db.query(
+    `SELECT id, nombre, ruc, email, tipo
+     FROM empresas
+     WHERE deleted_at IS NULL
+       AND activo = 1
+       AND (? IS NULL OR nombre LIKE ? OR ruc LIKE ? OR email LIKE ?)
+     ORDER BY
+       CASE
+         WHEN ? IS NOT NULL AND nombre = ? THEN 0
+         WHEN ? IS NOT NULL AND nombre LIKE ? THEN 1
+         ELSE 2
+       END,
+       nombre ASC
+     LIMIT ?`,
+    [term, like, like, like, term, term, term, term ? `${term}%` : null, safeLimit]
+  );
+  return rows;
+}
+
 async function listFormacion(candidatoId) {
   let rows = [];
   try {
-    const [rowsFull] = await db.query(
+    const [queryRows] = await db.query(
       `SELECT
         f.id,
         f.candidato_id,
@@ -671,7 +988,9 @@ async function listFormacion(candidatoId) {
         f.activo,
         f.categoria_formacion,
         f.subtipo_formacion,
+        f.centro_cliente_id,
         f.institucion,
+        cc.nombre AS centro_cliente_nombre,
         f.nombre_programa,
         f.titulo_obtenido,
         f.entidad_emisora,
@@ -679,48 +998,19 @@ async function listFormacion(candidatoId) {
         f.fecha_emision,
         f.fecha_vencimiento,
         f.created_at,
-        f.updated_at,
-        fr.id AS fr_id,
-        fr.resultado_curso AS fr_resultado_curso,
-        fr.nota_curso AS fr_nota_curso,
-        fr.fuente_curso AS fr_fuente_curso,
-        fr.fecha_cierre_curso AS fr_fecha_cierre_curso,
-        fr.examen_estado AS fr_examen_estado,
-        fr.nota_examen AS fr_nota_examen,
-        fr.acreditado AS fr_acreditado,
-        fr.fecha_examen AS fr_fecha_examen,
-        fr.documento_url AS fr_documento_url,
-        fr.created_at AS fr_created_at,
-        fr.updated_at AS fr_updated_at,
-        fc.id AS fc_id,
-        fc.nombre_archivo AS fc_nombre_archivo,
-        fc.nombre_original AS fc_nombre_original,
-        fc.ruta_archivo AS fc_ruta_archivo,
-        fc.tipo_mime AS fc_tipo_mime,
-        fc.tamanio_kb AS fc_tamanio_kb,
-        fc.fecha_emision AS fc_fecha_emision,
-        fc.descripcion AS fc_descripcion,
-        fc.estado AS fc_estado,
-        fc.estado_extraccion AS fc_estado_extraccion,
-        fc.datos_extraidos_json AS fc_datos_extraidos_json,
-        fc.created_at AS fc_created_at,
-        fc.updated_at AS fc_updated_at
+        f.updated_at
        FROM candidatos_formaciones f
-       LEFT JOIN candidatos_formacion_resultados fr
-         ON fr.candidato_formacion_id = f.id
-        AND fr.deleted_at IS NULL
-       LEFT JOIN candidatos_formacion_certificados fc
-         ON fc.candidato_formacion_id = f.id
-        AND fc.deleted_at IS NULL
+       LEFT JOIN centros_capacitacion cc
+         ON cc.id = f.centro_cliente_id
        WHERE f.candidato_id = ?
          AND f.deleted_at IS NULL
        ORDER BY f.created_at DESC`,
       [candidatoId]
     );
-    rows = rowsFull;
+    rows = queryRows;
   } catch (error) {
     if (!isSchemaDriftError(error)) throw error;
-    const [rowsFallback] = await db.query(
+    const [queryRows] = await db.query(
       `SELECT
         f.id,
         f.candidato_id,
@@ -728,7 +1018,9 @@ async function listFormacion(candidatoId) {
         f.activo,
         f.categoria_formacion,
         f.subtipo_formacion,
+        NULL AS centro_cliente_id,
         f.institucion,
+        NULL AS centro_cliente_nombre,
         f.nombre_programa,
         f.titulo_obtenido,
         f.entidad_emisora,
@@ -736,42 +1028,14 @@ async function listFormacion(candidatoId) {
         f.fecha_emision,
         f.fecha_vencimiento,
         f.created_at,
-        f.updated_at,
-        fr.id AS fr_id,
-        fr.resultado_curso AS fr_resultado_curso,
-        fr.nota_curso AS fr_nota_curso,
-        fr.fuente_curso AS fr_fuente_curso,
-        fr.fecha_cierre_curso AS fr_fecha_cierre_curso,
-        fr.examen_estado AS fr_examen_estado,
-        fr.nota_examen AS fr_nota_examen,
-        fr.acreditado AS fr_acreditado,
-        fr.fecha_examen AS fr_fecha_examen,
-        fr.documento_url AS fr_documento_url,
-        fr.created_at AS fr_created_at,
-        fr.updated_at AS fr_updated_at,
-        NULL AS fc_id,
-        NULL AS fc_nombre_archivo,
-        NULL AS fc_nombre_original,
-        NULL AS fc_ruta_archivo,
-        NULL AS fc_tipo_mime,
-        NULL AS fc_tamanio_kb,
-        NULL AS fc_fecha_emision,
-        NULL AS fc_descripcion,
-        NULL AS fc_estado,
-        NULL AS fc_estado_extraccion,
-        NULL AS fc_datos_extraidos_json,
-        NULL AS fc_created_at,
-        NULL AS fc_updated_at
+        f.updated_at
        FROM candidatos_formaciones f
-       LEFT JOIN candidatos_formacion_resultados fr
-         ON fr.candidato_formacion_id = f.id
-        AND fr.deleted_at IS NULL
        WHERE f.candidato_id = ?
          AND f.deleted_at IS NULL
        ORDER BY f.created_at DESC`,
       [candidatoId]
     );
-    rows = rowsFallback;
+    rows = queryRows;
   }
 
   return rows.map((row) => {
@@ -782,6 +1046,8 @@ async function listFormacion(candidatoId) {
       activo: row.activo,
       categoria_formacion: row.categoria_formacion,
       subtipo_formacion: row.subtipo_formacion,
+      centro_cliente_id: row.centro_cliente_id,
+      centro_cliente_nombre: row.centro_cliente_nombre,
       institucion: row.institucion,
       nombre_programa: row.nombre_programa,
       titulo_obtenido: row.titulo_obtenido,
@@ -790,90 +1056,161 @@ async function listFormacion(candidatoId) {
       fecha_emision: row.fecha_emision,
       fecha_vencimiento: row.fecha_vencimiento,
       created_at: row.created_at,
-      updated_at: row.updated_at,
-      resultado: row.fr_id
-        ? {
-            id: row.fr_id,
-            resultado_curso: row.fr_resultado_curso,
-            nota_curso: row.fr_nota_curso,
-            fuente_curso: row.fr_fuente_curso,
-            fecha_cierre_curso: row.fr_fecha_cierre_curso,
-            examen_estado: row.fr_examen_estado,
-            nota_examen: row.fr_nota_examen,
-            acreditado: row.fr_acreditado,
-            fecha_examen: row.fr_fecha_examen,
-            documento_url: row.fr_documento_url,
-            created_at: row.fr_created_at,
-            updated_at: row.fr_updated_at
-          }
-        : null,
-      certificado_curso: row.fc_id
-        ? {
-            id: row.fc_id,
-            nombre_archivo: row.fc_nombre_archivo,
-            nombre_original: row.fc_nombre_original,
-            ruta_archivo: row.fc_ruta_archivo,
-            tipo_mime: row.fc_tipo_mime,
-            tamanio_kb: row.fc_tamanio_kb,
-            fecha_emision: row.fc_fecha_emision,
-            descripcion: row.fc_descripcion,
-            estado: row.fc_estado,
-            estado_extraccion: row.fc_estado_extraccion,
-            datos_extraidos_json: row.fc_datos_extraidos_json,
-            created_at: row.fc_created_at,
-            updated_at: row.fc_updated_at
-          }
-        : null
+      updated_at: row.updated_at
     };
   });
 }
 
 async function createFormacion(candidatoId, payload) {
-  const [result] = await db.query(
-    `INSERT INTO candidatos_formaciones (
-      candidato_id,
-      fecha_aprobacion,
-      activo,
-      categoria_formacion,
-      subtipo_formacion,
-      institucion,
-      nombre_programa,
-      titulo_obtenido,
-      entidad_emisora,
-      numero_registro,
-      fecha_emision,
-      fecha_vencimiento
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      candidatoId,
-      payload.fecha_aprobacion ?? null,
-      payload.activo ?? 1,
-      payload.categoria_formacion,
-      payload.subtipo_formacion,
-      payload.institucion ?? null,
-      payload.nombre_programa ?? null,
-      payload.titulo_obtenido ?? null,
-      payload.entidad_emisora ?? null,
-      payload.numero_registro ?? null,
-      payload.fecha_emision ?? null,
-      payload.fecha_vencimiento ?? null
-    ]
-  );
+  const resolvedCenter = await resolveCentroCapacitacionForFormacion({
+    categoriaFormacion: payload.categoria_formacion,
+    centroClienteId: payload.centro_cliente_id,
+    institucion: payload.institucion,
+    allowCenterCreate: true,
+    centerOrigin: 'externo'
+  });
+
+  let result;
+  try {
+    [result] = await db.query(
+      `INSERT INTO candidatos_formaciones (
+        candidato_id,
+        fecha_aprobacion,
+        activo,
+        categoria_formacion,
+        subtipo_formacion,
+        centro_cliente_id,
+        institucion,
+        nombre_programa,
+        titulo_obtenido,
+        entidad_emisora,
+        numero_registro,
+        fecha_emision,
+        fecha_vencimiento
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        candidatoId,
+        payload.fecha_aprobacion ?? null,
+        payload.activo ?? 1,
+        payload.categoria_formacion,
+        payload.subtipo_formacion,
+        resolvedCenter.centro_cliente_id,
+        resolvedCenter.institucion,
+        payload.nombre_programa ?? null,
+        payload.titulo_obtenido ?? null,
+        payload.entidad_emisora ?? null,
+        payload.numero_registro ?? null,
+        payload.fecha_emision ?? null,
+        payload.fecha_vencimiento ?? null
+      ]
+    );
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    [result] = await db.query(
+      `INSERT INTO candidatos_formaciones (
+        candidato_id,
+        fecha_aprobacion,
+        activo,
+        categoria_formacion,
+        subtipo_formacion,
+        institucion,
+        nombre_programa,
+        titulo_obtenido,
+        entidad_emisora,
+        numero_registro,
+        fecha_emision,
+        fecha_vencimiento
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        candidatoId,
+        payload.fecha_aprobacion ?? null,
+        payload.activo ?? 1,
+        payload.categoria_formacion,
+        payload.subtipo_formacion,
+        resolvedCenter.institucion,
+        payload.nombre_programa ?? null,
+        payload.titulo_obtenido ?? null,
+        payload.entidad_emisora ?? null,
+        payload.numero_registro ?? null,
+        payload.fecha_emision ?? null,
+        payload.fecha_vencimiento ?? null
+      ]
+    );
+  }
   return { id: result.insertId };
 }
 
 async function updateFormacion(candidatoId, formacionId, payload) {
+  let rows = [];
+  let hasCenterColumn = true;
+  try {
+    const [queryRows] = await db.query(
+      `SELECT id, categoria_formacion, centro_cliente_id, institucion
+       FROM candidatos_formaciones
+       WHERE id = ?
+         AND candidato_id = ?
+         AND deleted_at IS NULL
+       LIMIT 1`,
+      [formacionId, candidatoId]
+    );
+    rows = queryRows;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    hasCenterColumn = false;
+    const [queryRows] = await db.query(
+      `SELECT id, categoria_formacion, institucion
+       FROM candidatos_formaciones
+       WHERE id = ?
+         AND candidato_id = ?
+         AND deleted_at IS NULL
+       LIMIT 1`,
+      [formacionId, candidatoId]
+    );
+    rows = queryRows.map((row) => ({
+      ...row,
+      centro_cliente_id: null
+    }));
+  }
+  if (!rows.length) return 0;
+
+  const current = rows[0];
   const keys = Object.keys(payload);
   if (!keys.length) return 0;
 
-  const setSql = keys.map((key) => `${key} = ?`).join(', ');
+  const hasCategoria = Object.prototype.hasOwnProperty.call(payload, 'categoria_formacion');
+  const hasCentroClienteId = Object.prototype.hasOwnProperty.call(payload, 'centro_cliente_id');
+  const hasInstitucion = Object.prototype.hasOwnProperty.call(payload, 'institucion');
+  const mustResolveCenter = hasCategoria || hasCentroClienteId || hasInstitucion;
+
+  if (mustResolveCenter) {
+    const categoriaFormacion = hasCategoria ? payload.categoria_formacion : current.categoria_formacion;
+    const centroClienteId = hasCentroClienteId ? payload.centro_cliente_id : current.centro_cliente_id;
+    const institucion = hasInstitucion ? payload.institucion : current.institucion;
+    const resolvedCenter = await resolveCentroCapacitacionForFormacion({
+      categoriaFormacion,
+      centroClienteId,
+      institucion,
+      allowCenterCreate: true,
+      centerOrigin: 'externo'
+    });
+    payload.centro_cliente_id = resolvedCenter.centro_cliente_id;
+    payload.institucion = resolvedCenter.institucion;
+  }
+
+  if (!hasCenterColumn) {
+    delete payload.centro_cliente_id;
+  }
+
+  const payloadKeys = Object.keys(payload);
+  if (!payloadKeys.length) return 0;
+  const setSql = payloadKeys.map((key) => `${key} = ?`).join(', ');
   const [result] = await db.query(
     `UPDATE candidatos_formaciones
      SET ${setSql}
      WHERE id = ?
        AND candidato_id = ?
        AND deleted_at IS NULL`,
-    [...keys.map((key) => payload[key]), formacionId, candidatoId]
+    [...payloadKeys.map((key) => payload[key]), formacionId, candidatoId]
   );
   return result.affectedRows;
 }
@@ -903,54 +1240,7 @@ async function existsFormacion(candidatoId, formacionId) {
   return Boolean(rows.length);
 }
 
-async function getFormacionResultado(candidatoId, formacionId) {
-  const [rows] = await db.query(
-    `SELECT
-      fr.id,
-      fr.candidato_formacion_id,
-      fr.resultado_curso,
-      fr.nota_curso,
-      fr.fuente_curso,
-      fr.fecha_cierre_curso,
-      fr.examen_estado,
-      fr.nota_examen,
-      fr.acreditado,
-      fr.fecha_examen,
-      fr.documento_url,
-      fr.created_at,
-      fr.updated_at
-     FROM candidatos_formaciones f
-     LEFT JOIN candidatos_formacion_resultados fr
-       ON fr.candidato_formacion_id = f.id
-      AND fr.deleted_at IS NULL
-     WHERE f.id = ?
-       AND f.candidato_id = ?
-       AND f.deleted_at IS NULL
-     LIMIT 1`,
-    [formacionId, candidatoId]
-  );
-
-  const row = rows[0];
-  if (!row || !row.id) return null;
-
-  return {
-    id: row.id,
-    candidato_formacion_id: row.candidato_formacion_id,
-    resultado_curso: row.resultado_curso,
-    nota_curso: row.nota_curso,
-    fuente_curso: row.fuente_curso,
-    fecha_cierre_curso: row.fecha_cierre_curso,
-    examen_estado: row.examen_estado,
-    nota_examen: row.nota_examen,
-    acreditado: row.acreditado,
-    fecha_examen: row.fecha_examen,
-    documento_url: row.documento_url,
-    created_at: row.created_at,
-    updated_at: row.updated_at
-  };
-}
-
-async function canUseFormacionResultado(candidatoId, formacionId) {
+async function getFormacionCertificadoAccessState(candidatoId, formacionId) {
   const [rows] = await db.query(
     `SELECT
       id,
@@ -966,29 +1256,6 @@ async function canUseFormacionResultado(candidatoId, formacionId) {
   const row = rows[0];
   if (!row) return { exists: false, allowed: false };
   return { exists: true, allowed: row.categoria_formacion === 'externa' };
-}
-
-async function upsertFormacionResultado(candidatoId, formacionId, payload) {
-  const state = await canUseFormacionResultado(candidatoId, formacionId);
-  if (!state.exists) return 0;
-  if (!state.allowed) return -1;
-
-  const keys = Object.keys(payload);
-  if (!keys.length) return 0;
-
-  const columns = ['candidato_formacion_id', ...keys];
-  const placeholders = columns.map(() => '?').join(', ');
-  const values = [formacionId, ...keys.map((key) => payload[key])];
-  const updateSql = [...keys.map((key) => `${key} = VALUES(${key})`), 'deleted_at = NULL'].join(', ');
-
-  await db.query(
-    `INSERT INTO candidatos_formacion_resultados (${columns.join(', ')})
-     VALUES (${placeholders})
-     ON DUPLICATE KEY UPDATE ${updateSql}`,
-    values
-  );
-
-  return 1;
 }
 
 async function getFormacionCertificado(candidatoId, formacionId) {
@@ -1081,7 +1348,7 @@ async function getFormacionCertificado(candidatoId, formacionId) {
 }
 
 async function createFormacionCertificado(candidatoId, formacionId, payload) {
-  const state = await canUseFormacionResultado(candidatoId, formacionId);
+  const state = await getFormacionCertificadoAccessState(candidatoId, formacionId);
   if (!state.exists) return 0;
   if (!state.allowed) return -1;
 
@@ -1131,7 +1398,7 @@ async function createFormacionCertificado(candidatoId, formacionId, payload) {
 }
 
 async function updateFormacionCertificado(candidatoId, formacionId, patch) {
-  const state = await canUseFormacionResultado(candidatoId, formacionId);
+  const state = await getFormacionCertificadoAccessState(candidatoId, formacionId);
   if (!state.exists) return -1;
   if (!state.allowed) return -2;
 
@@ -1156,7 +1423,7 @@ async function updateFormacionCertificado(candidatoId, formacionId, patch) {
 }
 
 async function deleteFormacionCertificado(candidatoId, formacionId) {
-  const state = await canUseFormacionResultado(candidatoId, formacionId);
+  const state = await getFormacionCertificadoAccessState(candidatoId, formacionId);
   if (!state.exists) return -1;
   if (!state.allowed) return -2;
 
@@ -1291,14 +1558,13 @@ module.exports = {
   createExperienciaCertificado,
   updateExperienciaCertificado,
   deleteExperienciaCertificado,
+  listCentrosCapacitacion,
+  listEmpresasExperiencia,
   listFormacion,
   createFormacion,
   updateFormacion,
   deleteFormacion,
   existsFormacion,
-  getFormacionResultado,
-  canUseFormacionResultado,
-  upsertFormacionResultado,
   getFormacionCertificado,
   createFormacionCertificado,
   updateFormacionCertificado,
@@ -1308,5 +1574,3 @@ module.exports = {
   updateDocumento,
   deleteDocumento
 };
-
-

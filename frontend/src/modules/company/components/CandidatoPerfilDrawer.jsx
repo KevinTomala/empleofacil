@@ -6,6 +6,42 @@ function renderValue(value) {
   return String(value)
 }
 
+function formatDateShort(value) {
+  if (!value) return 'N/D'
+  return String(value).slice(0, 10)
+}
+
+function diffMonths(fromDate, toDate) {
+  if (!fromDate || !toDate) return null
+  const start = new Date(fromDate)
+  const end = new Date(toDate)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null
+  let months = (end.getFullYear() - start.getFullYear()) * 12
+  months += end.getMonth() - start.getMonth()
+  if (end.getDate() < start.getDate()) months -= 1
+  return Math.max(months, 0)
+}
+
+function formatDurationLabel(item) {
+  const start = item?.fecha_inicio
+  const end = item?.actualmente_trabaja ? new Date().toISOString().slice(0, 10) : item?.fecha_fin
+  const months = diffMonths(start, end)
+  if (months === null) return 'N/D'
+  const years = Math.floor(months / 12)
+  const restMonths = months % 12
+  if (years > 0 && restMonths > 0) return `${years}a ${restMonths}m`
+  if (years > 0) return `${years}a`
+  return `${restMonths}m`
+}
+
+function resolveEmpresaNombre(item) {
+  if (item?.empresa_local_nombre) return item.empresa_local_nombre
+  if (item?.empresa_nombre) return item.empresa_nombre
+  if (item?.empresa_origen === 'ademy' && item?.empresa_origen_id) return `ADEMY #${item.empresa_origen_id}`
+  if (item?.empresa_id) return `Empresa #${item.empresa_id}`
+  return 'Empresa no especificada'
+}
+
 function Section({ title, data }) {
   if (Array.isArray(data)) {
     return (
@@ -42,6 +78,33 @@ function Section({ title, data }) {
           </div>
         ))}
       </div>
+    </section>
+  )
+}
+
+function ExperienceSection({ items }) {
+  const data = Array.isArray(items) ? items : []
+  return (
+    <section className="border border-border rounded-xl p-3 bg-white">
+      <h3 className="text-sm font-semibold mb-2">Experiencia</h3>
+      {!data.length && <p className="text-xs text-foreground/60">Sin registros</p>}
+      {data.length > 0 && (
+        <div className="space-y-2">
+          {data.map((item) => (
+            <article key={item.id || JSON.stringify(item)} className="border border-border/70 rounded-lg px-3 py-2">
+              <p className="text-sm font-semibold text-foreground/90">{resolveEmpresaNombre(item)}</p>
+              <p className="text-xs text-foreground/70">Cargo: {item?.cargo || 'N/D'}</p>
+              <p className="text-xs text-foreground/70">
+                Periodo: {formatDateShort(item?.fecha_inicio)} - {item?.actualmente_trabaja ? 'Actual' : formatDateShort(item?.fecha_fin)}
+              </p>
+              <p className="text-xs text-foreground/70">Tiempo trabajado: {formatDurationLabel(item)}</p>
+              <p className="text-xs text-foreground/70">Actualmente trabaja ahi: {item?.actualmente_trabaja ? 'Si' : 'No'}</p>
+              <p className="text-xs text-foreground/70">Descripcion del puesto: {item?.descripcion || 'N/D'}</p>
+              <p className="text-xs text-foreground/70">Certificado laboral: {item?.certificado_laboral ? 'Adjuntado' : 'Pendiente'}</p>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   )
 }
@@ -91,8 +154,7 @@ export default function CandidatoPerfilDrawer({
               <Section title="Educacion" data={perfil.educacion} />
               <Section title="Educacion general" data={perfil.educacion_general_items} />
               <Section title="Formacion" data={perfil.formacion_detalle} />
-              <Section title="Resultados formacion" data={perfil.formacion_resultados} />
-              <Section title="Experiencia" data={perfil.experiencia} />
+              <ExperienceSection items={perfil.experiencia} />
               <Section title="Documentos" data={perfil.documentos} />
             </>
           )}

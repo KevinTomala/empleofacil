@@ -74,6 +74,7 @@ export default function Header() {
         { href: '/app/admin', label: 'Resumen' },
         { href: '/app/admin/roles', label: 'Roles' },
         { href: '/app/admin/cuentas', label: 'Cuentas' },
+        { href: '/app/admin/mapeo-empresas', label: 'Mapeo empresas' },
         { href: '/app/admin/candidatos', label: 'Candidatos' },
         { href: '/app/admin/auditoria', label: 'Auditoría' },
       ]

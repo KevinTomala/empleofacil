@@ -13,6 +13,63 @@ function createServiceError(code, message) {
   return error;
 }
 
+function isSchemaDriftError(error) {
+  if (!error) return false;
+  const code = String(error.code || '');
+  const errno = Number(error.errno || 0);
+  return code === 'ER_BAD_FIELD_ERROR' || code === 'ER_NO_SUCH_TABLE' || errno === 1054 || errno === 1146;
+}
+
+function normalizeCompanyName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+async function linkExperienciasByEmpresaName(empresaId, empresaNombre, connection = db) {
+  const safeEmpresaId = Number(empresaId);
+  const safeNombre = normalizeCompanyName(empresaNombre);
+  if (!Number.isInteger(safeEmpresaId) || safeEmpresaId <= 0 || !safeNombre) return 0;
+
+  try {
+    const [result] = await connection.query(
+      `UPDATE candidatos_experiencia ce
+       SET ce.empresa_id = ?,
+           ce.updated_at = NOW()
+       WHERE ce.deleted_at IS NULL
+         AND ce.empresa_id IS NULL
+         AND ce.empresa_origen IS NULL
+         AND ce.empresa_nombre IS NOT NULL
+         AND LOWER(TRIM(ce.empresa_nombre)) = LOWER(TRIM(?))`,
+      [safeEmpresaId, safeNombre]
+    );
+    return Number(result?.affectedRows || 0);
+  } catch (error) {
+    if (isSchemaDriftError(error)) return 0;
+    throw error;
+  }
+}
+
+async function linkExperienciasByEmpresaId(empresaId, connection = db) {
+  const safeEmpresaId = Number(empresaId);
+  if (!Number.isInteger(safeEmpresaId) || safeEmpresaId <= 0) return 0;
+
+  try {
+    const [rows] = await connection.query(
+      `SELECT id, nombre
+       FROM empresas
+       WHERE id = ?
+         AND deleted_at IS NULL
+       LIMIT 1`,
+      [safeEmpresaId]
+    );
+    const empresa = rows[0];
+    if (!empresa?.nombre) return 0;
+    return linkExperienciasByEmpresaName(empresa.id, empresa.nombre, connection);
+  } catch (error) {
+    if (isSchemaDriftError(error)) return 0;
+    throw error;
+  }
+}
+
 function parseJsonArray(value) {
   if (!value) return [];
   if (Array.isArray(value)) return value;
@@ -97,6 +154,8 @@ async function createEmpresaForUser(userId) {
 
     const empresaId = insertEmpresa.insertId;
 
+    await linkExperienciasByEmpresaName(empresaId, nombreEmpresa, connection);
+
     await connection.query(
       `INSERT INTO empresas_usuarios (empresa_id, usuario_id, rol_empresa, principal, estado)
        VALUES (?, ?, 'admin', 1, 'activo')`,
@@ -150,6 +209,8 @@ async function attachEmpresaByUserEmail(userId) {
        principal = IF(principal = 1, 1, VALUES(principal))`,
     [empresa.id, user.id]
   );
+
+  await linkExperienciasByEmpresaId(empresa.id);
 
   return empresa.id;
 }
@@ -303,6 +364,10 @@ async function updateEmpresa(empresaId, patch) {
        AND deleted_at IS NULL`,
     [...keys.map((key) => patch[key]), empresaId]
   );
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'nombre')) {
+    await linkExperienciasByEmpresaId(empresaId);
+  }
 }
 
 async function upsertPerfilEmpresa(empresaId, patch) {

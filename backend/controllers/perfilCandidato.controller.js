@@ -21,13 +21,12 @@ const {
   createExperienciaCertificado,
   updateExperienciaCertificado,
   deleteExperienciaCertificado,
+  listCentrosCapacitacion,
+  listEmpresasExperiencia,
   listFormacion,
   createFormacion,
   updateFormacion,
   deleteFormacion,
-  getFormacionResultado,
-  canUseFormacionResultado,
-  upsertFormacionResultado,
   getFormacionCertificado,
   createFormacionCertificado,
   updateFormacionCertificado,
@@ -49,9 +48,6 @@ const FORMACION_SUBTIPOS = {
 const FORMACION_SUBTIPOS_ALL = [
   ...FORMACION_SUBTIPOS.externa
 ];
-const RESULTADO_CURSO = ['aprobado', 'reprobado', 'pendiente'];
-const FUENTE_CURSO = ['classroom', 'manual', 'externo'];
-const EXAMEN_ESTADO = ['no_presentado', 'primera_oportunidad', 'segunda_oportunidad'];
 const DOCUMENTO_TIPOS = [
   'documento_identidad',
   'carnet_tipo_sangre',
@@ -103,6 +99,16 @@ function parseNullableNumber(value) {
   if (typeof value === 'string' && value.trim() !== '') {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
+  }
+  return NaN;
+}
+
+function parseNullablePositiveInt(value) {
+  if (value === null) return null;
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed > 0) return parsed;
   }
   return NaN;
 }
@@ -330,7 +336,7 @@ function validateEducacionGeneralItemPayload(payload, { partial = false } = {}) 
 }
 
 function validateExperienciaPayload(payload, { partial = false } = {}) {
-  const allowed = ['empresa_id', 'cargo', 'fecha_inicio', 'fecha_fin', 'actualmente_trabaja', 'tipo_contrato', 'descripcion'];
+  const allowed = ['empresa_id', 'empresa_nombre', 'cargo', 'fecha_inicio', 'fecha_fin', 'actualmente_trabaja', 'tipo_contrato', 'descripcion'];
   if (!validatePayloadShape(payload, allowed)) return null;
 
   const normalized = {};
@@ -340,6 +346,9 @@ function validateExperienciaPayload(payload, { partial = false } = {}) {
     if (key === 'empresa_id') {
       if (!(value === null || Number.isInteger(value))) return null;
       normalized.empresa_id = value;
+    } else if (key === 'empresa_nombre') {
+      if (!isNullableString(value)) return null;
+      normalized.empresa_nombre = normalizeString(value);
     } else if (key === 'cargo') {
       if (!isNullableString(value)) return null;
       normalized.cargo = normalizeString(value);
@@ -360,6 +369,7 @@ function validateExperienciaPayload(payload, { partial = false } = {}) {
 
   if (!partial) {
     if (!normalized.cargo) return null;
+    if (!normalized.empresa_id && !normalized.empresa_nombre) return null;
   }
 
   return normalized;
@@ -371,6 +381,7 @@ function validateFormacionPayload(payload, { partial = false } = {}) {
     'activo',
     'categoria_formacion',
     'subtipo_formacion',
+    'centro_cliente_id',
     'institucion',
     'nombre_programa',
     'titulo_obtenido',
@@ -392,6 +403,10 @@ function validateFormacionPayload(payload, { partial = false } = {}) {
     } else if (['fecha_aprobacion', 'fecha_emision', 'fecha_vencimiento'].includes(key)) {
       if (!isNullableDate(value)) return null;
       normalized[key] = value;
+    } else if (key === 'centro_cliente_id') {
+      const parsed = parseNullablePositiveInt(value);
+      if (Number.isNaN(parsed)) return null;
+      normalized.centro_cliente_id = parsed;
     } else if (key === 'categoria_formacion') {
       if (!isEnum(value, FORMACION_CATEGORIAS)) return null;
       normalized.categoria_formacion = value;
@@ -421,52 +436,6 @@ function validateFormacionPayload(payload, { partial = false } = {}) {
   }
 
   return normalized;
-}
-
-function validateFormacionResultadoPayload(payload) {
-  const allowed = [
-    'resultado_curso',
-    'nota_curso',
-    'fuente_curso',
-    'fecha_cierre_curso',
-    'examen_estado',
-    'nota_examen',
-    'acreditado',
-    'fecha_examen',
-    'documento_url'
-  ];
-
-  if (!validatePayloadShape(payload, allowed)) return null;
-
-  const normalized = {};
-  for (const [key, raw] of Object.entries(payload)) {
-    const value = toNullIfEmptyString(raw);
-    if (key === 'resultado_curso') {
-      if (!isEnum(value, RESULTADO_CURSO)) return null;
-      normalized.resultado_curso = value;
-    } else if (key === 'fuente_curso') {
-      if (!isEnum(value, FUENTE_CURSO)) return null;
-      normalized.fuente_curso = value;
-    } else if (key === 'examen_estado') {
-      if (!isEnum(value, EXAMEN_ESTADO)) return null;
-      normalized.examen_estado = value;
-    } else if (key === 'acreditado') {
-      if (!isTinyIntLike(value)) return null;
-      normalized.acreditado = normalizeTinyInt(value);
-    } else if (['nota_curso', 'nota_examen'].includes(key)) {
-      const parsed = parseNullableNumber(value);
-      if (!isNullableNumber(parsed)) return null;
-      normalized[key] = parsed;
-    } else if (['fecha_cierre_curso', 'fecha_examen'].includes(key)) {
-      if (!isNullableDate(value)) return null;
-      normalized[key] = value;
-    } else if (key === 'documento_url') {
-      if (!isNullableString(value)) return null;
-      normalized.documento_url = normalizeString(value);
-    }
-  }
-
-  return Object.keys(normalized).length ? normalized : null;
 }
 
 function validateDocumentoMetaPayload(payload, { allowEstado = false } = {}) {
@@ -521,6 +490,17 @@ function parsePositiveInt(value) {
   const n = Number(value);
   if (!Number.isInteger(n) || n <= 0) return null;
   return n;
+}
+
+function handleFormacionServiceError(res, error) {
+  const code = String(error?.code || '');
+  if (code === 'FORMACION_INSTITUCION_REQUIRED') {
+    return res.status(422).json({ error: 'FORMACION_INSTITUCION_REQUIRED' });
+  }
+  if (code === 'CENTRO_CAPACITACION_NOT_FOUND') {
+    return res.status(400).json({ error: 'CENTRO_CAPACITACION_NOT_FOUND' });
+  }
+  return null;
 }
 
 function resolveErrorCodeByAction(action) {
@@ -794,6 +774,20 @@ async function deleteExperienciaCertificadoHandler(req, res) {
   return res.json({ ok: true });
 }
 
+async function listCentrosCapacitacionHandler(req, res) {
+  const search = typeof req.query?.search === 'string' ? req.query.search : null;
+  const limit = parsePositiveInt(req.query?.limit) || 20;
+  const items = await listCentrosCapacitacion({ search, limit });
+  return res.json({ items });
+}
+
+async function listEmpresasExperienciaHandler(req, res) {
+  const search = typeof req.query?.search === 'string' ? req.query.search : null;
+  const limit = parsePositiveInt(req.query?.limit) || 30;
+  const items = await listEmpresasExperiencia({ search, limit });
+  return res.json({ items });
+}
+
 async function listFormacionHandler(req, res) {
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
   const items = await listFormacion(req.candidatoId);
@@ -805,8 +799,14 @@ async function createFormacionHandler(req, res) {
   if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
 
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
-  const created = await createFormacion(req.candidatoId, payload);
-  return res.status(201).json({ ok: true, id: created.id });
+  try {
+    const created = await createFormacion(req.candidatoId, payload);
+    return res.status(201).json({ ok: true, id: created.id });
+  } catch (error) {
+    const handled = handleFormacionServiceError(res, error);
+    if (handled) return handled;
+    throw error;
+  }
 }
 
 async function updateFormacionHandler(req, res) {
@@ -817,9 +817,15 @@ async function updateFormacionHandler(req, res) {
   if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
 
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
-  const affected = await updateFormacion(req.candidatoId, formacionId, payload);
-  if (!affected) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
-  return res.json({ ok: true });
+  try {
+    const affected = await updateFormacion(req.candidatoId, formacionId, payload);
+    if (!affected) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
+    return res.json({ ok: true });
+  } catch (error) {
+    const handled = handleFormacionServiceError(res, error);
+    if (handled) return handled;
+    throw error;
+  }
 }
 
 async function deleteFormacionHandler(req, res) {
@@ -829,37 +835,6 @@ async function deleteFormacionHandler(req, res) {
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
   const affected = await deleteFormacion(req.candidatoId, formacionId);
   if (!affected) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
-  return res.json({ ok: true });
-}
-
-async function getFormacionResultadoHandler(req, res) {
-  const formacionId = parsePositiveInt(req.params.formacionId);
-  if (!formacionId) return res.status(400).json({ error: 'INVALID_FORMACION_ID' });
-
-  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
-  const state = await canUseFormacionResultado(req.candidatoId, formacionId);
-  if (!state.exists) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
-  if (!state.allowed) return res.status(400).json({ error: 'FORMACION_RESULTADO_NOT_ALLOWED' });
-
-  const item = await getFormacionResultado(req.candidatoId, formacionId);
-  return res.json({ item });
-}
-
-async function updateFormacionResultadoHandler(req, res) {
-  const formacionId = parsePositiveInt(req.params.formacionId);
-  if (!formacionId) return res.status(400).json({ error: 'INVALID_FORMACION_ID' });
-
-  const payload = validateFormacionResultadoPayload(req.body || {});
-  if (!payload) return res.status(400).json({ error: 'INVALID_RESULTADO_PAYLOAD' });
-
-  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
-  const state = await canUseFormacionResultado(req.candidatoId, formacionId);
-  if (!state.exists) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
-  if (!state.allowed) return res.status(400).json({ error: 'FORMACION_RESULTADO_NOT_ALLOWED' });
-
-  const result = await upsertFormacionResultado(req.candidatoId, formacionId, payload);
-  if (result === -1) return res.status(400).json({ error: 'FORMACION_RESULTADO_NOT_ALLOWED' });
-  if (!result) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
   return res.json({ ok: true });
 }
 
@@ -1091,6 +1066,8 @@ module.exports = {
   updateExperienciaCertificadoById: makeCandidateScopeHandler('id', updateExperienciaCertificadoHandler, 'update'),
   deleteExperienciaCertificadoById: makeCandidateScopeHandler('id', deleteExperienciaCertificadoHandler, 'update'),
 
+  listCentrosCapacitacion: listCentrosCapacitacionHandler,
+  listEmpresasExperiencia: listEmpresasExperienciaHandler,
   listMyFormacion: makeCandidateScopeHandler('me', listFormacionHandler, 'fetch'),
   createMyFormacion: makeCandidateScopeHandler('me', createFormacionHandler, 'update'),
   updateMyFormacion: makeCandidateScopeHandler('me', updateFormacionHandler, 'update'),
@@ -1100,10 +1077,6 @@ module.exports = {
   updateFormacionById: makeCandidateScopeHandler('id', updateFormacionHandler, 'update'),
   deleteFormacionById: makeCandidateScopeHandler('id', deleteFormacionHandler, 'update'),
 
-  getMyFormacionResultado: makeCandidateScopeHandler('me', getFormacionResultadoHandler, 'fetch'),
-  updateMyFormacionResultado: makeCandidateScopeHandler('me', updateFormacionResultadoHandler, 'update'),
-  getFormacionResultadoById: makeCandidateScopeHandler('id', getFormacionResultadoHandler, 'fetch'),
-  updateFormacionResultadoById: makeCandidateScopeHandler('id', updateFormacionResultadoHandler, 'update'),
   getMyFormacionCertificado: makeCandidateScopeHandler('me', getFormacionCertificadoHandler, 'fetch'),
   createMyFormacionCertificado: makeCandidateScopeHandler('me', createFormacionCertificadoHandler, 'update'),
   updateMyFormacionCertificado: makeCandidateScopeHandler('me', updateFormacionCertificadoHandler, 'update'),
