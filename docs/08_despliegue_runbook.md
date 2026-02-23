@@ -32,6 +32,10 @@ curl http://localhost:3000/healthz
 ## Migraciones BD (alineacion con `init.sql`)
 1. Validar estructura minima:
 ```sql
+SHOW COLUMNS FROM candidatos LIKE 'centro_id';
+SHOW COLUMNS FROM candidatos LIKE 'interesado_id';
+SHOW COLUMNS FROM candidatos LIKE 'referente_id';
+SHOW COLUMNS FROM candidatos LIKE 'estado_academico';
 SHOW COLUMNS FROM candidatos_formaciones LIKE 'centro_cliente_id';
 SHOW TABLES LIKE 'centros_capacitacion';
 SHOW TABLES LIKE 'integracion_ademy_promociones_institucion';
@@ -39,7 +43,21 @@ SHOW COLUMNS FROM candidatos_experiencia LIKE 'empresa_origen_id';
 SHOW TABLES LIKE 'integracion_ademy_empresas_empleofacil';
 SHOW TABLES LIKE 'candidatos_experiencia_certificados';
 ```
-2. Si falta `candidatos_experiencia_certificados`, crearla:
+2. Si en un entorno viejo aun existen columnas legacy en `candidatos`, retirarlas:
+```sql
+ALTER TABLE candidatos
+  DROP INDEX idx_estado_academico,
+  DROP COLUMN centro_id,
+  DROP COLUMN interesado_id,
+  DROP COLUMN referente_id,
+  DROP COLUMN estado_academico;
+```
+3. Verificar contrato final de la tabla `candidatos`:
+```sql
+SHOW COLUMNS FROM candidatos;
+```
+Debe quedar sin `centro_id`, `interesado_id`, `referente_id` y `estado_academico`.
+4. Si falta `candidatos_experiencia_certificados`, crearla:
 ```sql
 CREATE TABLE candidatos_experiencia_certificados (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -61,7 +79,7 @@ CREATE TABLE candidatos_experiencia_certificados (
   CONSTRAINT fk_experiencia_certificados_experiencia FOREIGN KEY (experiencia_id) REFERENCES candidatos_experiencia(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
-3. Si necesitas backfill de vinculo por nombre (experiencias manuales -> empresa local):
+5. Si necesitas backfill de vinculo por nombre (experiencias manuales -> empresa local):
 ```sql
 UPDATE candidatos_experiencia ce
 JOIN empresas e
@@ -74,7 +92,7 @@ WHERE ce.deleted_at IS NULL
   AND ce.empresa_nombre IS NOT NULL
   AND e.deleted_at IS NULL;
 ```
-4. Reiniciar backend despues de cambios de esquema:
+6. Reiniciar backend despues de cambios de esquema:
 ```bash
 docker compose restart backend
 ```

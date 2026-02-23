@@ -107,6 +107,7 @@
   - seccion pendiente: `Guardar` + `Guardar y continuar`.
 - Alertas contextuales no bloqueantes en sidebar:
   - aplican a cambios sensibles (email, telefono celular, documento) cuando corresponde.
+- `ProfilePerfil` y `ProfileDatosBasicos` ya no muestran ni envian `estado_academico` al backend.
 - Los servicios de API van en `src/services/`.
 - Helpers y utilidades van en `src/utils/`.
 - No commitear `.env`. Usar `.env.example` como referencia.

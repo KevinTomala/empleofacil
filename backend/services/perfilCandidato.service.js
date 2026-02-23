@@ -36,9 +36,6 @@ async function getPerfilByCandidatoId(candidatoId) {
     `SELECT
       c.id AS c_id,
       c.usuario_id AS c_usuario_id,
-      c.centro_id AS c_centro_id,
-      c.interesado_id AS c_interesado_id,
-      c.referente_id AS c_referente_id,
       c.nombres AS c_nombres,
       c.apellidos AS c_apellidos,
       c.documento_identidad AS c_documento_identidad,
@@ -46,7 +43,6 @@ async function getPerfilByCandidatoId(candidatoId) {
       c.fecha_nacimiento AS c_fecha_nacimiento,
       c.sexo AS c_sexo,
       c.estado_civil AS c_estado_civil,
-      c.estado_academico AS c_estado_academico,
       c.activo AS c_activo,
       cc.email AS cc_email,
       cc.telefono_fijo AS cc_telefono_fijo,
@@ -120,9 +116,6 @@ async function getPerfilByCandidatoId(candidatoId) {
     datos_basicos: {
       id: row.c_id,
       usuario_id: row.c_usuario_id,
-      centro_id: row.c_centro_id,
-      interesado_id: row.c_interesado_id,
-      referente_id: row.c_referente_id,
       nombres: row.c_nombres,
       apellidos: row.c_apellidos,
       documento_identidad: row.c_documento_identidad,
@@ -130,7 +123,6 @@ async function getPerfilByCandidatoId(candidatoId) {
       fecha_nacimiento: row.c_fecha_nacimiento,
       sexo: row.c_sexo,
       estado_civil: row.c_estado_civil,
-      estado_academico: row.c_estado_academico,
       activo: row.c_activo
     },
     contacto: {

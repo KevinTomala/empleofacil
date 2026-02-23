@@ -88,6 +88,9 @@ Estructura real en `backend/`:
 - Las secciones y estados del perfil se centralizan en `frontend/src/modules/candidate/profileSections.js`.
   - Fase 1: `datos-basicos`, `datos-personales`, `preferencias`, `formacion`.
   - Fase 2: `idiomas`, `experiencia`, `documentos` con persistencia en backend `/api/perfil/*`.
+- Contrato actual de `datos_basicos`:
+  - ya no incluye `centro_id`, `interesado_id`, `referente_id`, `estado_academico`.
+  - los formularios de perfil candidato no exponen ni envian esos campos.
 - Micro-UX implementada:
   - Sidebar compacto (evita repetir mensajes cuando Fase 1 esta completa).
   - Resaltado de seccion actual en checklist.

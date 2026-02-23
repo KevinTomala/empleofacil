@@ -25,13 +25,6 @@ const estadoCivilOptions = [
   { value: 'union_libre', label: 'Union libre' }
 ]
 
-const estadoAcademicoOptions = [
-  { value: 'preinscrito', label: 'Preinscrito' },
-  { value: 'inscrito', label: 'Inscrito' },
-  { value: 'matriculado', label: 'Matriculado' },
-  { value: 'rechazado', label: 'Rechazado' }
-]
-
 export default function ProfilePerfil() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
@@ -45,7 +38,6 @@ export default function ProfilePerfil() {
     nacionalidad: '',
     sexo: 'O',
     estado_civil: 'soltero',
-    estado_academico: 'preinscrito',
     telefono_celular: '',
     telefono_fijo: '',
     email: '',
@@ -72,7 +64,6 @@ export default function ProfilePerfil() {
           nacionalidad: data?.datos_basicos?.nacionalidad || '',
           sexo: data?.datos_basicos?.sexo || 'O',
           estado_civil: data?.datos_basicos?.estado_civil || 'soltero',
-          estado_academico: data?.datos_basicos?.estado_academico || 'preinscrito',
           telefono_celular: data?.contacto?.telefono_celular || '',
           telefono_fijo: data?.contacto?.telefono_fijo || '',
           email: data?.contacto?.email || '',
@@ -109,8 +100,7 @@ export default function ProfilePerfil() {
       fecha_nacimiento: form.fecha_nacimiento || null,
       nacionalidad: form.nacionalidad.trim() || null,
       sexo: form.sexo,
-      estado_civil: form.estado_civil,
-      estado_academico: form.estado_academico
+      estado_civil: form.estado_civil
     }
 
     const payloadContacto = {
@@ -202,10 +192,6 @@ export default function ProfilePerfil() {
               <FormDropdown value={form.estado_civil} options={estadoCivilOptions} onChange={(value) => setField('estado_civil', value)} />
             </label>
             <label className="space-y-1 text-sm font-medium text-foreground/80">
-              Estado academico
-              <FormDropdown value={form.estado_academico} options={estadoAcademicoOptions} onChange={(value) => setField('estado_academico', value)} />
-            </label>
-            <label className="space-y-1 text-sm font-medium text-foreground/80">
               Telefono celular
               <input className="ef-control" type="tel" value={form.telefono_celular} onChange={(event) => setField('telefono_celular', event.target.value)} />
             </label>
@@ -221,7 +207,7 @@ export default function ProfilePerfil() {
               Contacto emergencia
               <input className="ef-control" type="text" value={form.contacto_emergencia_nombre} onChange={(event) => setField('contacto_emergencia_nombre', event.target.value)} />
             </label>
-            <label className="space-y-1 text-sm font-medium text-foreground/80 sm:col-span-2">
+            <label className="space-y-1 text-sm font-medium text-foreground/80">
               Telefono emergencia
               <input className="ef-control" type="tel" value={form.contacto_emergencia_telefono} onChange={(event) => setField('contacto_emergencia_telefono', event.target.value)} />
             </label>

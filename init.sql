@@ -133,9 +133,6 @@ LIMIT 1;
 CREATE TABLE candidatos (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   usuario_id BIGINT NULL,
-  centro_id BIGINT NULL,
-  interesado_id BIGINT NULL,
-  referente_id BIGINT NULL,
   nombres VARCHAR(100) NOT NULL,
   apellidos VARCHAR(100) NOT NULL,
   documento_identidad VARCHAR(50),
@@ -143,14 +140,12 @@ CREATE TABLE candidatos (
   fecha_nacimiento DATE,
   sexo ENUM('M','F','O') DEFAULT 'O',
   estado_civil ENUM('soltero','casado','viudo','divorciado','union_libre') DEFAULT 'soltero',
-  estado_academico ENUM('preinscrito','inscrito','matriculado','rechazado') DEFAULT 'preinscrito',
   activo TINYINT UNSIGNED DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at DATETIME NULL,
   INDEX idx_candidato_usuario_id (usuario_id),
   INDEX idx_documento (documento_identidad),
-  INDEX idx_estado_academico (estado_academico),
   UNIQUE KEY uk_documento_identidad (documento_identidad),
   CONSTRAINT fk_candidatos_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

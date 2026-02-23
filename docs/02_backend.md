@@ -53,6 +53,8 @@ Rutas registradas actualmente:
 
 ### Perfil candidato
 - Lectura/escritura por secciones (`datos_basicos`, `contacto`, `domicilio`, `salud`, `logistica`, `educacion`).
+- `datos_basicos` vigente (sin campos legacy): `nombres`, `apellidos`, `documento_identidad`, `nacionalidad`, `fecha_nacimiento`, `sexo`, `estado_civil`, `activo`.
+- Campos retirados del contrato y del modelo operativo: `centro_id`, `interesado_id`, `referente_id`, `estado_academico`.
 - Fase 2 activa en el mismo modulo:
   - `idiomas` (CRUD)
   - `experiencia` (CRUD)

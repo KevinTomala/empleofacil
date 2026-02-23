@@ -141,9 +141,6 @@ function validateAndNormalize(section, payload) {
 
   if (section === 'datos_basicos') {
     const allowed = [
-      'centro_id',
-      'interesado_id',
-      'referente_id',
       'nombres',
       'apellidos',
       'documento_identidad',
@@ -151,17 +148,13 @@ function validateAndNormalize(section, payload) {
       'fecha_nacimiento',
       'sexo',
       'estado_civil',
-      'estado_academico',
       'activo'
     ];
     if (!validatePayloadShape(payload, allowed)) return null;
 
     for (const [key, raw] of Object.entries(payload)) {
       const value = toNullIfEmptyString(raw);
-      if (['centro_id', 'interesado_id', 'referente_id'].includes(key)) {
-        if (!(value === null || Number.isInteger(value))) return null;
-        normalized[key] = value;
-      } else if (['nombres', 'apellidos'].includes(key)) {
+      if (['nombres', 'apellidos'].includes(key)) {
         if (typeof value !== 'string' || !value.trim()) return null;
         normalized[key] = value.trim();
       } else if (['documento_identidad', 'nacionalidad'].includes(key)) {
@@ -175,9 +168,6 @@ function validateAndNormalize(section, payload) {
         normalized[key] = value;
       } else if (key === 'estado_civil') {
         if (!isEnum(value, ['soltero', 'casado', 'viudo', 'divorciado', 'union_libre'])) return null;
-        normalized[key] = value;
-      } else if (key === 'estado_academico') {
-        if (!isEnum(value, ['preinscrito', 'inscrito', 'matriculado', 'rechazado'])) return null;
         normalized[key] = value;
       } else if (key === 'activo') {
         if (!isTinyIntLike(value)) return null;

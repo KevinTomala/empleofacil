@@ -22,12 +22,17 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 ### 4) Hoja de vida
 - `GET /api/hoja-vida/:id` con id invalido debe devolver `400 INVALID_ESTUDIANTE_ID`.
 - `GET /api/hoja-vida/:id/pdf` con candidato existente debe devolver `application/pdf`.
+- `GET /api/hoja-vida/:id` no debe incluir `perfil.estado_academico`.
+- `GET /api/hoja-vida/:id/pdf` no debe renderizar la linea `Estado academico`.
 
 ### 5) Integraciones Ademy
 - `POST /api/integraciones/ademy/acreditados/import` con token admin debe devolver resumen `{ ok, total, created, updated, skipped, errors }`.
 - Lanzar dos imports simultaneos debe provocar `409 SYNC_ALREADY_RUNNING` en uno de ellos.
 
 ### 6) Perfil candidato Fase 2 (backend)
+- `GET /api/perfil/me` no debe incluir en `datos_basicos`: `centro_id`, `interesado_id`, `referente_id`, `estado_academico`.
+- `PUT /api/perfil/me/datos-basicos` con payload valido sin campos legacy responde `200`.
+- `PUT /api/perfil/me/datos-basicos` enviando `centro_id|interesado_id|referente_id|estado_academico` debe responder `400 INVALID_PAYLOAD`.
 - `GET /api/perfil/me/idiomas` responde `200` con `{ items: [] }`.
 - `POST /api/perfil/me/idiomas` crea idioma y devuelve `201`.
 - `PUT/DELETE /api/perfil/me/idiomas/:idiomaId` validan ownership y responden `404` si no existe.
@@ -121,6 +126,7 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `Guardar` mantiene comportamiento de persistencia actual.
 - `Guardar y continuar` mantiene navegacion esperada entre tabs.
 - Ejecutar build frontend sin errores.
+- `ProfilePerfil` y `ProfileDatosBasicos` no deben mostrar ni enviar `estado_academico`.
 
 ### 6) Perfil candidato Fase 2 (frontend)
 - `ProfileIdiomas` permite crear, editar y eliminar items.

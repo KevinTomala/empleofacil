@@ -146,9 +146,6 @@ Respuesta `GET` exitosa:
   "datos_basicos": {
     "id": 10,
     "usuario_id": 25,
-    "centro_id": null,
-    "interesado_id": null,
-    "referente_id": null,
     "nombres": "Juan",
     "apellidos": "Perez",
     "documento_identidad": "1234567890",
@@ -156,7 +153,6 @@ Respuesta `GET` exitosa:
     "fecha_nacimiento": "2000-01-01",
     "sexo": "M",
     "estado_civil": "soltero",
-    "estado_academico": "inscrito",
     "activo": 1
   },
   "contacto": {
@@ -255,11 +251,9 @@ Errores esperados:
 - Auth: requerido.
 - Roles: `candidato`.
 - Body permitido (parcial):
-  - `centro_id`, `interesado_id`, `referente_id`
   - `nombres`, `apellidos`, `documento_identidad`, `nacionalidad`, `fecha_nacimiento`
   - `sexo` (`M|F|O`)
   - `estado_civil` (`soltero|casado|viudo|divorciado|union_libre`)
-  - `estado_academico` (`preinscrito|inscrito|matriculado|rechazado`)
   - `activo` (`0|1|false|true`)
 
 ### PUT `/api/perfil/me/contacto`
