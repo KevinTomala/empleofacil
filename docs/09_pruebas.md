@@ -12,6 +12,8 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `POST /auth/login` con credenciales validas devuelve `token`.
 - `POST /auth/login` con password invalido devuelve `401 INVALID_CREDENTIALS`.
 - `POST /auth/change-password` sin token devuelve `401 AUTH_REQUIRED`.
+- `POST /auth/login` de usuario con clave temporal devuelve `user.must_change_password = true`.
+- `POST /auth/change-password` exitoso debe permitir login posterior con nueva clave y devolver `must_change_password = false`.
 
 ### 3) Autorizacion por rol
 - `GET /api/integraciones/ademy/convocatorias` con rol no admin debe devolver `403 FORBIDDEN`.
@@ -41,6 +43,8 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `GET|POST|PUT|DELETE /api/perfil/me/educacion-general*` permiten multiples registros academicos.
 - `PUT /api/perfil/me/formacion/:formacionId/resultado` hace upsert y valida `INVALID_RESULTADO_PAYLOAD`.
 - `PUT /api/perfil/me/formacion/:formacionId/resultado` en item no externa devuelve `FORMACION_RESULTADO_NOT_ALLOWED`.
+- `GET|POST|PUT|DELETE /api/perfil/me/formacion/:formacionId/certificado` permite upload/reemplazo/borrado de certificado de curso.
+- `POST /api/perfil/me/formacion/:formacionId/certificado` en item no externa devuelve `FORMACION_CERTIFICADO_NOT_ALLOWED`.
 - `GET|POST|PUT|DELETE /api/perfil/me/experiencia/:experienciaId/certificado` respetan ownership.
 - `POST certificado` sin archivo devuelve `400 FILE_REQUIRED`.
 - Empresa solo lectura en `/:candidatoId/formacion*` y `/:candidatoId/experiencia/:experienciaId/certificado`.
@@ -63,7 +67,19 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - Login funciona por email.
 - Login funciona por documento de candidato.
 - Cambio de password limpia `must_change_password`.
+- Usuario creado por import Ademy inicia `activo` y con `must_change_password=1`.
 - Cron no corre cuando `ADEMY_SYNC_ENABLED=false`.
+
+## Pruebas manuales frontend (auth y seguridad)
+- Usuario autenticado visualiza `Cambiar contrasena` arriba de `Salir` en dropdown desktop.
+- Usuario autenticado visualiza `Cambiar contrasena` arriba de `Salir` en menu mobile.
+- Navegar a `/app/change-password` con sesion activa renderiza formulario.
+- Navegar a `/app/change-password` sin sesion redirige a `/login`.
+- Formulario bloquea submit cuando faltan campos.
+- Formulario muestra error cuando nueva contrasena tiene menos de 8 caracteres.
+- Formulario muestra error cuando nueva contrasena es igual a la actual.
+- Formulario muestra error cuando confirmacion no coincide.
+- Cambio exitoso muestra toast de exito y limpia los campos.
 
 ## Pruebas manuales frontend (perfil candidato wizard)
 
@@ -101,6 +117,7 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `ProfileFormacion` usa tabs:
   - `Academica` permite CRUD multiple en `candidatos_educacion_general`.
   - `Externa` usa CRUD de `/api/perfil/me/formacion`.
+  - `Externa` permite subir/reemplazar/eliminar certificado de curso (pdf/imagen) por cada formacion.
   - `Certificacion` redirige operacion a `ProfileExperiencia` (certificado laboral por experiencia).
 - En `Externa`, solo se muestran campos del contrato limpio (`categoria_formacion`, `subtipo_formacion`, `institucion`, `nombre_programa`, `titulo_obtenido`, `fecha_aprobacion`, `fecha_emision`, `fecha_vencimiento`).
 - El dashboard de perfil actualiza progreso total al completar secciones de Fase 2.

@@ -661,44 +661,118 @@ async function deleteExperienciaCertificado(candidatoId, experienciaId) {
 }
 
 async function listFormacion(candidatoId) {
-  const [rows] = await db.query(
-    `SELECT
-      f.id,
-      f.candidato_id,
-      f.fecha_aprobacion,
-      f.activo,
-      f.categoria_formacion,
-      f.subtipo_formacion,
-      f.institucion,
-      f.nombre_programa,
-      f.titulo_obtenido,
-      f.entidad_emisora,
-      f.numero_registro,
-      f.fecha_emision,
-      f.fecha_vencimiento,
-      f.created_at,
-      f.updated_at,
-      fr.id AS fr_id,
-      fr.resultado_curso AS fr_resultado_curso,
-      fr.nota_curso AS fr_nota_curso,
-      fr.fuente_curso AS fr_fuente_curso,
-      fr.fecha_cierre_curso AS fr_fecha_cierre_curso,
-      fr.examen_estado AS fr_examen_estado,
-      fr.nota_examen AS fr_nota_examen,
-      fr.acreditado AS fr_acreditado,
-      fr.fecha_examen AS fr_fecha_examen,
-      fr.documento_url AS fr_documento_url,
-      fr.created_at AS fr_created_at,
-      fr.updated_at AS fr_updated_at
-     FROM candidatos_formaciones f
-     LEFT JOIN candidatos_formacion_resultados fr
-       ON fr.candidato_formacion_id = f.id
-      AND fr.deleted_at IS NULL
-     WHERE f.candidato_id = ?
-       AND f.deleted_at IS NULL
-     ORDER BY f.created_at DESC`,
-    [candidatoId]
-  );
+  let rows = [];
+  try {
+    const [rowsFull] = await db.query(
+      `SELECT
+        f.id,
+        f.candidato_id,
+        f.fecha_aprobacion,
+        f.activo,
+        f.categoria_formacion,
+        f.subtipo_formacion,
+        f.institucion,
+        f.nombre_programa,
+        f.titulo_obtenido,
+        f.entidad_emisora,
+        f.numero_registro,
+        f.fecha_emision,
+        f.fecha_vencimiento,
+        f.created_at,
+        f.updated_at,
+        fr.id AS fr_id,
+        fr.resultado_curso AS fr_resultado_curso,
+        fr.nota_curso AS fr_nota_curso,
+        fr.fuente_curso AS fr_fuente_curso,
+        fr.fecha_cierre_curso AS fr_fecha_cierre_curso,
+        fr.examen_estado AS fr_examen_estado,
+        fr.nota_examen AS fr_nota_examen,
+        fr.acreditado AS fr_acreditado,
+        fr.fecha_examen AS fr_fecha_examen,
+        fr.documento_url AS fr_documento_url,
+        fr.created_at AS fr_created_at,
+        fr.updated_at AS fr_updated_at,
+        fc.id AS fc_id,
+        fc.nombre_archivo AS fc_nombre_archivo,
+        fc.nombre_original AS fc_nombre_original,
+        fc.ruta_archivo AS fc_ruta_archivo,
+        fc.tipo_mime AS fc_tipo_mime,
+        fc.tamanio_kb AS fc_tamanio_kb,
+        fc.fecha_emision AS fc_fecha_emision,
+        fc.descripcion AS fc_descripcion,
+        fc.estado AS fc_estado,
+        fc.estado_extraccion AS fc_estado_extraccion,
+        fc.datos_extraidos_json AS fc_datos_extraidos_json,
+        fc.created_at AS fc_created_at,
+        fc.updated_at AS fc_updated_at
+       FROM candidatos_formaciones f
+       LEFT JOIN candidatos_formacion_resultados fr
+         ON fr.candidato_formacion_id = f.id
+        AND fr.deleted_at IS NULL
+       LEFT JOIN candidatos_formacion_certificados fc
+         ON fc.candidato_formacion_id = f.id
+        AND fc.deleted_at IS NULL
+       WHERE f.candidato_id = ?
+         AND f.deleted_at IS NULL
+       ORDER BY f.created_at DESC`,
+      [candidatoId]
+    );
+    rows = rowsFull;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    const [rowsFallback] = await db.query(
+      `SELECT
+        f.id,
+        f.candidato_id,
+        f.fecha_aprobacion,
+        f.activo,
+        f.categoria_formacion,
+        f.subtipo_formacion,
+        f.institucion,
+        f.nombre_programa,
+        f.titulo_obtenido,
+        f.entidad_emisora,
+        f.numero_registro,
+        f.fecha_emision,
+        f.fecha_vencimiento,
+        f.created_at,
+        f.updated_at,
+        fr.id AS fr_id,
+        fr.resultado_curso AS fr_resultado_curso,
+        fr.nota_curso AS fr_nota_curso,
+        fr.fuente_curso AS fr_fuente_curso,
+        fr.fecha_cierre_curso AS fr_fecha_cierre_curso,
+        fr.examen_estado AS fr_examen_estado,
+        fr.nota_examen AS fr_nota_examen,
+        fr.acreditado AS fr_acreditado,
+        fr.fecha_examen AS fr_fecha_examen,
+        fr.documento_url AS fr_documento_url,
+        fr.created_at AS fr_created_at,
+        fr.updated_at AS fr_updated_at,
+        NULL AS fc_id,
+        NULL AS fc_nombre_archivo,
+        NULL AS fc_nombre_original,
+        NULL AS fc_ruta_archivo,
+        NULL AS fc_tipo_mime,
+        NULL AS fc_tamanio_kb,
+        NULL AS fc_fecha_emision,
+        NULL AS fc_descripcion,
+        NULL AS fc_estado,
+        NULL AS fc_estado_extraccion,
+        NULL AS fc_datos_extraidos_json,
+        NULL AS fc_created_at,
+        NULL AS fc_updated_at
+       FROM candidatos_formaciones f
+       LEFT JOIN candidatos_formacion_resultados fr
+         ON fr.candidato_formacion_id = f.id
+        AND fr.deleted_at IS NULL
+       WHERE f.candidato_id = ?
+         AND f.deleted_at IS NULL
+       ORDER BY f.created_at DESC`,
+      [candidatoId]
+    );
+    rows = rowsFallback;
+  }
 
   return rows.map((row) => {
     return {
@@ -731,6 +805,23 @@ async function listFormacion(candidatoId) {
             documento_url: row.fr_documento_url,
             created_at: row.fr_created_at,
             updated_at: row.fr_updated_at
+          }
+        : null,
+      certificado_curso: row.fc_id
+        ? {
+            id: row.fc_id,
+            nombre_archivo: row.fc_nombre_archivo,
+            nombre_original: row.fc_nombre_original,
+            ruta_archivo: row.fc_ruta_archivo,
+            tipo_mime: row.fc_tipo_mime,
+            tamanio_kb: row.fc_tamanio_kb,
+            fecha_emision: row.fc_fecha_emision,
+            descripcion: row.fc_descripcion,
+            estado: row.fc_estado,
+            estado_extraccion: row.fc_estado_extraccion,
+            datos_extraidos_json: row.fc_datos_extraidos_json,
+            created_at: row.fc_created_at,
+            updated_at: row.fc_updated_at
           }
         : null
     };
@@ -900,6 +991,186 @@ async function upsertFormacionResultado(candidatoId, formacionId, payload) {
   return 1;
 }
 
+async function getFormacionCertificado(candidatoId, formacionId) {
+  let rows = [];
+  try {
+    const [rowsFull] = await db.query(
+      `SELECT
+        f.id AS formacion_id,
+        f.categoria_formacion,
+        fc.id,
+        fc.candidato_formacion_id,
+        fc.nombre_archivo,
+        fc.nombre_original,
+        fc.ruta_archivo,
+        fc.tipo_mime,
+        fc.tamanio_kb,
+        fc.fecha_emision,
+        fc.descripcion,
+        fc.estado,
+        fc.estado_extraccion,
+        fc.datos_extraidos_json,
+        fc.created_at,
+        fc.updated_at
+       FROM candidatos_formaciones f
+       LEFT JOIN candidatos_formacion_certificados fc
+         ON fc.candidato_formacion_id = f.id
+        AND fc.deleted_at IS NULL
+       WHERE f.id = ?
+         AND f.candidato_id = ?
+         AND f.deleted_at IS NULL
+       LIMIT 1`,
+      [formacionId, candidatoId]
+    );
+    rows = rowsFull;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    const [rowsFallback] = await db.query(
+      `SELECT
+        f.id AS formacion_id,
+        f.categoria_formacion,
+        NULL AS id,
+        NULL AS candidato_formacion_id,
+        NULL AS nombre_archivo,
+        NULL AS nombre_original,
+        NULL AS ruta_archivo,
+        NULL AS tipo_mime,
+        NULL AS tamanio_kb,
+        NULL AS fecha_emision,
+        NULL AS descripcion,
+        NULL AS estado,
+        NULL AS estado_extraccion,
+        NULL AS datos_extraidos_json,
+        NULL AS created_at,
+        NULL AS updated_at
+       FROM candidatos_formaciones f
+       WHERE f.id = ?
+         AND f.candidato_id = ?
+         AND f.deleted_at IS NULL
+       LIMIT 1`,
+      [formacionId, candidatoId]
+    );
+    rows = rowsFallback;
+  }
+
+  const row = rows[0];
+  if (!row) return { exists: false, allowed: false, certificado: null };
+  if (row.categoria_formacion !== 'externa') return { exists: true, allowed: false, certificado: null };
+  if (!row.id) return { exists: true, allowed: true, certificado: null };
+
+  return {
+    exists: true,
+    allowed: true,
+    certificado: {
+      id: row.id,
+      candidato_formacion_id: row.candidato_formacion_id,
+      nombre_archivo: row.nombre_archivo,
+      nombre_original: row.nombre_original,
+      ruta_archivo: row.ruta_archivo,
+      tipo_mime: row.tipo_mime,
+      tamanio_kb: row.tamanio_kb,
+      fecha_emision: row.fecha_emision,
+      descripcion: row.descripcion,
+      estado: row.estado,
+      estado_extraccion: row.estado_extraccion,
+      datos_extraidos_json: row.datos_extraidos_json,
+      created_at: row.created_at,
+      updated_at: row.updated_at
+    }
+  };
+}
+
+async function createFormacionCertificado(candidatoId, formacionId, payload) {
+  const state = await canUseFormacionResultado(candidatoId, formacionId);
+  if (!state.exists) return 0;
+  if (!state.allowed) return -1;
+
+  await db.query(
+    `INSERT INTO candidatos_formacion_certificados (
+      candidato_id,
+      candidato_formacion_id,
+      nombre_archivo,
+      nombre_original,
+      ruta_archivo,
+      tipo_mime,
+      tamanio_kb,
+      fecha_emision,
+      descripcion,
+      estado,
+      estado_extraccion
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      nombre_archivo = VALUES(nombre_archivo),
+      nombre_original = VALUES(nombre_original),
+      ruta_archivo = VALUES(ruta_archivo),
+      tipo_mime = VALUES(tipo_mime),
+      tamanio_kb = VALUES(tamanio_kb),
+      fecha_emision = VALUES(fecha_emision),
+      descripcion = VALUES(descripcion),
+      estado = VALUES(estado),
+      estado_extraccion = 'pendiente',
+      datos_extraidos_json = NULL,
+      deleted_at = NULL`,
+    [
+      candidatoId,
+      formacionId,
+      payload.nombre_archivo,
+      payload.nombre_original,
+      payload.ruta_archivo,
+      payload.tipo_mime,
+      payload.tamanio_kb,
+      payload.fecha_emision ?? null,
+      payload.descripcion ?? null,
+      payload.estado ?? 'pendiente',
+      'pendiente'
+    ]
+  );
+
+  const cert = await getFormacionCertificado(candidatoId, formacionId);
+  return cert.certificado;
+}
+
+async function updateFormacionCertificado(candidatoId, formacionId, patch) {
+  const state = await canUseFormacionResultado(candidatoId, formacionId);
+  if (!state.exists) return -1;
+  if (!state.allowed) return -2;
+
+  const keys = Object.keys(patch);
+  if (!keys.length) return 0;
+
+  if (keys.some((key) => ['nombre_archivo', 'nombre_original', 'ruta_archivo', 'tipo_mime', 'tamanio_kb'].includes(key))) {
+    patch.estado_extraccion = 'pendiente';
+    patch.datos_extraidos_json = null;
+  }
+
+  const setSql = Object.keys(patch).map((key) => `${key} = ?`).join(', ');
+  const [result] = await db.query(
+    `UPDATE candidatos_formacion_certificados
+     SET ${setSql}
+     WHERE candidato_formacion_id = ?
+       AND candidato_id = ?
+       AND deleted_at IS NULL`,
+    [...Object.keys(patch).map((key) => patch[key]), formacionId, candidatoId]
+  );
+  return result.affectedRows;
+}
+
+async function deleteFormacionCertificado(candidatoId, formacionId) {
+  const state = await canUseFormacionResultado(candidatoId, formacionId);
+  if (!state.exists) return -1;
+  if (!state.allowed) return -2;
+
+  const [result] = await db.query(
+    `UPDATE candidatos_formacion_certificados
+     SET deleted_at = NOW()
+     WHERE candidato_formacion_id = ?
+       AND candidato_id = ?
+       AND deleted_at IS NULL`,
+    [formacionId, candidatoId]
+  );
+  return result.affectedRows;
+}
+
 async function listDocumentos(candidatoId) {
   const [rows] = await db.query(
     `SELECT
@@ -1028,6 +1299,10 @@ module.exports = {
   getFormacionResultado,
   canUseFormacionResultado,
   upsertFormacionResultado,
+  getFormacionCertificado,
+  createFormacionCertificado,
+  updateFormacionCertificado,
+  deleteFormacionCertificado,
   listDocumentos,
   createDocumento,
   updateDocumento,

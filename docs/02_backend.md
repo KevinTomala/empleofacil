@@ -59,6 +59,7 @@ Rutas registradas actualmente:
   - `experiencia/:experienciaId/certificado` (CRUD 1:1 + upload multipart)
   - `formacion` (CRUD relacional por item)
   - `formacion/:formacionId/resultado` (upsert 1:1)
+  - `formacion/:formacionId/certificado` (CRUD 1:1 + upload multipart)
   - `documentos` (CRUD + upload multipart con `multer`)
 - Contrato actual de `formacion` (externa):
   - columnas legacy removidas en dominio (`matricula_id`, `nivel_id`, `curso_id`, `formacion_origen_id`, `estado`, `fecha_inicio`, `fecha_fin`).

@@ -374,7 +374,7 @@ CREATE TABLE candidatos_formaciones (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   candidato_id BIGINT NOT NULL,
   categoria_formacion ENUM('externa') NULL,
-  subtipo_formacion ENUM('curso','ministerio','chofer_profesional') NULL,
+  subtipo_formacion ENUM('curso','ministerio','ministerio_i','chofer_profesional') NULL,
   institucion VARCHAR(200) NULL,
   nombre_programa VARCHAR(200) NULL,
   titulo_obtenido VARCHAR(200) NULL,
@@ -407,6 +407,28 @@ CREATE TABLE candidatos_formacion_resultados (
   deleted_at DATETIME NULL,
   CONSTRAINT uq_formacion_resultado UNIQUE (candidato_formacion_id),
   CONSTRAINT fk_formacion_resultados_formacion FOREIGN KEY (candidato_formacion_id) REFERENCES candidatos_formaciones(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE candidatos_formacion_certificados (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  candidato_id BIGINT NOT NULL,
+  candidato_formacion_id BIGINT NOT NULL,
+  nombre_archivo VARCHAR(255) NOT NULL,
+  nombre_original VARCHAR(255) NOT NULL,
+  ruta_archivo VARCHAR(500) NOT NULL,
+  tipo_mime VARCHAR(100) NOT NULL,
+  tamanio_kb INT NOT NULL,
+  fecha_emision DATE NULL,
+  descripcion TEXT NULL,
+  estado ENUM('pendiente','aprobado','rechazado','vencido') DEFAULT 'pendiente',
+  estado_extraccion ENUM('pendiente','procesado','error') DEFAULT 'pendiente',
+  datos_extraidos_json JSON NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME NULL,
+  CONSTRAINT uq_formacion_certificado UNIQUE (candidato_formacion_id),
+  CONSTRAINT fk_formacion_certificados_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
+  CONSTRAINT fk_formacion_certificados_formacion FOREIGN KEY (candidato_formacion_id) REFERENCES candidatos_formaciones(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE candidatos_experiencia_certificados (

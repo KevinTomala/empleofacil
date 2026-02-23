@@ -76,6 +76,10 @@ EmpleoFacil API
   - `400 MISSING_FIELDS`
   - `401 INVALID_CREDENTIALS`
   - `403 USER_INACTIVE`
+- Nota de flujo de clave temporal:
+  - Si `user.must_change_password = true`, el cliente debe notificar al usuario que cambie su clave.
+  - El backend devuelve el login exitoso si las credenciales son correctas y el usuario esta `activo`.
+  - En frontend actual se muestra alerta no bloqueante y luego se redirige segun rol.
 
 ### POST `/auth/change-password`
 - Auth: requerido.
@@ -90,6 +94,11 @@ EmpleoFacil API
 ```json
 { "ok": true }
 ```
+- Efecto adicional:
+  - Al cambiar correctamente la clave, `usuarios.must_change_password` pasa a `0`.
+- Consumo frontend actual:
+  - Pantalla: `GET /app/change-password` (SPA).
+  - Acceso desde dropdown de usuario (`Cambiar contrasena`) en desktop y mobile.
 - Errores:
   - `400 MISSING_FIELDS`
   - `400 WEAK_PASSWORD`
@@ -399,7 +408,7 @@ Errores esperados:
   - Este CRUD de `formacion` se usa para formacion externa.
 - Body formacion (externa):
   - `categoria_formacion` (`externa`)
-  - `subtipo_formacion`: `curso|ministerio|chofer_profesional`
+  - `subtipo_formacion`: `curso|ministerio|ministerio_i|chofer_profesional`
   - `institucion`, `nombre_programa`, `titulo_obtenido`
   - `entidad_emisora`, `numero_registro`, `fecha_aprobacion`, `fecha_emision`, `fecha_vencimiento`
 - Breaking change:
@@ -428,6 +437,28 @@ Errores esperados:
   - `404 FORMACION_NOT_FOUND`
   - `400 INVALID_RESULTADO_PAYLOAD`
   - `400 FORMACION_RESULTADO_NOT_ALLOWED` (resultado disponible solo para formacion externa)
+- Pendiente (fase futura):
+  - Automatizar extraccion de campos desde certificado (OCR/parsing) usando `estado_extraccion` y `datos_extraidos_json`.
+
+### GET `/api/perfil/me/formacion/:formacionId/certificado`
+### POST `/api/perfil/me/formacion/:formacionId/certificado`
+### PUT `/api/perfil/me/formacion/:formacionId/certificado`
+### DELETE `/api/perfil/me/formacion/:formacionId/certificado`
+- Auth: requerido.
+- Roles: `candidato`.
+- `POST|PUT`: `multipart/form-data` con campo `archivo` (pdf/jpg/png/webp) y metadata opcional:
+  - `fecha_emision`, `descripcion`, `estado` (`pendiente|aprobado|rechazado|vencido`)
+- Errores:
+  - `400 INVALID_FORMACION_ID`
+  - `404 FORMACION_NOT_FOUND`
+  - `400 FORMACION_CERTIFICADO_NOT_ALLOWED`
+  - `404 CERTIFICADO_NOT_FOUND`
+  - `400 FILE_REQUIRED`
+  - `400 INVALID_FILE_TYPE`
+  - `400 FILE_TOO_LARGE`
+- Equivalentes por `:candidatoId`:
+  - `GET /api/perfil/:candidatoId/formacion/:formacionId/certificado` (empresa|administrador|superadmin lectura)
+  - `POST|PUT|DELETE /api/perfil/:candidatoId/formacion/:formacionId/certificado` (administrador|superadmin edicion)
 
 ### GET `/api/perfil/me/documentos`
 - Auth: requerido.
@@ -874,6 +905,10 @@ Base: `/api/verificaciones`
   "errors": 5
 }
 ```
+- Efecto adicional al crear cuenta de candidato en import:
+  - Se crea usuario con `estado='activo'`, `activo=1`, `rol='candidato'`, `must_change_password=1`.
+  - Clave inicial temporal: `documento_identidad`; si no existe, usa `email`.
+  - Luego del primer login, el sistema debe forzar operativamente el cambio via `POST /auth/change-password`.
 - Errores:
   - `409 SYNC_ALREADY_RUNNING`
   - `500 SYNC_FAILED`

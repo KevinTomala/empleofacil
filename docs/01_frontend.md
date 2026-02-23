@@ -76,7 +76,10 @@
   })
   ```
 - Las rutas se definen en `src/App.jsx` con `react-router-dom`.
-- Modulo `auth` en `src/modules/auth/` con rutas `/login`, `/register` y `/request-password`.
+- Modulo `auth` en `src/modules/auth/` con rutas `/login`, `/register`, `/request-password` y `/app/change-password`.
+- En `/login`, si backend responde `user.must_change_password = true`, se muestra alerta de clave temporal y se recomienda cambio inmediato.
+- El dropdown del usuario (desktop/mobile) incluye `Cambiar contrasena` encima de `Salir`.
+- La vista `/app/change-password` valida: campos requeridos, minimo 8 caracteres, nueva != actual y confirmacion igual.
 - Modulo `Landing` en `src/modules/Landing/` con ruta `/`.
 - Registro en 2 pasos (selector de tipo de cuenta + credenciales minimas).
 - Mockups post-login: `/app/candidate/vacantes`, `/app/candidate/postulaciones`, `/app/candidate/perfil` y rutas empresa `/app/company/*`.
