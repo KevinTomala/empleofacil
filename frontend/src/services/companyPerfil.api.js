@@ -18,7 +18,7 @@ function parseCompanyPerfilError(error, fallbackMessage) {
   if (code === 'FILE_TOO_LARGE') return 'El logo supera el limite permitido de 5 MB.'
   if (code === 'INTERNAL_ERROR') return 'Error interno del servidor al procesar el logo. Intenta nuevamente.'
   if (code === 'FORBIDDEN') return 'No tienes permisos para editar el perfil de empresa.'
-  if (code === 'COMPANY_ACCESS_REQUIRED') return 'Tu usuario no tiene una membresia activa en empresa.'
+  if (code === 'COMPANY_ACCESS_REQUIRED') return 'Tu cuenta empresa esta inactiva o sin membresia activa. Solicita reactivacion al administrador.'
   if (code === 'COMPANY_ROLE_FORBIDDEN') return 'Tu rol en la empresa no tiene permisos para esta accion.'
   if (code === 'SUPERADMIN_REQUIRED') return 'Esta accion requiere un superadmin.'
   if (code === 'EMPRESA_NOT_FOUND') return 'No se encontro una empresa asociada a tu cuenta.'
@@ -30,6 +30,20 @@ function parseCompanyPerfilError(error, fallbackMessage) {
   if (code === 'USER_ALREADY_LINKED') return 'Ese usuario ya esta vinculado a la empresa.'
   if (code === 'LINK_NOT_FOUND') return 'No se encontro el vinculo de usuario solicitado.'
   if (code === 'LAST_ADMIN_REQUIRED') return 'Debe existir al menos un admin activo en la empresa.'
+  if (code === 'INVALID_DEACTIVATION_REASON') return 'Selecciona un motivo valido para desactivar la empresa.'
+  if (code === 'INVALID_REACTIVATION_REASON') return 'Selecciona un motivo valido para solicitar reactivacion.'
+  if (code === 'MOTIVO_OTRO_REQUIRED') return 'Si seleccionas \"otro\", debes explicar el motivo.'
+  if (code === 'REACTIVATION_ENDPOINT_NOT_FOUND') {
+    return 'Tu backend no tiene habilitadas las rutas de reactivacion. Reinicia/actualiza el backend para usar esta encuesta.'
+  }
+  if (code === 'REACTIVATION_ALREADY_PENDING') return 'Ya existe una solicitud de reactivacion en proceso.'
+  if (code === 'DEACTIVATION_SURVEY_ALREADY_SUBMITTED') {
+    return 'La encuesta de desactivacion ya fue enviada anteriormente y solo puede enviarse una vez.'
+  }
+  if (code === 'REACTIVATION_SURVEY_ALREADY_SUBMITTED') {
+    return 'La encuesta de reactivacion ya fue enviada anteriormente y solo puede enviarse una vez.'
+  }
+  if (code === 'COMPANY_ALREADY_ACTIVE') return 'La cuenta de empresa ya esta activa.'
   if (code === 'INVALID_EMPRESA_USUARIO_ID') return 'El identificador del usuario de empresa es invalido.'
   if (code === 'PROFILE_DELETE_FAILED') return 'No se pudo desactivar la empresa.'
 
@@ -67,6 +81,41 @@ export async function requestMyCompanyVerification(payload = {}) {
     method: 'POST',
     body: JSON.stringify(payload)
   })
+}
+
+export async function getMyCompanyReactivationRequest() {
+  try {
+    return await apiRequest('/api/company/reactivacion/me')
+  } catch (error) {
+    const isNotFound = Number(error?.status) === 404
+    const backendCode = String(error?.payload?.error || '').trim()
+    if (isNotFound && backendCode !== 'EMPRESA_NOT_FOUND') {
+      const wrapped = new Error('REACTIVATION_ENDPOINT_NOT_FOUND')
+      wrapped.status = 404
+      wrapped.payload = { ...(error?.payload || {}), error: 'REACTIVATION_ENDPOINT_NOT_FOUND' }
+      throw wrapped
+    }
+    throw error
+  }
+}
+
+export async function requestMyCompanyReactivation(payload = {}) {
+  try {
+    return await apiRequest('/api/company/reactivacion/me/solicitar', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
+  } catch (error) {
+    const isNotFound = Number(error?.status) === 404
+    const backendCode = String(error?.payload?.error || '').trim()
+    if (isNotFound && backendCode !== 'EMPRESA_NOT_FOUND') {
+      const wrapped = new Error('REACTIVATION_ENDPOINT_NOT_FOUND')
+      wrapped.status = 404
+      wrapped.payload = { ...(error?.payload || {}), error: 'REACTIVATION_ENDPOINT_NOT_FOUND' }
+      throw wrapped
+    }
+    throw error
+  }
 }
 
 export async function deleteMyCompanyLogo() {
@@ -131,8 +180,9 @@ export async function updateMyCompanyPreferences(payload) {
   })
 }
 
-export async function deleteMyCompanyProfile() {
+export async function deleteMyCompanyProfile(payload) {
   return apiRequest('/api/company/perfil/me', {
-    method: 'DELETE'
+    method: 'DELETE',
+    body: JSON.stringify(payload || {})
   })
 }

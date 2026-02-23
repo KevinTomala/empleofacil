@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { apiRequest } from '../services/api'
 
 const AuthContext = createContext(null)
@@ -34,7 +34,7 @@ export function AuthProvider({ children }) {
     setReady(true)
   }, [])
 
-  const refreshCompanyAccess = async () => {
+  const refreshCompanyAccess = useCallback(async () => {
     if (!user || !token) {
       setHasCompanyAccess(false)
       setCompanyAccessReady(true)
@@ -57,13 +57,12 @@ export function AuthProvider({ children }) {
       setCompanyAccessReady(true)
       return false
     }
-  }
+  }, [user, token])
 
   useEffect(() => {
     if (!ready) return
     refreshCompanyAccess()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, token, user?.id])
+  }, [ready, refreshCompanyAccess])
 
   const login = async (identifier, password) => {
     try {
@@ -123,12 +122,13 @@ export function AuthProvider({ children }) {
       token,
       login,
       logout,
+      refreshCompanyAccess,
       loading,
       ready,
       hasCompanyAccess,
       companyAccessReady
     }),
-    [user, token, loading, ready, hasCompanyAccess, companyAccessReady]
+    [user, token, loading, ready, hasCompanyAccess, companyAccessReady, refreshCompanyAccess]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

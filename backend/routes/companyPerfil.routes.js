@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const { authRequired } = require('../middlewares/auth.middleware');
+const { authRequired, requireRole } = require('../middlewares/auth.middleware');
 const {
   companyContextRequired,
   requireCompanyAnyWrite,
@@ -19,6 +19,8 @@ const {
   deleteMyCompanyUsuario,
   getMyCompanyPreferencias,
   upsertMyCompanyPreferencias,
+  getMyCompanyReactivationRequest,
+  requestMyCompanyReactivation,
   deleteMyCompanyPerfil
 } = require('../controllers/companyPerfil.controller');
 const {
@@ -62,6 +64,8 @@ const uploadLogo = multer({
 });
 
 router.get('/perfil/me', authRequired, companyContextRequired(), getMyCompanyPerfil);
+router.get('/reactivacion/me', authRequired, requireRole(['empresa']), getMyCompanyReactivationRequest);
+router.post('/reactivacion/me/solicitar', authRequired, requireRole(['empresa']), requestMyCompanyReactivation);
 router.get('/perfil/me/verificacion', authRequired, companyContextRequired(), getMyCompanyVerification);
 router.post('/perfil/me/verificacion/solicitar', authRequired, companyContextRequired(), requireCompanyAnyWrite(), requestMyCompanyVerification);
 router.put('/perfil/me/datos-generales', authRequired, companyContextRequired(), requireCompanyAnyWrite(), updateMyCompanyDatosGenerales);

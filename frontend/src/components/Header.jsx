@@ -64,7 +64,8 @@ export default function Header() {
   const homeLink = useMemo(() => {
     if (role === 'superadmin' || role === 'administrador') return '/app/admin'
     if (role === 'candidato') return '/app/candidate/vacantes'
-    if (role === 'empresa' || hasCompanyAccess) return '/app/company'
+    if (role === 'empresa') return hasCompanyAccess ? '/app/company' : '/app/company/inactiva'
+    if (hasCompanyAccess) return '/app/company'
     return '/'
   }, [role, hasCompanyAccess])
 
@@ -74,6 +75,7 @@ export default function Header() {
         { href: '/app/admin', label: 'Resumen' },
         { href: '/app/admin/roles', label: 'Roles' },
         { href: '/app/admin/cuentas', label: 'Cuentas' },
+        { href: '/app/admin/solicitudes', label: 'Solicitudes' },
         { href: '/app/admin/mapeo-empresas', label: 'Mapeo empresas' },
         { href: '/app/admin/candidatos', label: 'Candidatos' },
         { href: '/app/admin/auditoria', label: 'Auditoría' },
@@ -81,6 +83,10 @@ export default function Header() {
     }
 
     if (role === 'empresa') {
+      if (!hasCompanyAccess) {
+        return [{ href: '/app/company/inactiva', label: 'Reactivacion' }]
+      }
+
       return [
         { href: '/app/company/vacantes', label: 'Vacantes' },
         { href: '/app/company/candidatos', label: 'Candidatos' },

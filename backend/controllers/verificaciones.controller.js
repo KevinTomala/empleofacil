@@ -1,4 +1,9 @@
-const { resolveEmpresaIdForUser } = require('../services/companyPerfil.service');
+const {
+  resolveEmpresaIdForUser,
+  VALID_ESTADOS_REACTIVACION_EMPRESA,
+  listEmpresaReactivaciones,
+  reviewEmpresaReactivacionById
+} = require('../services/companyPerfil.service');
 const { findCandidatoIdByUserId } = require('../services/perfilCandidato.service');
 const {
   VALID_VERIFICACION_ESTADOS,
@@ -217,6 +222,73 @@ async function reviewVerificacionAdmin(req, res) {
   }
 }
 
+async function listReactivacionesEmpresaAdmin(req, res) {
+  try {
+    const estado = parseNullableString(req.query.estado);
+    if (estado && !VALID_ESTADOS_REACTIVACION_EMPRESA.includes(estado)) {
+      return res.status(400).json({ error: 'INVALID_REACTIVATION_STATUS' });
+    }
+
+    const q = parseNullableString(req.query.q) || '';
+    const page = parsePositiveInt(req.query.page) || 1;
+    const pageSize = parsePositiveInt(req.query.page_size) || 20;
+
+    const result = await listEmpresaReactivaciones({
+      estado,
+      q,
+      page,
+      pageSize
+    });
+
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({
+      error: 'VERIFICATION_FETCH_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+async function reviewReactivacionEmpresaAdmin(req, res) {
+  const reactivacionId = parsePositiveInt(req.params.reactivacionId);
+  if (!reactivacionId) return res.status(400).json({ error: 'INVALID_REACTIVATION_ID' });
+
+  const payload = req.body || {};
+  const estado = parseNullableString(payload.estado);
+  const comentario = parseNullableString(payload.comentario_admin || payload.comentario);
+
+  if (!estado || !['en_revision', 'aprobada', 'rechazada'].includes(estado)) {
+    return res.status(400).json({ error: 'INVALID_REACTIVATION_STATUS' });
+  }
+
+  try {
+    const solicitud = await reviewEmpresaReactivacionById({
+      reactivacionId,
+      estado,
+      comentarioAdmin: comentario,
+      actorUsuarioId: req.user?.id || null
+    });
+
+    return res.json({ ok: true, solicitud });
+  } catch (error) {
+    const code = String(error?.code || '');
+    if (code === 'REACTIVATION_NOT_FOUND') {
+      return res.status(404).json({ error: 'REACTIVATION_NOT_FOUND' });
+    }
+    if (code === 'INVALID_REACTIVATION_ID') {
+      return res.status(400).json({ error: 'INVALID_REACTIVATION_ID' });
+    }
+    if (code === 'INVALID_REACTIVATION_STATUS') {
+      return res.status(400).json({ error: 'INVALID_REACTIVATION_STATUS' });
+    }
+
+    return res.status(500).json({
+      error: 'VERIFICATION_UPDATE_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
 module.exports = {
   getMyCompanyVerification,
   requestMyCompanyVerification,
@@ -224,5 +296,7 @@ module.exports = {
   requestMyCandidateVerification,
   listVerificacionesAdmin,
   getVerificacionByIdAdmin,
-  reviewVerificacionAdmin
+  reviewVerificacionAdmin,
+  listReactivacionesEmpresaAdmin,
+  reviewReactivacionEmpresaAdmin
 };

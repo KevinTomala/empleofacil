@@ -22,9 +22,11 @@ import CompanyVacantes from './modules/company/CompanyVacantes'
 import CompanyCandidatos from './modules/company/CompanyCandidatos'
 import CompanyMensajes from './modules/company/CompanyMensajes'
 import CompanyPerfil from './modules/company/CompanyPerfil'
+import CompanyAccountInactive from './modules/company/CompanyAccountInactive'
 import AdminHome from './modules/admin/AdminHome'
 import AdminRolesPermisos from './modules/admin/AdminRolesPermisos'
 import AdminCuentas from './modules/admin/AdminCuentas'
+import AdminSolicitudes from './modules/admin/AdminSolicitudes'
 import AdminAuditoria from './modules/admin/AdminAuditoria'
 import AdminEmpresasMapeo from './modules/admin/AdminEmpresasMapeo'
 import { AuthProvider } from './context/AuthContext'
@@ -156,6 +158,14 @@ function App() {
           <Route path="/perfil/datos-personales" element={<Navigate to="/perfil/perfil" replace />} />
           <Route path="/perfil/preferencias" element={<Navigate to="/perfil/movilidad" replace />} />
           <Route
+            path="/app/company/inactiva"
+            element={
+              <ProtectedRoute roles={['empresa']} requireCompanyAccess={false}>
+                <CompanyAccountInactive />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/app/company"
             element={
               <ProtectedRoute>
@@ -216,6 +226,14 @@ function App() {
             element={
               <ProtectedRoute roles={['administrador', 'superadmin']}>
                 <AdminCuentas />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/admin/solicitudes"
+            element={
+              <ProtectedRoute roles={['administrador', 'superadmin']}>
+                <AdminSolicitudes />
               </ProtectedRoute>
             }
           />

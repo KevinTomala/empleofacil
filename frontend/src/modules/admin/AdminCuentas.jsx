@@ -142,13 +142,14 @@ export default function AdminCuentas() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-2">
               <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">
-                <BadgeCheck className="w-4 h-4" /> Verificacion de cuentas
+                <BadgeCheck className="w-4 h-4" /> Gestion de cuentas
               </span>
               <h1 className="admin-title font-heading text-2xl sm:text-3xl font-bold">
                 Empresas y candidatos
               </h1>
               <p className="text-sm text-foreground/70 max-w-xl">
-                Administra estados de verificacion. Administrador opera el flujo diario y superadmin resuelve excepciones.
+                Consulta y administra estados generales de cuentas. La bandeja de solicitudes opera en el modulo
+                Solicitudes.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">

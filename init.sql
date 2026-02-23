@@ -93,6 +93,49 @@ CREATE TABLE empresas_preferencias (
   CONSTRAINT fk_empresas_preferencias_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE empresas_desactivaciones (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  empresa_id BIGINT NOT NULL,
+  usuario_id BIGINT NULL,
+  usuarios_activos_json JSON NULL,
+  motivo_codigo VARCHAR(50) NOT NULL,
+  motivos_codigos_json JSON NULL,
+  motivo_detalle TEXT NULL,
+  requiere_soporte TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_empresas_desactivaciones_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+  CONSTRAINT fk_empresas_desactivaciones_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+  INDEX idx_empresas_desactivaciones_empresa (empresa_id),
+  INDEX idx_empresas_desactivaciones_motivo (motivo_codigo),
+  INDEX idx_empresas_desactivaciones_soporte (requiere_soporte),
+  INDEX idx_empresas_desactivaciones_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE empresas_reactivaciones (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  empresa_id BIGINT NOT NULL,
+  usuario_id BIGINT NULL,
+  estado ENUM('pendiente','en_revision','aprobada','rechazada') NOT NULL DEFAULT 'pendiente',
+  motivo_codigo VARCHAR(50) NOT NULL,
+  motivos_codigos_json JSON NULL,
+  motivo_detalle TEXT NULL,
+  acciones_realizadas TEXT NULL,
+  requiere_soporte TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  comentario_admin TEXT NULL,
+  reviewed_by BIGINT NULL,
+  reviewed_at DATETIME NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_empresas_reactivaciones_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+  CONSTRAINT fk_empresas_reactivaciones_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+  CONSTRAINT fk_empresas_reactivaciones_reviewed_by FOREIGN KEY (reviewed_by) REFERENCES usuarios(id) ON DELETE SET NULL,
+  INDEX idx_empresas_reactivaciones_empresa (empresa_id),
+  INDEX idx_empresas_reactivaciones_estado (estado),
+  INDEX idx_empresas_reactivaciones_motivo (motivo_codigo),
+  INDEX idx_empresas_reactivaciones_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 INSERT INTO empresas (nombre, email, tipo, activo)
 VALUES ('ADEMY S.A.S.', 'ademy@empleofacil.com', 'externa', 1);

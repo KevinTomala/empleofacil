@@ -1,10 +1,12 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-export default function ProtectedRoute({ roles = [], children }) {
+export default function ProtectedRoute({ roles = [], children, requireCompanyAccess = null }) {
   const { user, ready, hasCompanyAccess, companyAccessReady } = useAuth()
   const location = useLocation()
-  const requireCompanyAccess = Boolean(location.pathname.startsWith('/app/company'))
+  const routeNeedsCompanyAccess = Boolean(location.pathname.startsWith('/app/company'))
+  const shouldRequireCompanyAccess =
+    typeof requireCompanyAccess === 'boolean' ? requireCompanyAccess : routeNeedsCompanyAccess
 
   if (!ready) {
     return null
@@ -14,11 +16,14 @@ export default function ProtectedRoute({ roles = [], children }) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
   }
 
-  if (requireCompanyAccess && !companyAccessReady) {
+  if (shouldRequireCompanyAccess && !companyAccessReady) {
     return null
   }
 
-  if (requireCompanyAccess && !hasCompanyAccess) {
+  if (shouldRequireCompanyAccess && !hasCompanyAccess) {
+    if (user.rol === 'empresa') {
+      return <Navigate to="/app/company/inactiva" replace />
+    }
     return <Navigate to="/login" replace />
   }
 

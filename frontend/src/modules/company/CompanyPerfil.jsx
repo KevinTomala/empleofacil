@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import './company.css'
 import {
   Building2,
@@ -14,6 +15,7 @@ import {
   Users,
 } from 'lucide-react'
 import Header from '../../components/Header'
+import { useAuth } from '../../context/AuthContext'
 import { showToast } from '../../utils/showToast'
 import {
   deleteMyCompanyLogo,
@@ -61,6 +63,19 @@ const USER_FORM_DEFAULT = {
 
 const MODALIDADES = ['presencial', 'hibrido', 'remoto']
 const NIVELES = ['junior', 'semi_senior', 'senior']
+const MOTIVOS_DESACTIVACION = [
+  { value: 'sin_vacantes', label: 'No tengo vacantes por ahora' },
+  { value: 'poca_calidad_candidatos', label: 'No encuentro perfiles adecuados' },
+  { value: 'costo_alto', label: 'Costo alto para mi empresa' },
+  { value: 'pausa_temporal', label: 'Pausa temporal de contratacion' },
+  { value: 'problema_tecnico', label: 'Problemas tecnicos en la plataforma' },
+  { value: 'otro', label: 'Otro motivo' },
+]
+const DEACTIVATION_FORM_DEFAULT = {
+  motivos_codigos: [],
+  motivo_detalle: '',
+  requiere_soporte: true,
+}
 
 function mapPayloadToForm(payload) {
   return {
@@ -112,6 +127,8 @@ function toAssetUrl(value) {
 }
 
 export default function CompanyPerfil() {
+  const navigate = useNavigate()
+  const { refreshCompanyAccess } = useAuth()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -130,6 +147,9 @@ export default function CompanyPerfil() {
   const [loadingPreferences, setLoadingPreferences] = useState(true)
   const [savingPreferences, setSavingPreferences] = useState(false)
   const [deletingCompany, setDeletingCompany] = useState(false)
+  const [showDeactivateSurvey, setShowDeactivateSurvey] = useState(false)
+  const [showDeactivateConfirmModal, setShowDeactivateConfirmModal] = useState(false)
+  const [deactivationForm, setDeactivationForm] = useState(DEACTIVATION_FORM_DEFAULT)
   const logoInputRef = useRef(null)
   const logoMenuRef = useRef(null)
   const linksMenuRef = useRef(null)
@@ -491,6 +511,18 @@ export default function CompanyPerfil() {
     })
   }
 
+  const toggleDeactivationReason = (value) => {
+    setDeactivationForm((prev) => {
+      const current = Array.isArray(prev.motivos_codigos) ? prev.motivos_codigos : []
+      const exists = current.includes(value)
+      const next = exists ? current.filter((item) => item !== value) : [...current, value]
+      if (value === 'otro' && exists) {
+        return { ...prev, motivos_codigos: next, motivo_detalle: '' }
+      }
+      return { ...prev, motivos_codigos: next }
+    })
+  }
+
   const handleSavePreferences = async () => {
     if (savingPreferences) return
     try {
@@ -517,18 +549,50 @@ export default function CompanyPerfil() {
     }
   }
 
+  const validateDeactivationPayloadOrNull = () => {
+    const motivosCodigos = Array.isArray(deactivationForm.motivos_codigos)
+      ? deactivationForm.motivos_codigos.filter(Boolean)
+      : []
+    if (!motivosCodigos.length) {
+      showToast({ type: 'warning', message: 'Selecciona al menos un motivo para desactivar la empresa.' })
+      return null
+    }
+
+    const motivoDetalle = String(deactivationForm.motivo_detalle || '').trim() || null
+    if (motivosCodigos.includes('otro') && !motivoDetalle) {
+      showToast({ type: 'warning', message: 'Si seleccionas "otro", debes explicar el motivo.' })
+      return null
+    }
+
+    return {
+      motivos_codigos: motivosCodigos,
+      motivo_detalle: motivoDetalle,
+      requiere_soporte: Boolean(deactivationForm.requiere_soporte),
+    }
+  }
+
+  const handleAskDeleteCompanyConfirmation = () => {
+    if (deletingCompany) return
+    const payload = validateDeactivationPayloadOrNull()
+    if (!payload) return
+    setShowDeactivateConfirmModal(true)
+  }
+
   const handleDeleteCompany = async () => {
     if (deletingCompany) return
-    const confirmed = window.confirm(
-      'Esta accion desactiva la empresa y marca inactivos los usuarios vinculados. ¿Deseas continuar?'
-    )
-    if (!confirmed) return
+
+    const payload = validateDeactivationPayloadOrNull()
+    if (!payload) return
 
     try {
       setDeletingCompany(true)
-      await deleteMyCompanyProfile()
+      await deleteMyCompanyProfile(payload)
+      await refreshCompanyAccess()
+      setShowDeactivateConfirmModal(false)
+      setShowDeactivateSurvey(false)
+      setDeactivationForm(DEACTIVATION_FORM_DEFAULT)
       showToast({ type: 'success', message: 'Empresa desactivada correctamente.' })
-      window.location.assign('/login')
+      navigate('/app/company/inactiva', { replace: true })
     } catch (error) {
       setDeletingCompany(false)
       showToast({
@@ -1176,18 +1240,119 @@ export default function CompanyPerfil() {
               <p className="text-sm text-foreground/70">
                 Esta accion desactiva la empresa y marca inactivos los usuarios vinculados.
               </p>
+              {!showDeactivateSurvey ? (
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded-lg border border-rose-300 text-rose-700 text-xs font-semibold"
+                  onClick={() => setShowDeactivateSurvey(true)}
+                  disabled={deletingCompany}
+                >
+                  Iniciar desactivacion
+                </button>
+              ) : (
+                <div className="space-y-3 rounded-xl border border-rose-200 bg-rose-50/60 p-3">
+                  <label className="space-y-1 text-xs block">
+                    <span className="font-semibold text-rose-800">Motivos (seleccion multiple, obligatorio)</span>
+                    <div className="grid sm:grid-cols-2 gap-2 rounded-lg border border-rose-200 bg-white p-2">
+                      {MOTIVOS_DESACTIVACION.map((item) => (
+                        <label key={item.value} className="inline-flex items-center gap-2 text-xs text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={deactivationForm.motivos_codigos.includes(item.value)}
+                            onChange={() => toggleDeactivationReason(item.value)}
+                            disabled={deletingCompany}
+                          />
+                          {item.label}
+                        </label>
+                      ))}
+                    </div>
+                  </label>
+
+                  {deactivationForm.motivos_codigos.includes('otro') ? (
+                    <label className="space-y-1 text-xs block">
+                      <span className="font-semibold text-rose-800">Otro motivo (obligatorio)</span>
+                      <input
+                        className="w-full border border-rose-200 rounded-lg px-3 py-2 bg-white"
+                        type="text"
+                        placeholder="Escribe aqui tu otro motivo"
+                        value={deactivationForm.motivo_detalle}
+                        onChange={(event) =>
+                          setDeactivationForm((prev) => ({ ...prev, motivo_detalle: event.target.value }))
+                        }
+                        disabled={deletingCompany}
+                        maxLength={1000}
+                      />
+                    </label>
+                  ) : null}
+
+                  <label className="inline-flex items-center gap-2 text-xs text-rose-900">
+                    <input
+                      type="checkbox"
+                      checked={deactivationForm.requiere_soporte}
+                      onChange={(event) =>
+                        setDeactivationForm((prev) => ({ ...prev, requiere_soporte: event.target.checked }))
+                      }
+                      disabled={deletingCompany}
+                    />
+                    Quiero que soporte me contacte para ayudarme a continuar.
+                  </label>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className="px-3 py-2 rounded-lg border border-border text-xs font-semibold"
+                      onClick={() => {
+                        setShowDeactivateSurvey(false)
+                        setDeactivationForm(DEACTIVATION_FORM_DEFAULT)
+                      }}
+                      disabled={deletingCompany}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="px-3 py-2 rounded-lg border border-rose-300 text-rose-700 text-xs font-semibold"
+                      onClick={handleAskDeleteCompanyConfirmation}
+                      disabled={deletingCompany}
+                    >
+                      Continuar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      </main>
+      {showDeactivateConfirmModal ? (
+        <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-[1px] flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-xl border border-border bg-white p-5 space-y-4">
+            <h3 className="font-heading text-lg font-semibold">Confirmar desactivacion</h3>
+            <p className="text-sm text-foreground/70">
+              Esta accion desactiva la empresa y dejara inactivos los usuarios vinculados. Estas seguro de continuar?
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="px-3 py-2 rounded-lg border border-border text-xs font-semibold"
+                onClick={() => setShowDeactivateConfirmModal(false)}
+                disabled={deletingCompany}
+              >
+                Cancelar
+              </button>
               <button
                 type="button"
                 className="px-3 py-2 rounded-lg border border-rose-300 text-rose-700 text-xs font-semibold"
                 onClick={handleDeleteCompany}
                 disabled={deletingCompany}
               >
-                {deletingCompany ? 'Desactivando...' : 'Desactivar empresa'}
+                {deletingCompany ? 'Desactivando...' : 'Si, desactivar cuenta'}
               </button>
             </div>
           </div>
-        </section>
-      </main>
+        </div>
+      ) : null}
     </div>
   )
 }
+

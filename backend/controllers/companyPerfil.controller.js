@@ -3,9 +3,12 @@ const path = require('path');
 const {
   VALID_ROLES_EMPRESA,
   VALID_ESTADOS_EMPRESA_USUARIO,
+  VALID_MOTIVOS_DESACTIVACION_EMPRESA,
+  VALID_MOTIVOS_REACTIVACION_EMPRESA,
   VALID_MODALIDADES,
   VALID_NIVELES_EXPERIENCIA,
   resolveEmpresaIdForUser,
+  resolveEmpresaIdForUserAnyState,
   getPerfilByEmpresaId,
   updateEmpresa,
   upsertPerfilEmpresa,
@@ -16,7 +19,10 @@ const {
   createEmpresaUsuarioByEmail,
   updateEmpresaUsuarioById,
   deactivateEmpresaUsuarioById,
-  softDeleteEmpresaById
+  softDeleteEmpresaById,
+  createEmpresaReactivacionByEmpresaId,
+  getLatestEmpresaReactivacionByEmpresaId,
+  getLatestEmpresaDesactivacionByEmpresaId
 } = require('../services/companyPerfil.service');
 const { ensureVerificacionByScope } = require('../services/verificaciones.service');
 
@@ -57,6 +63,16 @@ function parseOptionalBoolean(value) {
   if (value === true || value === 1 || value === '1' || value === 'true') return true;
   if (value === false || value === 0 || value === '0' || value === 'false') return false;
   return null;
+}
+
+function normalizeStringArray(values) {
+  return Array.from(
+    new Set(
+      (Array.isArray(values) ? values : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+    )
+  );
 }
 
 function validateAndNormalizePayload(payload) {
@@ -160,6 +176,13 @@ function mapServiceErrorToHttp(error, defaultStatus = 500) {
   if (code === 'LINK_NOT_FOUND') return { status: 404, error: code };
   if (code === 'USER_ALREADY_LINKED') return { status: 409, error: code };
   if (code === 'LAST_ADMIN_REQUIRED') return { status: 400, error: code };
+  if (code === 'INVALID_DEACTIVATION_REASON') return { status: 400, error: code };
+  if (code === 'INVALID_REACTIVATION_REASON') return { status: 400, error: code };
+  if (code === 'MOTIVO_OTRO_REQUIRED') return { status: 400, error: code };
+  if (code === 'REACTIVATION_ALREADY_PENDING') return { status: 409, error: code };
+  if (code === 'DEACTIVATION_SURVEY_ALREADY_SUBMITTED') return { status: 409, error: code };
+  if (code === 'REACTIVATION_SURVEY_ALREADY_SUBMITTED') return { status: 409, error: code };
+  if (code === 'COMPANY_ALREADY_ACTIVE') return { status: 409, error: code };
   if (code === 'COMPANY_ACCESS_REQUIRED') return { status: 403, error: code };
   if (code === 'COMPANY_ROLE_FORBIDDEN') return { status: 403, error: code };
 
@@ -555,6 +578,57 @@ function validatePreferenciasPayload(payload) {
   };
 }
 
+function validateDeactivateCompanyPayload(payload) {
+  if (!isPlainObject(payload)) return null;
+
+  const motivosCodigos = normalizeStringArray(payload.motivos_codigos);
+  if (!motivosCodigos.length) return null;
+  if (!motivosCodigos.every((item) => VALID_MOTIVOS_DESACTIVACION_EMPRESA.includes(item))) return null;
+
+  const motivoDetalleRaw = normalizeNullableString(payload.motivo_detalle);
+  if (!(motivoDetalleRaw === null || typeof motivoDetalleRaw === 'string')) return null;
+  const motivoDetalle = typeof motivoDetalleRaw === 'string' ? motivoDetalleRaw.slice(0, 1000) : null;
+
+  if (motivosCodigos.includes('otro') && !motivoDetalle) return null;
+
+  const requiereSoporte = parseOptionalBoolean(payload.requiere_soporte);
+  if (requiereSoporte === null) return null;
+
+  return {
+    motivos_codigos: motivosCodigos,
+    motivo_detalle: motivoDetalle,
+    requiere_soporte: requiereSoporte === undefined ? false : requiereSoporte
+  };
+}
+
+function validateRequestReactivationPayload(payload) {
+  if (!isPlainObject(payload)) return null;
+
+  const motivosCodigos = normalizeStringArray(payload.motivos_codigos);
+  if (!motivosCodigos.length) return null;
+  if (!motivosCodigos.every((item) => VALID_MOTIVOS_REACTIVACION_EMPRESA.includes(item))) return null;
+
+  const motivoDetalleRaw = normalizeNullableString(payload.motivo_detalle);
+  if (!(motivoDetalleRaw === null || typeof motivoDetalleRaw === 'string')) return null;
+  const motivoDetalle = typeof motivoDetalleRaw === 'string' ? motivoDetalleRaw.slice(0, 1000) : null;
+  if (motivosCodigos.includes('otro') && !motivoDetalle) return null;
+
+  const accionesRaw = payload.acciones_realizadas === undefined
+    ? null
+    : normalizeNullableString(payload.acciones_realizadas);
+  if (!(accionesRaw === null || typeof accionesRaw === 'string')) return null;
+
+  const requiereSoporte = parseOptionalBoolean(payload.requiere_soporte);
+  if (requiereSoporte === null) return null;
+
+  return {
+    motivos_codigos: motivosCodigos,
+    motivo_detalle: motivoDetalle,
+    acciones_realizadas: typeof accionesRaw === 'string' ? accionesRaw.slice(0, 2000) : null,
+    requiere_soporte: requiereSoporte === undefined ? false : requiereSoporte
+  };
+}
+
 async function upsertMyCompanyPreferencias(req, res) {
   const payload = validatePreferenciasPayload(req.body || {});
   if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
@@ -574,12 +648,68 @@ async function upsertMyCompanyPreferencias(req, res) {
   }
 }
 
+async function getMyCompanyReactivationRequest(req, res) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'AUTH_REQUIRED' });
+
+    const empresaId = await resolveEmpresaIdForUserAnyState(userId);
+    if (!empresaId) return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+
+    const solicitud = await getLatestEmpresaReactivacionByEmpresaId(empresaId);
+    const desactivacion = await getLatestEmpresaDesactivacionByEmpresaId(empresaId);
+    return res.json({ solicitud, desactivacion });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'PROFILE_FETCH_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+async function requestMyCompanyReactivation(req, res) {
+  const payload = validateRequestReactivationPayload(req.body || {});
+  if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'AUTH_REQUIRED' });
+
+    const empresaId = await resolveEmpresaIdForUserAnyState(userId);
+    if (!empresaId) return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
+
+    const solicitud = await createEmpresaReactivacionByEmpresaId(empresaId, {
+      usuarioId: userId,
+      motivosCodigos: payload.motivos_codigos,
+      motivoDetalle: payload.motivo_detalle,
+      accionesRealizadas: payload.acciones_realizadas,
+      requiereSoporte: payload.requiere_soporte
+    });
+
+    return res.status(201).json({ ok: true, solicitud });
+  } catch (error) {
+    const mapped = mapServiceErrorToHttp(error);
+    return res.status(mapped.status).json({
+      error: mapped.error,
+      details: mapped.status >= 500 ? String(error.message || error) : undefined
+    });
+  }
+}
+
 async function deleteMyCompanyPerfil(req, res) {
+  const payload = validateDeactivateCompanyPayload(req.body || {});
+  if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
   try {
     const empresaId = await resolveMyEmpresa(req);
     if (!empresaId) return res.status(404).json({ error: 'EMPRESA_NOT_FOUND' });
 
-    await softDeleteEmpresaById(empresaId);
+    await softDeleteEmpresaById(empresaId, {
+      actorUsuarioId: req.user?.id || null,
+      motivosCodigos: payload.motivos_codigos,
+      motivoDetalle: payload.motivo_detalle,
+      requiereSoporte: payload.requiere_soporte
+    });
     return res.json({ ok: true });
   } catch (error) {
     const mapped = mapServiceErrorToHttp(error);
@@ -601,5 +731,7 @@ module.exports = {
   deleteMyCompanyUsuario,
   getMyCompanyPreferencias,
   upsertMyCompanyPreferencias,
+  getMyCompanyReactivationRequest,
+  requestMyCompanyReactivation,
   deleteMyCompanyPerfil
 };

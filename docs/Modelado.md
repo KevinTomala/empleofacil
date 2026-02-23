@@ -7,11 +7,11 @@ Fecha: 2026-02-11
 - Prioridad: `auth` (Login, Register, RequestPassword).
 - Pais: Ecuador (mapa interactivo y filtros por provincias/cantones).
 - `estudiantes` provienen de sistema externo (solo lectura en el portal).
-- La base `initNew.sql` se mantiene para auth salvo cambio obligado por el UI.
+- La base `init.sql` se mantiene para auth salvo cambio obligado por el UI.
 
 ## 2) Auth: entidades y relaciones
 
-Tablas actuales en `initNew.sql`:
+Tablas actuales en `init.sql`:
 - `roles` -> define roles del sistema.
 - `permisos` -> define permisos por modulo/ruta.
 - `rol_permiso` -> relacion N:N entre `roles` y `permisos`.
@@ -58,7 +58,7 @@ Campos sugeridos en `permisos`:
 
 ## 6) Cambios pendientes (auth)
 
-- No se requieren cambios en `initNew.sql` para auth en esta fase.
+- No se requieren cambios en `init.sql` para auth en esta fase.
 - Si el UI exige otra semantica de roles, se ajusta `roles` y `permisos` sin tocar el resto.
 
 ## 7) Admin (mapeo inicial)
