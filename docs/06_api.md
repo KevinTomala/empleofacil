@@ -136,6 +136,209 @@ EmpleoFacil API
 }
 ```
 
+## Vacantes (MVP)
+
+### GET `/api/vacantes`
+- Auth: requerido.
+- Roles: `candidato`, `empresa`, `administrador`, `superadmin`.
+- Query params:
+  - `page` (default `1`)
+  - `page_size` (default `20`, max `100`)
+  - `q` (titulo, area, ubicacion o empresa)
+  - `provincia` (exacto)
+  - `modalidad` (`presencial|remoto|hibrido`)
+  - `tipo_contrato` (`tiempo_completo|medio_tiempo|por_horas|temporal|indefinido|otro`)
+- Respuesta `200`:
+```json
+{
+  "items": [
+    {
+      "id": 21,
+      "empresa_id": 4,
+      "empresa_nombre": "ADEMY S.A.S.",
+      "titulo": "Guardia de seguridad",
+      "area": "Operaciones",
+      "provincia": "Guayas",
+      "ciudad": "Guayaquil",
+      "modalidad": "presencial",
+      "tipo_contrato": "tiempo_completo",
+      "estado": "activa",
+      "fecha_publicacion": "2026-02-23T12:00:00.000Z"
+    }
+  ],
+  "page": 1,
+  "page_size": 20,
+  "total": 1
+}
+```
+- Nota: este endpoint solo devuelve vacantes activas.
+
+### GET `/api/vacantes/mias`
+- Auth: requerido.
+- Roles: `empresa`, `administrador`, `superadmin`.
+- Query params:
+  - `page`, `page_size`, `q`, `provincia`, `modalidad`, `tipo_contrato`, `estado`
+  - `empresa_id` (solo admin/superadmin, opcional)
+- Respuesta `200`: mismo contrato `{ items, page, page_size, total }`.
+- Errores:
+  - `403 COMPANY_ACCESS_REQUIRED`
+  - `500 VACANTES_FETCH_FAILED`
+
+### POST `/api/vacantes`
+- Auth: requerido.
+- Roles: `empresa`, `administrador`, `superadmin`.
+- Body minimo:
+```json
+{
+  "titulo": "Operador CCTV",
+  "estado": "borrador"
+}
+```
+- Body permitido (parcial):
+  - `titulo` (requerido)
+  - `area`, `provincia`, `ciudad`
+  - `modalidad`, `tipo_contrato`
+  - `descripcion`, `requisitos`
+  - `estado` (`borrador|activa|pausada|cerrada`)
+  - `fecha_cierre` (`YYYY-MM-DD`)
+- Respuesta `201`:
+```json
+{ "ok": true, "id": 55 }
+```
+- Errores:
+  - `400 INVALID_PAYLOAD`
+  - `403 COMPANY_ACCESS_REQUIRED`
+  - `500 VACANTE_UPDATE_FAILED`
+
+### PUT `/api/vacantes/:vacanteId`
+- Auth: requerido.
+- Roles: `empresa`, `administrador`, `superadmin`.
+- Body permitido (parcial):
+  - `titulo`, `area`, `provincia`, `ciudad`, `modalidad`, `tipo_contrato`, `descripcion`, `requisitos`, `fecha_cierre`
+- Respuesta `200`:
+```json
+{ "ok": true }
+```
+- Errores:
+  - `400 INVALID_VACANTE_ID`
+  - `400 INVALID_PAYLOAD`
+  - `404 VACANTE_NOT_FOUND`
+  - `403 FORBIDDEN`
+  - `403 COMPANY_ACCESS_REQUIRED`
+  - `500 VACANTE_UPDATE_FAILED`
+
+### PUT `/api/vacantes/:vacanteId/estado`
+- Auth: requerido.
+- Roles: `empresa`, `administrador`, `superadmin`.
+- Body:
+```json
+{ "estado": "activa" }
+```
+- Estados permitidos: `borrador|activa|pausada|cerrada`.
+- Respuesta `200`:
+```json
+{ "ok": true }
+```
+- Errores:
+  - `400 INVALID_VACANTE_ID`
+  - `400 INVALID_PAYLOAD`
+  - `404 VACANTE_NOT_FOUND`
+  - `403 FORBIDDEN`
+  - `403 COMPANY_ACCESS_REQUIRED`
+  - `500 VACANTE_UPDATE_FAILED`
+
+## Postulaciones (MVP)
+
+### POST `/api/postulaciones`
+- Auth: requerido.
+- Roles: `candidato`.
+- Body:
+```json
+{ "vacante_id": 21 }
+```
+- Reglas:
+  - la vacante debe existir,
+  - la vacante debe estar `activa`,
+  - no se permite duplicado por candidato-vacante.
+- Respuesta `201`:
+```json
+{ "ok": true, "id": 103 }
+```
+- Errores:
+  - `400 INVALID_PAYLOAD`
+  - `404 CANDIDATO_NOT_FOUND`
+  - `404 VACANTE_NOT_FOUND`
+  - `400 VACANTE_NOT_ACTIVE`
+  - `409 POSTULACION_DUPLICADA`
+  - `500 POSTULACION_CREATE_FAILED`
+
+### GET `/api/postulaciones/mias`
+- Auth: requerido.
+- Roles: `candidato`.
+- Query params:
+  - `page` (default `1`)
+  - `page_size` (default `20`, max `100`)
+- Respuesta `200`:
+```json
+{
+  "items": [
+    {
+      "id": 103,
+      "vacante_id": 21,
+      "vacante_titulo": "Guardia de seguridad",
+      "empresa_id": 4,
+      "empresa_nombre": "ADEMY S.A.S.",
+      "estado_proceso": "nuevo",
+      "fecha_postulacion": "2026-02-23T13:00:00.000Z"
+    }
+  ],
+  "page": 1,
+  "page_size": 20,
+  "total": 1
+}
+```
+- Errores:
+  - `404 CANDIDATO_NOT_FOUND`
+  - `500 POSTULACIONES_FETCH_FAILED`
+
+### GET `/api/postulaciones/empresa`
+- Auth: requerido.
+- Roles: `empresa`, `administrador`, `superadmin`.
+- Query params:
+  - `page`, `page_size`, `vacante_id`, `q`
+  - `empresa_id` (solo admin/superadmin, opcional)
+- Respuesta `200`:
+```json
+{
+  "items": [
+    {
+      "id": 301,
+      "vacante_id": 55,
+      "vacante_titulo": "Operador CCTV",
+      "candidato_id": 19,
+      "nombres": "Maria",
+      "apellidos": "Lopez",
+      "documento_identidad": "0922334455",
+      "email": "maria@correo.com",
+      "telefono_celular": "0999999999",
+      "estado_proceso": "nuevo",
+      "fecha_postulacion": "2026-02-23T15:10:00.000Z"
+    }
+  ],
+  "page": 1,
+  "page_size": 20,
+  "total": 1
+}
+```
+- Nota de consumo frontend:
+  - la vista empresa puede agrupar estos items por `vacante_id` para renderizar bloques por vacante.
+  - tambien puede consumirse filtrado por una vacante especifica desde `/app/company/vacantes`:
+    - `GET /api/postulaciones/empresa?vacante_id=<id>&page=1&page_size=20&q=<texto>`
+    - junto con `GET /api/vacantes/mias` para el flujo hub de vacantes.
+- Errores:
+  - `403 COMPANY_ACCESS_REQUIRED`
+  - `500 POSTULACIONES_FETCH_FAILED`
+
 ## Perfil de candidato
 
 Base: `/api/perfil`

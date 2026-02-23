@@ -81,6 +81,18 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
   - crear o renombrar empresa con nombre igual a `candidatos_experiencia.empresa_nombre` debe llenar `empresa_id` en esas experiencias.
   - experiencias con `empresa_origen='ademy'` no deben autovincularse por este mecanismo.
 
+### 8) Vacantes + postulaciones MVP (backend)
+- `POST /api/vacantes` con empresa valida debe responder `201` y `id`.
+- `GET /api/vacantes` debe responder `200` con `items`, `page`, `page_size`, `total` y solo vacantes activas.
+- `GET /api/vacantes/mias` debe responder `200` para empresa y `403 COMPANY_ACCESS_REQUIRED` si no hay scope de empresa.
+- `PUT /api/vacantes/:vacanteId` de vacante ajena debe devolver `403 FORBIDDEN`.
+- `PUT /api/vacantes/:vacanteId/estado` debe aceptar `borrador|activa|pausada|cerrada`.
+- `POST /api/postulaciones` sobre vacante activa debe responder `201`.
+- Repetir `POST /api/postulaciones` con mismo `vacante_id` debe devolver `409 POSTULACION_DUPLICADA`.
+- `POST /api/postulaciones` sobre vacante `pausada|cerrada` debe devolver `400 VACANTE_NOT_ACTIVE`.
+- `GET /api/postulaciones/mias` debe devolver historial del candidato autenticado.
+- `GET /api/postulaciones/empresa` debe devolver solo postulaciones de vacantes de su empresa.
+
 ## Checklist de regresion rapida
 - Login funciona por email.
 - Login funciona por documento de candidato.
@@ -154,6 +166,49 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - Bloque de preferencias permite guardar modalidades, niveles y observaciones.
 - Boton `Desactivar empresa` ejecuta baja logica y redirige a login cuando responde `200`.
 - Usuario sin membresia activa no accede a `/app/company/*` y es redirigido.
+
+### 8) CompanyCandidatos Fase 1 (frontend)
+- La vista `/app/company/candidatos` debe consultar `/api/candidatos` con `page`, `page_size` y `q`.
+- Escribir en buscador debe reiniciar a pagina 1 y refrescar resultados.
+- Boton `Limpiar` debe vaciar `q` y volver a pagina 1.
+- Paginacion:
+  - `Anterior` deshabilitado en pagina 1.
+  - `Siguiente` habilitado solo cuando la respuesta trae `items.length === page_size`.
+- Debe existir estado de carga, estado de error y estado vacio (general y por busqueda).
+- Cards:
+  - no deben mostrar separadores `?`.
+  - deben mostrar datos legibles (documento, contacto, nacionalidad, nacimiento).
+- Acciones por card:
+  - solo visible `Ver perfil`.
+  - no deben mostrarse `Cambiar estado`, `Enviar mensaje`, `Destacar`.
+- Drawer de candidato:
+  - debe mostrarse por secciones legibles.
+  - no debe usar dump generico por `Object.entries` + `JSON.stringify`.
+
+### 9) Vacantes + postulaciones MVP (frontend)
+- `/app/company/vacantes`:
+  - carga vacantes reales de `/api/vacantes/mias`,
+  - crea vacante y la muestra en listado,
+  - edita vacante existente,
+  - cambia estado (activar/pausar/cerrar),
+  - maneja estado vacio, error y paginacion,
+  - boton `Ver postulados` abre subvista por vacante en la misma ruta,
+  - subvista de postulados permite filtrar por `q` y paginar,
+  - boton `Volver a vacantes` retorna al listado sin romper flujo,
+  - en postulados, `Ver perfil` abre drawer real y botones `Copiar email` / `Copiar telefono` muestran feedback.
+- `/app/candidate/vacantes`:
+  - carga vacantes reales de `/api/vacantes`,
+  - aplica filtros `q`, `provincia`, `modalidad`, `tipo_contrato`,
+  - boton `Postular ahora` crea postulacion real,
+  - maneja feedback para duplicado y vacante no activa.
+- `/app/candidate/postulaciones`:
+  - carga datos de `/api/postulaciones/mias`,
+  - muestra vacante, empresa, fecha y estado de proceso,
+  - maneja estado vacio, error y paginacion.
+- `/app/company/postulaciones`:
+  - se mantiene como vista legacy de transicion (no flujo principal).
+- Validacion final:
+  - `npm run build` en frontend termina sin errores.
 
 ## Recomendacion de automatizacion
 1. Backend: incorporar `jest` + `supertest` para rutas criticas (`auth`, `candidatos`, `hoja-vida`, `integraciones`).

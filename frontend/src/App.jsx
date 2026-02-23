@@ -19,6 +19,7 @@ import ProfileDocumentos from './modules/candidate/ProfileDocumentos'
 import ProfileSalud from './modules/candidate/ProfileSalud'
 import CompanyHome from './modules/company/CompanyHome'
 import CompanyVacantes from './modules/company/CompanyVacantes'
+import CompanyPostulaciones from './modules/company/CompanyPostulaciones'
 import CompanyCandidatos from './modules/company/CompanyCandidatos'
 import CompanyMensajes from './modules/company/CompanyMensajes'
 import CompanyPerfil from './modules/company/CompanyPerfil'
@@ -176,6 +177,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <CompanyCandidatos />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/company/postulaciones"
+            element={
+              <ProtectedRoute>
+                <CompanyPostulaciones />
               </ProtectedRoute>
             }
           />

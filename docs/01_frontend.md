@@ -82,12 +82,16 @@
 - La vista `/app/change-password` valida: campos requeridos, minimo 8 caracteres, nueva != actual y confirmacion igual.
 - Modulo `Landing` en `src/modules/Landing/` con ruta `/`.
 - Registro en 2 pasos (selector de tipo de cuenta + credenciales minimas).
-- Mockups post-login: `/app/candidate/vacantes`, `/app/candidate/postulaciones`, `/app/candidate/perfil` y rutas empresa `/app/company/*`.
-- Modulo `company` en `src/modules/company/` con rutas `/app/company/vacantes`, `/app/company/candidatos`, `/app/company/mensajes`, `/app/company/empresa`.
+- Vistas post-login activas: `/app/candidate/vacantes`, `/app/candidate/postulaciones`, `/app/candidate/perfil` y rutas empresa `/app/company/*`.
+- Modulo `company` en `src/modules/company/` con rutas `/app/company/vacantes`, `/app/company/postulaciones`, `/app/company/candidatos`, `/app/company/mensajes`, `/app/company/empresa`.
 - Modulo `admin` (rol root) en `src/modules/admin/` con rutas `/app/admin`, `/app/admin/roles`, `/app/admin/cuentas`, `/app/admin/auditoria`.
 - Dashboard empresa en `/app/company` muestra hero con CTA publicar, actividad reciente, vacantes activas, candidatos destacados y resumen de mensajes.
-- Seccion Vacantes (empresa) en `/app/company/vacantes` incluye listado con estado, filtros clave, acciones rapidas y metricas por vacante.
-- Seccion Candidatos (empresa) en `/app/company/candidatos` incluye listado por vacante, estados del proceso, filtros potentes y acciones en lista.
+- Seccion Vacantes (empresa) en `/app/company/vacantes` consume API real (`/api/vacantes/mias`) con listado, filtros basicos, paginacion, CRUD minimo (crear, editar, cambiar estado) y subvista de postulados por vacante (`/api/postulaciones/empresa`).
+- La subvista de postulados en Vacantes muestra candidatos de una vacante, permite abrir perfil y copiar email/telefono para contacto rapido.
+- Seccion Postulaciones (empresa) en `/app/company/postulaciones` queda como vista legacy de transicion.
+- Seccion Vacantes (candidato) en `/app/candidate/vacantes` consume API real (`/api/vacantes`) con filtros `q`, `provincia`, `modalidad`, `tipo_contrato` y accion de postular (`POST /api/postulaciones`).
+- Seccion Postulaciones (candidato) en `/app/candidate/postulaciones` consume API real (`/api/postulaciones/mias`) con paginacion y estado de proceso.
+- Seccion Candidatos (empresa) en `/app/company/candidatos` incluye listado real de acreditados con busqueda `q`, paginacion (`page`, `page_size`) y drawer de perfil legible.
 - Seccion Mensajes (empresa) en `/app/company/mensajes` incluye bandeja, conversacion rapida y plantillas (invitacion, seguimiento, descarte) con contexto visible de vacante.
 - Seccion Perfil (empresa) en `/app/company/empresa` agrupa perfil, usuarios, preferencias y verificacion, con indicador de avance desde backend.
 - Modulo `dashboard` reservado en `src/modules/dashboard/` (pendiente de contenido).

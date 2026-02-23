@@ -97,6 +97,48 @@ WHERE ce.deleted_at IS NULL
 docker compose restart backend
 ```
 
+## Despliegue incremental MVP Vacantes + Postulaciones
+Orden recomendado:
+1. Desplegar backend con rutas nuevas (`/api/vacantes`, `/api/postulaciones`).
+2. Ejecutar migracion SQL de MVP:
+```bash
+docker compose exec -T mysql mysql -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < docs/sql/migrations/2026-02-23_add_vacantes_postulaciones_mvp.sql
+```
+3. Verificar tablas e indices:
+```sql
+SHOW TABLES LIKE 'vacantes_publicadas';
+SHOW TABLES LIKE 'postulaciones';
+SHOW INDEX FROM vacantes_publicadas;
+SHOW INDEX FROM postulaciones;
+```
+4. Desplegar frontend con vistas reales de vacantes/postulaciones.
+
+Smoke checks post despliegue:
+1. Empresa crea vacante:
+```bash
+curl -X POST http://localhost:3000/api/vacantes \
+  -H "Authorization: Bearer <token_empresa>" \
+  -H "Content-Type: application/json" \
+  -d '{"titulo":"Operador CCTV","estado":"activa"}'
+```
+2. Candidato lista vacantes:
+```bash
+curl "http://localhost:3000/api/vacantes?page=1&page_size=20" \
+  -H "Authorization: Bearer <token_candidato>"
+```
+3. Candidato postula:
+```bash
+curl -X POST http://localhost:3000/api/postulaciones \
+  -H "Authorization: Bearer <token_candidato>" \
+  -H "Content-Type: application/json" \
+  -d '{"vacante_id":1}'
+```
+4. Empresa lista postulaciones recibidas:
+```bash
+curl "http://localhost:3000/api/postulaciones/empresa?page=1&page_size=20" \
+  -H "Authorization: Bearer <token_empresa>"
+```
+
 ## Logs utiles
 - Backend:
 ```bash

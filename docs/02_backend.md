@@ -24,6 +24,8 @@ No reemplaza:
 Rutas registradas actualmente:
 - `/auth`
 - `/api/candidatos`
+- `/api/vacantes`
+- `/api/postulaciones`
 - `/api/perfil`
 - `/api/hoja-vida`
 - `/api/integraciones`
@@ -50,6 +52,32 @@ Rutas registradas actualmente:
 ### Candidatos
 - Listado paginado de candidatos acreditados.
 - Filtros por nombre, apellido, documento o email.
+- Contrato actual de `/api/candidatos`:
+  - acepta `page`, `page_size`, `q`.
+  - responde `items`, `page`, `page_size`.
+  - no incluye `total`, `estado_proceso` ni `match_porcentaje`.
+
+### Vacantes (MVP)
+- Endpoints base:
+  - `GET /api/vacantes` (vacantes activas para usuarios autenticados).
+  - `GET /api/vacantes/mias` (vacantes de la empresa autenticada).
+  - `POST /api/vacantes` (crear vacante, rol empresa/admin).
+  - `PUT /api/vacantes/:vacanteId` (editar vacante propia).
+  - `PUT /api/vacantes/:vacanteId/estado` (activar/pausar/cerrar).
+- Filtros soportados:
+  - `page`, `page_size`, `q`, `provincia`, `modalidad`, `tipo_contrato`.
+- Regla clave:
+  - soft delete respetado (`deleted_at IS NULL`) y solo `estado='activa'` para listado publico.
+
+### Postulaciones (MVP)
+- Endpoints base:
+  - `POST /api/postulaciones` (crear postulacion, solo candidato).
+  - `GET /api/postulaciones/mias` (postulaciones del candidato autenticado).
+  - `GET /api/postulaciones/empresa` (postulaciones de vacantes de la empresa autenticada).
+- Reglas clave:
+  - solo se puede postular a vacantes `activa`,
+  - no se permite postulacion duplicada (`vacante_id + candidato_id` unico),
+  - empresa no ve postulaciones fuera de sus vacantes.
 
 ### Perfil candidato
 - Lectura/escritura por secciones (`datos_basicos`, `contacto`, `domicilio`, `salud`, `logistica`, `educacion`).

@@ -24,7 +24,7 @@ empleofacil/
 Estructura real en `backend/`:
 - `index.js`: arranque HTTP, CORS, rutas y scheduler.
 - `db.js`: pool MySQL, retries de conexion (`waitForConnection`).
-- `routes/`: `auth`, `candidatos`, `perfilCandidato`, `hojaVida`, `companyPerfil`, `verificaciones`, `integraciones`.
+- `routes/`: `auth`, `candidatos`, `vacantes`, `postulaciones`, `perfilCandidato`, `hojaVida`, `companyPerfil`, `verificaciones`, `integraciones`.
 - `controllers/`: logica HTTP por modulo.
 - `services/`: perfil candidato, perfil empresa, verificaciones, integracion Ademy y armado/PDF de hoja de vida.
 - `middlewares/`: autenticacion y control de rol.
@@ -79,6 +79,39 @@ Estructura real en `backend/`:
   - Estilos dedicados en `frontend/src/styles/notifications.css`.
 - Variables principales: `VITE_API_URL`, `VITE_WS_URL` (opcional).
 - El frontend consume la API REST del backend.
+
+### Candidatos empresa (estado actual)
+- La pantalla `/app/company/candidatos` consume el endpoint vigente `/api/candidatos`.
+- Capacidades activas:
+  - busqueda por `q`,
+  - paginacion por `page` y `page_size`,
+  - visualizacion de perfil con drawer.
+- Alcance funcional:
+  - bolsa abierta de talento acreditado (no depende de postulaciones por vacante).
+- Capacidades no activas en el contrato actual:
+  - `total` de resultados,
+  - `estado_proceso` por candidato-vacante,
+  - `match_porcentaje`,
+  - acciones de pipeline persistidas.
+
+### Postulaciones empresa (estado actual)
+- El flujo operativo principal vive en `/app/company/vacantes`:
+  - listado y gestion de vacantes,
+  - subvista de postulados por vacante en la misma ruta,
+  - acceso a perfil de candidato via drawer (`GET /api/perfil/:candidatoId`),
+  - contacto rapido por copy de email/telefono.
+- La pantalla `/app/company/postulaciones` se mantiene como vista legacy de transicion.
+
+### Vacantes y postulaciones (MVP activo)
+- La publicacion de vacantes usa `vacantes_publicadas` como tabla operativa.
+- La postulacion usa `postulaciones` con unicidad por `vacante_id + candidato_id`.
+- El backend expone:
+  - `GET /api/vacantes`, `GET /api/vacantes/mias`,
+  - `POST /api/vacantes`, `PUT /api/vacantes/:vacanteId`, `PUT /api/vacantes/:vacanteId/estado`,
+  - `POST /api/postulaciones`, `GET /api/postulaciones/mias`, `GET /api/postulaciones/empresa`.
+- Alcance actual:
+  - flujo funcional de publicacion y postulacion,
+  - sin pipeline avanzado por etapas ni motor de match.
 
 ### Perfil candidato (wizard UI)
 - El flujo `/perfil/*` usa layout reusable `ProfileWizardLayout`:
