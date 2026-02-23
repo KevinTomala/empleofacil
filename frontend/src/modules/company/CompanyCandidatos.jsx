@@ -257,10 +257,12 @@ export default function CompanyCandidatos() {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="company-title font-heading text-2xl sm:text-3xl font-bold">
-                Candidatos
+                {canImportAcreditados ? 'Importaciones' : 'Candidatos'}
               </h1>
               <p className="text-sm text-foreground/70">
-                Operacion diaria del reclutador con filtros y estados del proceso.
+                {canImportAcreditados
+                  ? 'Importacion interna de acreditados y monitoreo rapido de resultados.'
+                  : 'Operacion diaria del reclutador con filtros y estados del proceso.'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -419,24 +421,26 @@ export default function CompanyCandidatos() {
                       <span>{candidato.availability}</span>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 bg-primary text-white rounded-lg flex items-center gap-2"
-                      onClick={() => handleOpenPerfil(candidato.id, candidato.name)}
-                    >
-                      <Users className="w-4 h-4" /> Ver perfil
-                    </button>
-                    <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
-                      <Briefcase className="w-4 h-4" /> Cambiar estado
-                    </button>
-                    <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
-                      <Mail className="w-4 h-4" /> Enviar mensaje
-                    </button>
-                    <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
-                      <Crown className="w-4 h-4" /> Destacar
-                    </button>
-                  </div>
+                  {!canImportAcreditados ? (
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 bg-primary text-white rounded-lg flex items-center gap-2"
+                        onClick={() => handleOpenPerfil(candidato.id, candidato.name)}
+                      >
+                        <Users className="w-4 h-4" /> Ver perfil
+                      </button>
+                      <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
+                        <Briefcase className="w-4 h-4" /> Cambiar estado
+                      </button>
+                      <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
+                        <Mail className="w-4 h-4" /> Enviar mensaje
+                      </button>
+                      <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
+                        <Crown className="w-4 h-4" /> Destacar
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-foreground/60">
                   <span className="inline-flex items-center gap-2">

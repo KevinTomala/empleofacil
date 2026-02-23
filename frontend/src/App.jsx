@@ -254,13 +254,14 @@ function App() {
             }
           />
           <Route
-            path="/app/admin/candidatos"
+            path="/app/admin/importaciones"
             element={
               <ProtectedRoute roles={['administrador', 'superadmin']}>
                 <CompanyCandidatos />
               </ProtectedRoute>
             }
           />
+          <Route path="/app/admin/candidatos" element={<Navigate to="/app/admin/importaciones" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

@@ -101,7 +101,8 @@ function mapVerificacionRow(row) {
     empresa_email: row.empresa_email || null,
     candidato_nombre: row.candidato_nombre || null,
     candidato_documento: row.candidato_documento || null,
-    candidato_email: row.candidato_email || null
+    candidato_email: row.candidato_email || null,
+    has_solicitud: Boolean(Number(row.has_solicitud || 0))
   };
 }
 
@@ -139,6 +140,12 @@ async function selectVerificacionByScope({ tipo, empresaId = null, candidatoId =
   const [rows] = await connection.query(
     `SELECT
       v.*,
+      EXISTS(
+        SELECT 1
+        FROM verificaciones_cuenta_eventos ve
+        WHERE ve.verificacion_id = v.id
+          AND ve.accion = 'solicitada'
+      ) AS has_solicitud,
       u.nombre_completo AS reviewed_by_nombre,
       e.nombre AS empresa_nombre,
       e.email AS empresa_email,
@@ -445,6 +452,12 @@ async function getVerificacionById(verificacionId) {
   const [rows] = await db.query(
     `SELECT
       v.*,
+      EXISTS(
+        SELECT 1
+        FROM verificaciones_cuenta_eventos ve
+        WHERE ve.verificacion_id = v.id
+          AND ve.accion = 'solicitada'
+      ) AS has_solicitud,
       u.nombre_completo AS reviewed_by_nombre,
       e.nombre AS empresa_nombre,
       e.email AS empresa_email,
@@ -528,6 +541,12 @@ async function listVerificaciones({ tipo = null, estado = null, q = '', page = 1
   const [rows] = await db.query(
     `SELECT
       v.*,
+      EXISTS(
+        SELECT 1
+        FROM verificaciones_cuenta_eventos ve
+        WHERE ve.verificacion_id = v.id
+          AND ve.accion = 'solicitada'
+      ) AS has_solicitud,
       u.nombre_completo AS reviewed_by_nombre,
       e.nombre AS empresa_nombre,
       e.email AS empresa_email,

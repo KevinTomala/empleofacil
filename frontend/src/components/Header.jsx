@@ -77,7 +77,7 @@ export default function Header() {
         { href: '/app/admin/cuentas', label: 'Cuentas' },
         { href: '/app/admin/solicitudes', label: 'Solicitudes' },
         { href: '/app/admin/mapeo-empresas', label: 'Mapeo empresas' },
-        { href: '/app/admin/candidatos', label: 'Candidatos' },
+        { href: '/app/admin/importaciones', label: 'Importaciones' },
         { href: '/app/admin/auditoria', label: 'Auditoría' },
       ]
     }
