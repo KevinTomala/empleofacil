@@ -4,7 +4,18 @@ const VALID_VERIFICACION_TIPOS = ['empresa', 'candidato'];
 const VALID_VERIFICACION_ESTADOS = ['pendiente', 'en_revision', 'aprobada', 'rechazada', 'vencida', 'suspendida'];
 const VALID_VERIFICACION_NIVELES = ['basico', 'completo'];
 const VALID_EVENTO_ACCIONES = ['solicitada', 'en_revision', 'aprobada', 'rechazada', 'suspendida', 'reabierta', 'vencida'];
+const VALID_EVENTO_ACTOR_ROLES = ['candidato', 'empresa', 'administrador', 'superadmin', 'system'];
 let verificationSchemaReadyPromise = null;
+
+function normalizeEventoActorRol(actorRol) {
+  const normalized = String(actorRol || '').trim().toLowerCase();
+  if (VALID_EVENTO_ACTOR_ROLES.includes(normalized)) return normalized;
+
+  // Roles internos de empresa deben mapear al rol permitido en eventos.
+  if (['admin', 'reclutador'].includes(normalized)) return 'empresa';
+
+  return 'system';
+}
 
 function toMysqlDateTime(value = new Date()) {
   return new Date(value).toISOString().slice(0, 19).replace('T', ' ');
@@ -204,6 +215,7 @@ async function createEvento(
   connection = db
 ) {
   if (!VALID_EVENTO_ACCIONES.includes(accion)) return;
+  const safeActorRol = normalizeEventoActorRol(actorRol);
 
   await connection.query(
     `INSERT INTO verificaciones_cuenta_eventos (
@@ -222,7 +234,7 @@ async function createEvento(
       estadoAnterior,
       estadoNuevo,
       actorUsuarioId,
-      actorRol,
+      safeActorRol,
       comentario,
       metadata ? JSON.stringify(metadata) : null
     ]

@@ -72,7 +72,7 @@ async function requestMyCompanyVerification(req, res) {
       tipo: 'empresa',
       empresaId,
       actorUsuarioId: userId,
-      actorRol: req.companyContext?.rolEmpresa || req.user?.rol || 'empresa',
+      actorRol: req.user?.rol || 'empresa',
       comentario: parseNullableString(req.body?.comentario)
     });
 
