@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import FormDropdown from '../../components/FormDropdown'
 import './admin.css'
 import {
   BadgeCheck,
@@ -266,9 +267,8 @@ export default function AdminCuentas() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold ${
-                filtroTipo === '' ? 'bg-primary text-white border-primary' : 'bg-white border-border text-foreground/70'
-              }`}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold ${filtroTipo === '' ? 'bg-primary text-white border-primary' : 'bg-white border-border text-foreground/70'
+                }`}
               onClick={() => {
                 setFiltroTipo('')
                 setPage(1)
@@ -278,11 +278,10 @@ export default function AdminCuentas() {
             </button>
             <button
               type="button"
-              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold ${
-                filtroTipo === 'empresa'
+              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold ${filtroTipo === 'empresa'
                   ? 'bg-primary text-white border-primary'
                   : 'bg-white border-border text-foreground/70'
-              }`}
+                }`}
               onClick={() => {
                 setFiltroTipo('empresa')
                 setPage(1)
@@ -292,11 +291,10 @@ export default function AdminCuentas() {
             </button>
             <button
               type="button"
-              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold ${
-                filtroTipo === 'candidato'
+              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold ${filtroTipo === 'candidato'
                   ? 'bg-primary text-white border-primary'
                   : 'bg-white border-border text-foreground/70'
-              }`}
+                }`}
               onClick={() => {
                 setFiltroTipo('candidato')
                 setPage(1)
@@ -317,34 +315,38 @@ export default function AdminCuentas() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <select
-                className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70 bg-white"
-                value={filtroEstado}
-                onChange={(event) => {
-                  setFiltroEstado(event.target.value)
-                  setPage(1)
-                }}
-              >
-                <option value="">Estado: todos</option>
-                <option value="pendiente">Pendiente</option>
-                <option value="en_revision">En revision</option>
-                <option value="aprobada">Aprobada</option>
-                <option value="rechazada">Rechazada</option>
-                <option value="suspendida">Suspendida</option>
-                <option value="vencida">Vencida</option>
-              </select>
-              <select
-                className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70 bg-white"
-                value={String(pageSize)}
-                onChange={(event) => {
-                  setPageSize(Number(event.target.value) || 20)
-                  setPage(1)
-                }}
-              >
-                <option value="20">20 por pagina</option>
-                <option value="50">50 por pagina</option>
-                <option value="100">100 por pagina</option>
-              </select>
+              <div style={{ width: '150px' }}>
+                <FormDropdown
+                  value={filtroEstado}
+                  options={[
+                    { value: '', label: 'Estado: Todos' },
+                    { value: 'pendiente', label: 'Pendiente' },
+                    { value: 'en_revision', label: 'En revision' },
+                    { value: 'aprobada', label: 'Aprobada' },
+                    { value: 'rechazada', label: 'Rechazada' },
+                    { value: 'suspendida', label: 'Suspendida' },
+                    { value: 'vencida', label: 'Vencida' }
+                  ]}
+                  onChange={(val) => {
+                    setFiltroEstado(val)
+                    setPage(1)
+                  }}
+                />
+              </div>
+              <div style={{ width: '130px' }}>
+                <FormDropdown
+                  value={pageSize}
+                  options={[
+                    { value: 20, label: '20 por pagina' },
+                    { value: 50, label: '50 por pagina' },
+                    { value: 100, label: '100 por pagina' }
+                  ]}
+                  onChange={(val) => {
+                    setPageSize(Number(val) || 20)
+                    setPage(1)
+                  }}
+                />
+              </div>
               <button className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70 bg-white" type="submit">
                 Buscar
               </button>

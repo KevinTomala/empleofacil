@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import FormDropdown from '../../components/FormDropdown'
 import Header from '../../components/Header'
 import provinciasData from '../../assets/provincias.json'
 import { apiRequest } from '../../services/api'
@@ -65,6 +66,16 @@ export default function CandidateVacantes() {
   const [q, setQ] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [selectedProvince, setSelectedProvince] = useState('')
+  const [provinceSearch, setProvinceSearch] = useState('')
+  const [citySearch, setCitySearch] = useState('')
+  const [areaSearch, setAreaSearch] = useState('')
+
+  const [dropdownsOpen, setDropdownsOpen] = useState({
+    province: false,
+    city: false,
+    area: false
+  })
+
   const [filters, setFilters] = useState({
     city: '',
     area: '',
@@ -114,6 +125,18 @@ export default function CandidateVacantes() {
     return [...selectedProvinceData.cantones].sort((a, b) => a.localeCompare(b))
   }, [provinceCatalog, selectedProvince])
 
+  const filteredCityOptions = useMemo(() => {
+    const term = citySearch.trim().toLowerCase()
+    if (!term) return cityOptions
+    return cityOptions.filter(c => c.toLowerCase().includes(term))
+  }, [cityOptions, citySearch])
+
+  const filteredProvinceOptions = useMemo(() => {
+    const term = provinceSearch.trim().toLowerCase()
+    if (!term) return provinceOptions
+    return provinceOptions.filter(p => p.label.toLowerCase().includes(term))
+  }, [provinceOptions, provinceSearch])
+
   const options = useMemo(() => {
     const areas = new Set()
     allVacantes.forEach((item) => {
@@ -123,6 +146,12 @@ export default function CandidateVacantes() {
       areas: Array.from(areas).sort((a, b) => a.localeCompare(b))
     }
   }, [allVacantes])
+
+  const filteredAreaOptions = useMemo(() => {
+    const term = areaSearch.trim().toLowerCase()
+    if (!term) return options.areas
+    return options.areas.filter(a => a.toLowerCase().includes(term))
+  }, [options.areas, areaSearch])
 
   const bindSvgProvinceClicks = useCallback((svgDoc) => {
     if (!svgDoc || svgBoundDocsRef.current.has(svgDoc)) return
@@ -229,6 +258,9 @@ export default function CandidateVacantes() {
     setQ('')
     setShowFilters(false)
     setSelectedProvince('')
+    setProvinceSearch('')
+    setCitySearch('')
+    setAreaSearch('')
     setFilters({
       city: '',
       area: '',
@@ -294,110 +326,239 @@ export default function CandidateVacantes() {
                 <div className="candidate-filters-row">
                   <label className="candidate-filter-inline">
                     Provincia
-                    <select
-                      className="ef-control"
-                      value={selectedProvince}
-                      onChange={(event) => {
-                        setSelectedProvince(event.target.value)
-                        setFilters((prev) => ({ ...prev, city: '' }))
-                        setPage(1)
+                    <div
+                      className="ef-dropdown w-full"
+                      tabIndex={0}
+                      onBlur={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget)) {
+                          setDropdownsOpen(prev => ({ ...prev, province: false }))
+                        }
                       }}
                     >
-                      <option value="">Selecciona provincia</option>
-                      {provinceOptions.map((prov) => (
-                        <option key={prov.value} value={prov.value}>
-                          {prov.label}
-                        </option>
-                      ))}
-                    </select>
+                      <input
+                        className="ef-control w-full"
+                        placeholder="Todas las provincias"
+                        value={dropdownsOpen.province ? provinceSearch : selectedProvince}
+                        onFocus={() => {
+                          setProvinceSearch(selectedProvince)
+                          setDropdownsOpen(prev => ({ ...prev, province: true }))
+                        }}
+                        onChange={(e) => {
+                          setProvinceSearch(e.target.value)
+                          setSelectedProvince(e.target.value)
+                          if (!e.target.value) {
+                            setFilters((prev) => ({ ...prev, city: '' }))
+                            setCitySearch('')
+                            setPage(1)
+                          }
+                          setDropdownsOpen(prev => ({ ...prev, province: true }))
+                        }}
+                      />
+                      {dropdownsOpen.province && (
+                        <div className="ef-dropdown-menu">
+                          <button
+                            type="button"
+                            className="ef-dropdown-option text-foreground/70 font-medium"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setSelectedProvince('')
+                              setFilters((prev) => ({ ...prev, city: '' }))
+                              setCitySearch('')
+                              setProvinceSearch('')
+                              setDropdownsOpen(prev => ({ ...prev, province: false }))
+                              setPage(1)
+                            }}
+                          >
+                            Todas las provincias
+                          </button>
+                          {filteredProvinceOptions.map(prov => (
+                            <button
+                              key={prov.value}
+                              type="button"
+                              className="ef-dropdown-option"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setSelectedProvince(prov.value)
+                                setFilters((prev) => ({ ...prev, city: '' }))
+                                setCitySearch('')
+                                setDropdownsOpen(prev => ({ ...prev, province: false }))
+                                setPage(1)
+                              }}
+                            >
+                              {prov.label}
+                            </button>
+                          ))}
+                          {!filteredProvinceOptions.length && (
+                            <p className="px-3 py-2 text-xs text-foreground/60">Sin coincidencias</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </label>
+
                   <label className="candidate-filter-inline">
                     Ciudad (Canton)
-                    <select
-                      className="ef-control"
-                      value={filters.city}
-                      onChange={(event) => {
-                        setFilters((prev) => ({ ...prev, city: event.target.value }))
-                        setPage(1)
+                    <div
+                      className={`ef-dropdown w-full ${!selectedProvince ? 'opacity-50 pointer-events-none' : ''}`}
+                      tabIndex={0}
+                      onBlur={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget)) {
+                          setDropdownsOpen(prev => ({ ...prev, city: false }))
+                        }
                       }}
-                      disabled={!selectedProvince}
                     >
-                      <option value="">Todas</option>
-                      {cityOptions.map((city) => (
-                        <option key={city} value={city}>
-                          {city}
-                        </option>
-                      ))}
-                    </select>
+                      <input
+                        className="ef-control w-full"
+                        placeholder="Todas las ciudades"
+                        value={dropdownsOpen.city ? citySearch : filters.city}
+                        onFocus={() => {
+                          setCitySearch(filters.city)
+                          setDropdownsOpen(prev => ({ ...prev, city: true }))
+                        }}
+                        onChange={(e) => {
+                          setCitySearch(e.target.value)
+                          setFilters((prev) => ({ ...prev, city: e.target.value }))
+                          setDropdownsOpen(prev => ({ ...prev, city: true }))
+                          if (!e.target.value) setPage(1)
+                        }}
+                        disabled={!selectedProvince}
+                      />
+                      {dropdownsOpen.city && (
+                        <div className="ef-dropdown-menu">
+                          <button
+                            type="button"
+                            className="ef-dropdown-option text-foreground/70 font-medium"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setFilters((prev) => ({ ...prev, city: '' }))
+                              setCitySearch('')
+                              setDropdownsOpen(prev => ({ ...prev, city: false }))
+                              setPage(1)
+                            }}
+                          >
+                            Todas las ciudades
+                          </button>
+                          {filteredCityOptions.map(city => (
+                            <button
+                              key={city}
+                              type="button"
+                              className="ef-dropdown-option"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setFilters((prev) => ({ ...prev, city }))
+                                setDropdownsOpen(prev => ({ ...prev, city: false }))
+                                setPage(1)
+                              }}
+                            >
+                              {city}
+                            </button>
+                          ))}
+                          {!filteredCityOptions.length && (
+                            <p className="px-3 py-2 text-xs text-foreground/60">Sin coincidencias</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </label>
+
                   <label className="candidate-filter-inline">
                     Cargo
-                    <select
-                      className="ef-control"
-                      value={filters.area}
-                      onChange={(event) => {
-                        setFilters((prev) => ({ ...prev, area: event.target.value }))
-                        setPage(1)
+                    <div
+                      className="ef-dropdown w-full"
+                      tabIndex={0}
+                      onBlur={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget)) {
+                          setDropdownsOpen(prev => ({ ...prev, area: false }))
+                        }
                       }}
                     >
-                      <option value="">Todas</option>
-                      {options.areas.map((area) => (
-                        <option key={area} value={area}>
-                          {area}
-                        </option>
-                      ))}
-                    </select>
+                      <input
+                        className="ef-control w-full"
+                        placeholder="Todas las areas"
+                        value={dropdownsOpen.area ? areaSearch : filters.area}
+                        onFocus={() => {
+                          setAreaSearch(filters.area)
+                          setDropdownsOpen(prev => ({ ...prev, area: true }))
+                        }}
+                        onChange={(e) => {
+                          setAreaSearch(e.target.value)
+                          setFilters((prev) => ({ ...prev, area: e.target.value }))
+                          setDropdownsOpen(prev => ({ ...prev, area: true }))
+                          if (!e.target.value) setPage(1)
+                        }}
+                      />
+                      {dropdownsOpen.area && (
+                        <div className="ef-dropdown-menu">
+                          <button
+                            type="button"
+                            className="ef-dropdown-option text-foreground/70 font-medium"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setFilters((prev) => ({ ...prev, area: '' }))
+                              setAreaSearch('')
+                              setDropdownsOpen(prev => ({ ...prev, area: false }))
+                              setPage(1)
+                            }}
+                          >
+                            Todas las areas
+                          </button>
+                          {filteredAreaOptions.map(area => (
+                            <button
+                              key={area}
+                              type="button"
+                              className="ef-dropdown-option"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setFilters((prev) => ({ ...prev, area }))
+                                setDropdownsOpen(prev => ({ ...prev, area: false }))
+                                setPage(1)
+                              }}
+                            >
+                              {area}
+                            </button>
+                          ))}
+                          {!filteredAreaOptions.length && (
+                            <p className="px-3 py-2 text-xs text-foreground/60">Sin coincidencias</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </label>
                   <label className="candidate-filter-inline">
                     Tipo
-                    <select
-                      className="ef-control"
+                    <FormDropdown
                       value={filters.contractType}
-                      onChange={(event) => {
-                        setFilters((prev) => ({ ...prev, contractType: event.target.value }))
+                      options={TIPO_CONTRATO_OPTIONS}
+                      onChange={(value) => {
+                        setFilters((prev) => ({ ...prev, contractType: value }))
                         setPage(1)
                       }}
-                    >
-                      {TIPO_CONTRATO_OPTIONS.map((type) => (
-                        <option key={type.value || 'all'} value={type.value}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Todos"
+                    />
                   </label>
                   <label className="candidate-filter-inline">
                     Modalidad
-                    <select
-                      className="ef-control"
+                    <FormDropdown
                       value={filters.modality}
-                      onChange={(event) => {
-                        setFilters((prev) => ({ ...prev, modality: event.target.value }))
+                      options={MODALIDAD_OPTIONS}
+                      onChange={(value) => {
+                        setFilters((prev) => ({ ...prev, modality: value }))
                         setPage(1)
                       }}
-                    >
-                      {MODALIDAD_OPTIONS.map((modality) => (
-                        <option key={modality.value || 'all'} value={modality.value}>
-                          {modality.label}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Todas"
+                    />
                   </label>
                   <label className="candidate-filter-inline">
                     Fecha
-                    <select
-                      className="ef-control"
+                    <FormDropdown
                       value={filters.posted}
-                      onChange={(event) => {
-                        setFilters((prev) => ({ ...prev, posted: event.target.value }))
+                      options={POSTED_OPTIONS}
+                      onChange={(value) => {
+                        setFilters((prev) => ({ ...prev, posted: value }))
                         setPage(1)
                       }}
-                    >
-                      {POSTED_OPTIONS.map((item) => (
-                        <option key={item.value || 'all'} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Todas"
+                    />
                   </label>
                   <button
                     type="button"
@@ -462,19 +623,20 @@ export default function CandidateVacantes() {
 
         <section className="bg-white border border-border rounded-xl p-4 flex flex-wrap items-center justify-between gap-3 text-sm">
           <div className="text-foreground/70">Pagina {page} de {totalPages} - Total {total}</div>
-          <div className="flex items-center gap-2">
-            <select
-              className="ef-control"
+          <div className="flex flex-wrap items-center gap-2">
+            <FormDropdown
               value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value))
+              options={[
+                { value: 20, label: '20' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' }
+              ]}
+              onChange={(value) => {
+                setPageSize(value)
                 setPage(1)
               }}
-            >
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+              placeholder="20"
+            />
             <button className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-50" type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
               Anterior
             </button>

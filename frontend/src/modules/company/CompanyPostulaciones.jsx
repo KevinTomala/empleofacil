@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Header from '../../components/Header'
+import FormDropdown from '../../components/FormDropdown'
 import { apiRequest } from '../../services/api'
 import { getPerfilById, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
 import CandidatoPerfilDrawer from './components/CandidatoPerfilDrawer'
@@ -155,22 +156,20 @@ export default function CompanyPostulaciones() {
             </label>
             <label className="text-xs text-foreground/65">
               Vacante
-              <select
-                className="w-full mt-1 border border-border rounded-lg px-3 py-2 text-sm"
-                value={vacanteId}
-                onChange={(event) => {
-                  setVacanteId(event.target.value)
-                  setPage(1)
-                }}
-                disabled={loadingVacantes}
-              >
-                <option value="">{loadingVacantes ? 'Cargando...' : 'Todas'}</option>
-                {vacantesOptions.map((vacante) => (
-                  <option key={vacante.id} value={vacante.id}>
-                    {vacante.titulo || `Vacante #${vacante.id}`}
-                  </option>
-                ))}
-              </select>
+              <div className="mt-1" style={{ height: '38px', minWidth: '200px' }}>
+                <FormDropdown
+                  value={vacanteId}
+                  options={[
+                    { value: '', label: loadingVacantes ? 'Cargando...' : 'Todas' },
+                    ...vacantesOptions.map(v => ({ value: v.id, label: v.titulo || `Vacante #${v.id}` }))
+                  ]}
+                  onChange={(val) => {
+                    setVacanteId(val)
+                    setPage(1)
+                  }}
+                  disabled={loadingVacantes}
+                />
+              </div>
             </label>
             <button className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium" type="submit">
               Buscar
@@ -246,18 +245,20 @@ export default function CompanyPostulaciones() {
           <section className="company-card p-4 flex flex-wrap items-center justify-between gap-3 text-sm">
             <div className="text-foreground/70">Pagina {page} de {totalPages} - Total {total}</div>
             <div className="flex items-center gap-2">
-              <select
-                className="border border-border rounded-lg px-2 py-1.5 text-sm"
-                value={pageSize}
-                onChange={(event) => {
-                  setPageSize(Number(event.target.value))
-                  setPage(1)
-                }}
-              >
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
+              <div style={{ width: '100px' }}>
+                <FormDropdown
+                  value={pageSize}
+                  options={[
+                    { value: 20, label: '20' },
+                    { value: 50, label: '50' },
+                    { value: 100, label: '100' }
+                  ]}
+                  onChange={(val) => {
+                    setPageSize(val)
+                    setPage(1)
+                  }}
+                />
+              </div>
               <button
                 className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-50"
                 type="button"

@@ -69,6 +69,8 @@ export default function ProfileDatosPersonales() {
     direccion: '',
     codigo_postal: ''
   })
+  const [dropdownOpen, setDropdownOpen] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const provincias = useMemo(
     () =>
@@ -96,6 +98,24 @@ export default function ProfileDatosPersonales() {
       label: nombre || ''
     }))
   }, [ubigeo.provinciaId, ubigeo.cantonId])
+
+  const filteredProvincias = useMemo(() => {
+    if (!searchQuery) return provincias
+    const lower = normalizeText(searchQuery)
+    return provincias.filter((p) => normalizeText(p.label).includes(lower))
+  }, [provincias, searchQuery])
+
+  const filteredCantones = useMemo(() => {
+    if (!searchQuery) return cantones
+    const lower = normalizeText(searchQuery)
+    return cantones.filter((c) => normalizeText(c.label).includes(lower))
+  }, [cantones, searchQuery])
+
+  const filteredParroquias = useMemo(() => {
+    if (!searchQuery) return parroquias
+    const lower = normalizeText(searchQuery)
+    return parroquias.filter((p) => normalizeText(p.label).includes(lower))
+  }, [parroquias, searchQuery])
 
   useEffect(() => {
     let active = true
@@ -300,23 +320,88 @@ export default function ProfileDatosPersonales() {
             </label>
             <label className="space-y-1 text-sm font-medium text-foreground/80">
               Provincia
-              <FormDropdown
-                value={ubigeo.provinciaId}
-                options={provincias}
-                placeholder="Selecciona provincia"
-                onChange={handleProvinciaChange}
-                disabled={false}
-              />
+              <div className="ef-dropdown w-full">
+                <input
+                  type="text"
+                  className="ef-control w-full cursor-text"
+                  placeholder="Selecciona provincia"
+                  value={dropdownOpen === 'provincia' ? searchQuery : (provincias.find(p => p.value === ubigeo.provinciaId)?.label || '')}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    setDropdownOpen('provincia')
+                  }}
+                  onFocus={() => {
+                    setSearchQuery(provincias.find(p => p.value === ubigeo.provinciaId)?.label || '')
+                    setDropdownOpen('provincia')
+                  }}
+                  onBlur={() => setTimeout(() => setDropdownOpen(null), 200)}
+                />
+                {dropdownOpen === 'provincia' && (
+                  <div className="ef-dropdown-menu absolute z-50 w-full mt-1 bg-white border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {filteredProvincias.length > 0 ? (
+                      filteredProvincias.map((prov) => (
+                        <button
+                          key={prov.value}
+                          type="button"
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-secondary transition-colors"
+                          onClick={() => {
+                            handleProvinciaChange(prov.value)
+                            setDropdownOpen(null)
+                          }}
+                        >
+                          {prov.label}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-2 text-sm text-foreground/50">No hay coincidencias</div>
+                    )}
+                  </div>
+                )}
+              </div>
             </label>
             <label className="space-y-1 text-sm font-medium text-foreground/80">
               Canton
-              <FormDropdown
-                value={ubigeo.cantonId}
-                options={cantones}
-                placeholder="Selecciona canton"
-                onChange={handleCantonChange}
-                disabled={!ubigeo.provinciaId}
-              />
+              <div className="ef-dropdown w-full">
+                <input
+                  type="text"
+                  className="ef-control w-full cursor-text"
+                  placeholder="Selecciona canton"
+                  disabled={!ubigeo.provinciaId}
+                  value={dropdownOpen === 'canton' ? searchQuery : (cantones.find(c => c.value === ubigeo.cantonId)?.label || '')}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    setDropdownOpen('canton')
+                  }}
+                  onFocus={() => {
+                    if (ubigeo.provinciaId) {
+                      setSearchQuery(cantones.find(c => c.value === ubigeo.cantonId)?.label || '')
+                      setDropdownOpen('canton')
+                    }
+                  }}
+                  onBlur={() => setTimeout(() => setDropdownOpen(null), 200)}
+                />
+                {dropdownOpen === 'canton' && (
+                  <div className="ef-dropdown-menu absolute z-50 w-full mt-1 bg-white border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {filteredCantones.length > 0 ? (
+                      filteredCantones.map((canton) => (
+                        <button
+                          key={canton.value}
+                          type="button"
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-secondary transition-colors"
+                          onClick={() => {
+                            handleCantonChange(canton.value)
+                            setDropdownOpen(null)
+                          }}
+                        >
+                          {canton.label}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-2 text-sm text-foreground/50">No hay coincidencias</div>
+                    )}
+                  </div>
+                )}
+              </div>
             </label>
             <label className="space-y-1 text-sm font-medium text-foreground/80 sm:col-span-2">
               Direccion
@@ -329,13 +414,47 @@ export default function ProfileDatosPersonales() {
             </label>
             <label className="space-y-1 text-sm font-medium text-foreground/80">
               Parroquia
-              <FormDropdown
-                value={ubigeo.parroquiaId}
-                options={parroquias}
-                placeholder="Selecciona parroquia"
-                onChange={handleParroquiaChange}
-                disabled={!ubigeo.provinciaId || !ubigeo.cantonId}
-              />
+              <div className="ef-dropdown w-full">
+                <input
+                  type="text"
+                  className="ef-control w-full cursor-text"
+                  placeholder="Selecciona parroquia"
+                  disabled={!ubigeo.provinciaId || !ubigeo.cantonId}
+                  value={dropdownOpen === 'parroquia' ? searchQuery : (parroquias.find(p => p.value === ubigeo.parroquiaId)?.label || '')}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    setDropdownOpen('parroquia')
+                  }}
+                  onFocus={() => {
+                    if (ubigeo.cantonId && ubigeo.provinciaId) {
+                      setSearchQuery(parroquias.find(p => p.value === ubigeo.parroquiaId)?.label || '')
+                      setDropdownOpen('parroquia')
+                    }
+                  }}
+                  onBlur={() => setTimeout(() => setDropdownOpen(null), 200)}
+                />
+                {dropdownOpen === 'parroquia' && (
+                  <div className="ef-dropdown-menu absolute z-50 w-full mt-1 bg-white border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {filteredParroquias.length > 0 ? (
+                      filteredParroquias.map((parr) => (
+                        <button
+                          key={parr.value}
+                          type="button"
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-secondary transition-colors"
+                          onClick={() => {
+                            handleParroquiaChange(parr.value)
+                            setDropdownOpen(null)
+                          }}
+                        >
+                          {parr.label}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-2 text-sm text-foreground/50">No hay coincidencias</div>
+                    )}
+                  </div>
+                )}
+              </div>
             </label>
             <label className="space-y-1 text-sm font-medium text-foreground/80">
               Codigo postal

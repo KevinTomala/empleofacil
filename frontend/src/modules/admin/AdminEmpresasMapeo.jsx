@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import FormDropdown from '../../components/FormDropdown'
 import './admin.css'
 import { Building2, Link2, Link2Off, RefreshCw, Save, Search, Shuffle } from 'lucide-react'
 import Header from '../../components/Header'
@@ -267,19 +268,21 @@ export default function AdminEmpresasMapeo() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <select
-                className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70 bg-white"
-                value={estado}
-                onChange={(event) => {
-                  setPage(1)
-                  setEstado(event.target.value)
-                }}
-              >
-                <option value="">Estado: todos</option>
-                <option value="pendiente">Pendiente</option>
-                <option value="vinculada">Vinculada</option>
-                <option value="descartada">Descartada</option>
-              </select>
+              <div style={{ width: '150px' }}>
+                <FormDropdown
+                  value={estado}
+                  options={[
+                    { value: '', label: 'Estado: Todos' },
+                    { value: 'pendiente', label: 'Pendiente' },
+                    { value: 'vinculada', label: 'Vinculada' },
+                    { value: 'descartada', label: 'Descartada' }
+                  ]}
+                  onChange={(val) => {
+                    setPage(1)
+                    setEstado(val)
+                  }}
+                />
+              </div>
               <button className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70" type="submit">
                 Buscar
               </button>
@@ -311,9 +314,8 @@ export default function AdminEmpresasMapeo() {
               {items.map((item) => (
                 <button
                   key={item.id}
-                  className={`w-full text-left border rounded-xl p-4 ${
-                    Number(selectedItem?.id) === Number(item.id) ? 'border-primary bg-primary/5' : 'border-border'
-                  }`}
+                  className={`w-full text-left border rounded-xl p-4 ${Number(selectedItem?.id) === Number(item.id) ? 'border-primary bg-primary/5' : 'border-border'
+                    }`}
                   onClick={() => handleSelectItem(item)}
                   type="button"
                 >
@@ -432,9 +434,8 @@ export default function AdminEmpresasMapeo() {
                     <button
                       key={empresa.id}
                       type="button"
-                      className={`w-full text-left border rounded-lg p-3 ${
-                        String(selectedEmpresaId) === String(empresa.id) ? 'border-primary bg-primary/5' : 'border-border'
-                      }`}
+                      className={`w-full text-left border rounded-lg p-3 ${String(selectedEmpresaId) === String(empresa.id) ? 'border-primary bg-primary/5' : 'border-border'
+                        }`}
                       onClick={() => setSelectedEmpresaId(String(empresa.id))}
                     >
                       <div className="flex items-start justify-between gap-2">

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import FormDropdown from '../../components/FormDropdown'
 import './admin.css'
 import {
   BadgeCheck,
@@ -711,20 +712,19 @@ export default function AdminSolicitudes() {
         <section className="admin-card p-4 space-y-4">
           <div className="flex flex-wrap gap-2">
             {tabs.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setTab(item.id)
-                    if (typeof window !== 'undefined') {
-                      window.history.replaceState(null, '', `${window.location.pathname}#${item.id}`)
-                    }
-                  }}
-                  className={`px-3 py-2 rounded-lg text-xs font-semibold border ${
-                    tab === item.id
-                      ? 'bg-primary text-white border-primary'
-                    : 'bg-white text-foreground/70 border-border hover:border-primary/40'
-                }`}
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setTab(item.id)
+                  if (typeof window !== 'undefined') {
+                    window.history.replaceState(null, '', `${window.location.pathname}#${item.id}`)
+                  }
+                }}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold border ${tab === item.id
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white text-foreground/70 border-border hover:border-primary/40'
+                  }`}
               >
                 {item.label} ({item.count})
               </button>
@@ -753,87 +753,100 @@ export default function AdminSolicitudes() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {tab === TAB_VERIFICACION_EMPRESAS ? (
-                <select
-                  className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70 bg-white"
-                  value={estadoVerificacionEmpresas}
-                  onChange={(event) => {
-                    setEstadoVerificacionEmpresas(event.target.value)
-                    setMetaVerificacionEmpresas((prev) => ({ ...prev, page: 1 }))
-                  }}
-                >
-                  <option value="">Estado: todos</option>
-                  <option value="pendiente">Pendiente</option>
-                  <option value="en_revision">En revision</option>
-                  <option value="aprobada">Aprobada</option>
-                  <option value="rechazada">Rechazada</option>
-                  <option value="suspendida">Suspendida</option>
-                  <option value="vencida">Vencida</option>
-                </select>
+                <div style={{ width: '150px' }}>
+                  <FormDropdown
+                    value={estadoVerificacionEmpresas}
+                    options={[
+                      { value: '', label: 'Estado: Todos' },
+                      { value: 'pendiente', label: 'Pendiente' },
+                      { value: 'en_revision', label: 'En revision' },
+                      { value: 'aprobada', label: 'Aprobada' },
+                      { value: 'rechazada', label: 'Rechazada' },
+                      { value: 'suspendida', label: 'Suspendida' },
+                      { value: 'vencida', label: 'Vencida' }
+                    ]}
+                    onChange={(val) => {
+                      setEstadoVerificacionEmpresas(val)
+                      setMetaVerificacionEmpresas((prev) => ({ ...prev, page: 1 }))
+                    }}
+                    placeholder="Estado"
+                  />
+                </div>
               ) : null}
               {tab === TAB_REACTIVACION_EMPRESAS ? (
-                <select
-                  className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70 bg-white"
-                  value={estadoReactivaciones}
-                  onChange={(event) => {
-                    setEstadoReactivaciones(event.target.value)
-                    setMetaReactivaciones((prev) => ({ ...prev, page: 1 }))
-                  }}
-                >
-                  <option value="">Estado: todos</option>
-                  <option value="pendiente">Pendiente</option>
-                  <option value="en_revision">En revision</option>
-                  <option value="aprobada">Aprobada</option>
-                  <option value="rechazada">Rechazada</option>
-                </select>
+                <div style={{ width: '150px' }}>
+                  <FormDropdown
+                    value={estadoReactivaciones}
+                    options={[
+                      { value: '', label: 'Estado: Todos' },
+                      { value: 'pendiente', label: 'Pendiente' },
+                      { value: 'en_revision', label: 'En revision' },
+                      { value: 'aprobada', label: 'Aprobada' },
+                      { value: 'rechazada', label: 'Rechazada' }
+                    ]}
+                    onChange={(val) => {
+                      setEstadoReactivaciones(val)
+                      setMetaReactivaciones((prev) => ({ ...prev, page: 1 }))
+                    }}
+                    placeholder="Estado"
+                  />
+                </div>
               ) : null}
               {tab === TAB_SOLICITUDES_CANDIDATOS ? (
-                <select
-                  className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70 bg-white"
-                  value={estadoCandidatos}
-                  onChange={(event) => {
-                    setEstadoCandidatos(event.target.value)
-                    setMetaCandidatos((prev) => ({ ...prev, page: 1 }))
-                  }}
-                >
-                  <option value="">Estado: todos</option>
-                  <option value="pendiente">Pendiente</option>
-                  <option value="en_revision">En revision</option>
-                  <option value="aprobada">Aprobada</option>
-                  <option value="rechazada">Rechazada</option>
-                  <option value="suspendida">Suspendida</option>
-                  <option value="vencida">Vencida</option>
-                </select>
+                <div style={{ width: '150px' }}>
+                  <FormDropdown
+                    value={estadoCandidatos}
+                    options={[
+                      { value: '', label: 'Estado: Todos' },
+                      { value: 'pendiente', label: 'Pendiente' },
+                      { value: 'en_revision', label: 'En revision' },
+                      { value: 'aprobada', label: 'Aprobada' },
+                      { value: 'rechazada', label: 'Rechazada' },
+                      { value: 'suspendida', label: 'Suspendida' },
+                      { value: 'vencida', label: 'Vencida' }
+                    ]}
+                    onChange={(val) => {
+                      setEstadoCandidatos(val)
+                      setMetaCandidatos((prev) => ({ ...prev, page: 1 }))
+                    }}
+                    placeholder="Estado"
+                  />
+                </div>
               ) : null}
               {tab === TAB_DOCUMENTOS_CANDIDATOS ? (
                 <>
-                  <select
-                    className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70 bg-white"
-                    value={estadoDocumentosCandidatos}
-                    onChange={(event) => {
-                      setEstadoDocumentosCandidatos(event.target.value)
-                      setMetaDocumentosCandidatos((prev) => ({ ...prev, page: 1 }))
-                    }}
-                  >
-                    <option value="">Estado doc: todos</option>
-                    <option value="pendiente">Pendiente</option>
-                    <option value="aprobado">Aprobado</option>
-                    <option value="rechazado">Rechazado</option>
-                    <option value="vencido">Vencido</option>
-                  </select>
-                  <select
-                    className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70 bg-white"
-                    value={tipoDocumentoCandidatos}
-                    onChange={(event) => {
-                      setTipoDocumentoCandidatos(event.target.value)
-                      setMetaDocumentosCandidatos((prev) => ({ ...prev, page: 1 }))
-                    }}
-                  >
-                    <option value="">Tipo doc: todos</option>
-                    {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
-                  </select>
-                  <label className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-foreground/70 border border-border rounded-lg bg-white">
+                  <div style={{ width: '150px' }}>
+                    <FormDropdown
+                      value={estadoDocumentosCandidatos}
+                      options={[
+                        { value: '', label: 'Estado: Todos' },
+                        { value: 'pendiente', label: 'Pendiente' },
+                        { value: 'aprobado', label: 'Aprobado' },
+                        { value: 'rechazado', label: 'Rechazado' },
+                        { value: 'vencido', label: 'Vencido' }
+                      ]}
+                      onChange={(val) => {
+                        setEstadoDocumentosCandidatos(val)
+                        setMetaDocumentosCandidatos((prev) => ({ ...prev, page: 1 }))
+                      }}
+                      placeholder="Estado Doc"
+                    />
+                  </div>
+                  <div style={{ width: '180px' }}>
+                    <FormDropdown
+                      value={tipoDocumentoCandidatos}
+                      options={[
+                        { value: '', label: 'Tipo Doc: Todos' },
+                        ...Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => ({ value, label }))
+                      ]}
+                      onChange={(val) => {
+                        setTipoDocumentoCandidatos(val)
+                        setMetaDocumentosCandidatos((prev) => ({ ...prev, page: 1 }))
+                      }}
+                      placeholder="Tipo Doc"
+                    />
+                  </div>
+                  <label className="inline-flex items-center gap-1.5 px-3 text-xs text-foreground/70 border border-border rounded-lg bg-white">
                     <input
                       type="checkbox"
                       checked={soloSolicitudesDocumentales}
@@ -846,15 +859,18 @@ export default function AdminSolicitudes() {
                   </label>
                 </>
               ) : null}
-              <select
-                className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70 bg-white"
-                value={String(currentMeta.pageSize)}
-                onChange={(event) => setCurrentPageSize(Number(event.target.value))}
-              >
-                <option value="20">20 por pagina</option>
-                <option value="50">50 por pagina</option>
-                <option value="100">100 por pagina</option>
-              </select>
+              <div style={{ width: '140px' }}>
+                <FormDropdown
+                  value={String(currentMeta.pageSize)}
+                  options={[
+                    { value: '20', label: '20 por pagina' },
+                    { value: '50', label: '50 por pagina' },
+                    { value: '100', label: '100 por pagina' }
+                  ]}
+                  onChange={(val) => setCurrentPageSize(Number(val))}
+                  placeholder="Por pagina"
+                />
+              </div>
               <button className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70 bg-white" type="submit">
                 Buscar
               </button>
@@ -977,7 +993,7 @@ export default function AdminSolicitudes() {
                         <p className="text-foreground/70 mt-1">
                           Motivo: {formatReasonList(
                             item.desactivacion_motivos_codigos
-                              || (item.desactivacion_motivo_codigo ? [item.desactivacion_motivo_codigo] : []),
+                            || (item.desactivacion_motivo_codigo ? [item.desactivacion_motivo_codigo] : []),
                             DEACTIVATION_REASON_LABELS
                           )}
                         </p>
@@ -1285,7 +1301,7 @@ export default function AdminSolicitudes() {
       ) : null}
 
       {documentPreviewModal.open ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/45" onClick={closeDocumentPreviewModal} />
           <div className="relative w-full max-w-5xl rounded-2xl border border-border bg-white p-4 sm:p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between gap-2">
@@ -1362,8 +1378,8 @@ export default function AdminSolicitudes() {
                 {rejectModal.mode === 'reactivacion'
                   ? 'Rechazar solicitud de reactivacion'
                   : rejectModal.mode === 'documento'
-                  ? 'Rechazar documento de candidato'
-                  : 'Rechazar solicitud de verificacion'}
+                    ? 'Rechazar documento de candidato'
+                    : 'Rechazar solicitud de verificacion'}
               </h3>
               <p className="text-sm text-foreground/70">
                 Ingresa un motivo para registrar la decision en el historial.
