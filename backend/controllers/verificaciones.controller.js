@@ -39,6 +39,14 @@ function parseNullableString(value) {
   return trimmed || null;
 }
 
+function parseBooleanFlag(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'si', 'yes'].includes(normalized)) return true;
+  if (['0', 'false', 'no'].includes(normalized)) return false;
+  return null;
+}
+
 async function getMyCompanyVerification(req, res) {
   try {
     const userId = req.user?.id;
@@ -140,6 +148,7 @@ async function listVerificacionesAdmin(req, res) {
   try {
     const estado = parseNullableString(req.query.estado);
     const tipo = parseNullableString(req.query.tipo);
+    const hasSolicitud = parseBooleanFlag(req.query.has_solicitud);
     const q = parseNullableString(req.query.q) || '';
     const page = parsePositiveInt(req.query.page) || 1;
     const pageSize = parsePositiveInt(req.query.page_size) || 20;
@@ -147,6 +156,7 @@ async function listVerificacionesAdmin(req, res) {
     const result = await listVerificaciones({
       estado,
       tipo,
+      hasSolicitud,
       q,
       page,
       pageSize

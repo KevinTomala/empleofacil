@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import Header from '../../components/Header'
-import { getMyPerfil, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
+import {
+  getMyCandidateVerification,
+  getMyPerfil,
+  getPerfilErrorMessage
+} from '../../services/perfilCandidato.api'
 import ProfileSidebarStatus from './ProfileSidebarStatus'
 import ProfileTabs from './ProfileTabs'
 
@@ -15,6 +19,7 @@ export default function ProfileWizardLayout({
   children
 }) {
   const [perfil, setPerfil] = useState(null)
+  const [verification, setVerification] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -24,9 +29,13 @@ export default function ProfileWizardLayout({
     async function loadPerfilSidebar() {
       try {
         setLoading(true)
-        const data = await getMyPerfil()
+        const [perfilData, verificationData] = await Promise.all([
+          getMyPerfil(),
+          getMyCandidateVerification().catch(() => null)
+        ])
         if (!active) return
-        setPerfil(data)
+        setPerfil(perfilData)
+        setVerification(verificationData?.verificacion || null)
         setError('')
       } catch (err) {
         if (!active) return
@@ -67,6 +76,7 @@ export default function ProfileWizardLayout({
           <aside className="lg:sticky lg:top-24">
             <ProfileSidebarStatus
               perfil={perfil}
+              verification={verification}
               loading={loading}
               error={error}
               currentTab={currentTab}

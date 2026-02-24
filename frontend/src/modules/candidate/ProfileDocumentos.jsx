@@ -6,10 +6,8 @@ import { showToast } from '../../utils/showToast'
 import {
   createMyDocumento,
   deleteMyDocumento,
-  getMyCandidateVerification,
   getMyDocumentos,
   getPerfilErrorMessage,
-  requestMyCandidateVerification,
   updateMyDocumento
 } from '../../services/perfilCandidato.api'
 import ProfileWizardLayout from './ProfileWizardLayout'
@@ -88,24 +86,12 @@ const legalChecklist = [
   'La plataforma puede reportar uso indebido a la autoridad.'
 ]
 
-const verificationStatusUi = {
-  pendiente: { label: 'Pendiente', className: 'bg-amber-100 text-amber-700' },
-  en_revision: { label: 'En revision', className: 'bg-blue-100 text-blue-700' },
-  aprobada: { label: 'Verificada', className: 'bg-emerald-100 text-emerald-700' },
-  rechazada: { label: 'Rechazada', className: 'bg-rose-100 text-rose-700' },
-  suspendida: { label: 'Suspendida', className: 'bg-rose-100 text-rose-700' },
-  vencida: { label: 'Vencida', className: 'bg-slate-200 text-slate-700' }
-}
-
 export default function ProfileDocumentos() {
   const navigate = useNavigate()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
-  const [loadingVerification, setLoadingVerification] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [requestingVerification, setRequestingVerification] = useState(false)
   const [editingId, setEditingId] = useState(null)
-  const [verification, setVerification] = useState(null)
   const [selectedFile, setSelectedFile] = useState(null)
   const [form, setForm] = useState(initialForm)
   const [acceptedCaptureGuide, setAcceptedCaptureGuide] = useState(false)
@@ -129,39 +115,6 @@ export default function ProfileDocumentos() {
     if (form.lado_documento === 'reverso') return identityTutorialSteps[1]
     return identityTutorialSteps[0]
   }, [form.tipo_documento, form.lado_documento])
-  const verificationStatus = String(verification?.estado || 'pendiente')
-  const verificationBadge = verificationStatusUi[verificationStatus] || verificationStatusUi.pendiente
-  const isVerificationPendingRequested = verificationStatus === 'pendiente' && Boolean(verification?.has_solicitud)
-  const canRequestVerificationByStatus =
-    verificationStatus === 'rechazada'
-    || verificationStatus === 'vencida'
-    || (verificationStatus === 'pendiente' && !isVerificationPendingRequested)
-
-  const verificationDocs = useMemo(() => {
-    const validDocuments = items.filter((item) => {
-      const status = String(item?.estado || '').toLowerCase()
-      const hasAsset = String(item?.ruta_archivo || item?.nombre_archivo || '').trim() !== ''
-      if (!hasAsset) return false
-      return !['rechazado', 'vencido'].includes(status)
-    })
-
-    const hasCedulaAnverso = validDocuments.some(
-      (item) => item.tipo_documento === 'documento_identidad' && item.lado_documento === 'anverso'
-    )
-    const hasCedulaReverso = validDocuments.some(
-      (item) => item.tipo_documento === 'documento_identidad' && item.lado_documento === 'reverso'
-    )
-    const cantidadCedula = validDocuments.filter((item) => item.tipo_documento === 'documento_identidad').length
-    const hasLicencia = validDocuments.some((item) => item.tipo_documento === 'licencia_conducir')
-    const eligible = (hasCedulaAnverso && hasCedulaReverso) || cantidadCedula >= 2 || hasLicencia
-
-    return {
-      hasCedulaAnverso,
-      hasCedulaReverso,
-      hasLicencia,
-      eligible
-    }
-  }, [items])
 
   async function loadDocumentos() {
     const response = await getMyDocumentos()
@@ -182,30 +135,6 @@ export default function ProfileDocumentos() {
         showToast({ type: 'error', message: getPerfilErrorMessage(error, 'No se pudo cargar documentos.') })
       } finally {
         if (active) setLoading(false)
-      }
-    }
-
-    load()
-
-    return () => {
-      active = false
-    }
-  }, [])
-
-  useEffect(() => {
-    let active = true
-
-    async function load() {
-      try {
-        setLoadingVerification(true)
-        const response = await getMyCandidateVerification()
-        if (!active) return
-        setVerification(response?.verificacion || null)
-      } catch (error) {
-        if (!active) return
-        showToast({ type: 'error', message: getPerfilErrorMessage(error, 'No se pudo cargar verificacion.') })
-      } finally {
-        if (active) setLoadingVerification(false)
       }
     }
 
@@ -386,32 +315,6 @@ export default function ProfileDocumentos() {
       showToast({ type: 'success', message: 'Documento eliminado.' })
     } catch (error) {
       showToast({ type: 'error', message: getPerfilErrorMessage(error, 'No se pudo eliminar documento.') })
-    }
-  }
-
-  const handleRequestVerification = async () => {
-    if (requestingVerification) return
-    if (!verificationDocs.eligible) {
-      showToast({
-        type: 'warning',
-        message: 'Debes subir cedula por ambos lados o licencia para solicitar verificacion.'
-      })
-      return
-    }
-    if (!canRequestVerificationByStatus) return
-
-    try {
-      setRequestingVerification(true)
-      const response = await requestMyCandidateVerification()
-      setVerification(response?.verificacion || null)
-      showToast({ type: 'success', message: 'Solicitud de verificacion enviada.' })
-    } catch (error) {
-      showToast({
-        type: 'error',
-        message: getPerfilErrorMessage(error, 'No se pudo solicitar la verificacion.')
-      })
-    } finally {
-      setRequestingVerification(false)
     }
   }
 
@@ -735,77 +638,6 @@ export default function ProfileDocumentos() {
                   </div>
                 </article>
               ))}
-            </div>
-          )}
-        </section>
-
-        <section className="bg-white border border-border rounded-2xl p-6 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-semibold text-base">Verificacion de cuenta</h2>
-            <span className={`inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-full ${verificationBadge.className}`}>
-              {verificationBadge.label}
-            </span>
-          </div>
-
-          {loadingVerification ? (
-            <p className="text-sm text-foreground/70">Cargando estado de verificacion...</p>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-foreground/70">
-                Para solicitar verificacion debes tener cedula por ambos lados o licencia de conducir.
-              </p>
-
-              <div className="grid gap-2 sm:grid-cols-3">
-                <div className={`rounded-lg border px-3 py-2 text-xs ${verificationDocs.hasCedulaAnverso ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-border text-foreground/70'}`}>
-                  Cedula anverso: {verificationDocs.hasCedulaAnverso ? 'OK' : 'Falta'}
-                </div>
-                <div className={`rounded-lg border px-3 py-2 text-xs ${verificationDocs.hasCedulaReverso ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-border text-foreground/70'}`}>
-                  Cedula reverso: {verificationDocs.hasCedulaReverso ? 'OK' : 'Falta'}
-                </div>
-                <div className={`rounded-lg border px-3 py-2 text-xs ${verificationDocs.hasLicencia ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-border text-foreground/70'}`}>
-                  Licencia: {verificationDocs.hasLicencia ? 'OK' : 'No cargada'}
-                </div>
-              </div>
-
-              {verification?.motivo_rechazo ? (
-                <p className="text-xs text-rose-700">
-                  Motivo de rechazo: {verification.motivo_rechazo}
-                </p>
-              ) : null}
-              {verification?.reviewed_at ? (
-                <p className="text-xs text-foreground/60">
-                  Ultima revision: {String(verification.reviewed_at).slice(0, 10)}
-                </p>
-              ) : null}
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className="px-3 py-2 rounded-lg bg-primary text-white text-xs font-semibold disabled:opacity-60"
-                  onClick={handleRequestVerification}
-                  disabled={
-                    requestingVerification
-                    || loadingVerification
-                    || !canRequestVerificationByStatus
-                    || !verificationDocs.eligible
-                  }
-                >
-                  {requestingVerification
-                    ? 'Solicitando...'
-                    : verificationStatus === 'aprobada'
-                    ? 'Cuenta verificada'
-                    : verificationStatus === 'en_revision' || isVerificationPendingRequested
-                    ? 'Revision solicitada'
-                    : !verificationDocs.eligible
-                    ? 'Documentos incompletos'
-                    : 'Solicitar revision'}
-                </button>
-                {!verificationDocs.eligible ? (
-                  <p className="text-xs text-amber-700">
-                    Sube cedula anverso y reverso, o licencia, para habilitar la solicitud.
-                  </p>
-                ) : null}
-              </div>
             </div>
           )}
         </section>

@@ -497,7 +497,7 @@ async function getVerificacionById(verificacionId) {
   return mapVerificacionRow(rows[0] || null);
 }
 
-async function listVerificaciones({ tipo = null, estado = null, q = '', page = 1, pageSize = 20 } = {}) {
+async function listVerificaciones({ tipo = null, estado = null, hasSolicitud = null, q = '', page = 1, pageSize = 20 } = {}) {
   await ensureVerificationSchema();
   await ensureVerificacionDefaults();
 
@@ -516,6 +516,15 @@ async function listVerificaciones({ tipo = null, estado = null, q = '', page = 1
   if (estado && VALID_VERIFICACION_ESTADOS.includes(estado)) {
     where.push('v.estado = ?');
     params.push(estado);
+  }
+
+  if (hasSolicitud === true) {
+    where.push(`EXISTS(
+      SELECT 1
+      FROM verificaciones_cuenta_eventos ve
+      WHERE ve.verificacion_id = v.id
+        AND ve.accion = 'solicitada'
+    )`);
   }
 
   const search = String(q || '').trim();

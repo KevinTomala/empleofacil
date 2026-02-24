@@ -5,6 +5,9 @@ import {
   Building2,
   CheckCircle2,
   Clock3,
+  Download,
+  Eye,
+  FileText,
   Filter,
   RefreshCw,
   Search,
@@ -13,6 +16,7 @@ import {
 } from 'lucide-react'
 import Header from '../../components/Header'
 import { showToast } from '../../utils/showToast'
+import { getDocumentosByCandidatoId, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
 import {
   getVerificationErrorMessage,
   listCompanyReactivationRequests,
@@ -25,6 +29,20 @@ const TAB_VERIFICACION_EMPRESAS = 'verificacion_empresas'
 const TAB_REACTIVACION_EMPRESAS = 'reactivacion_empresas'
 const TAB_SOLICITUDES_CANDIDATOS = 'solicitudes_candidatos'
 const VALID_TAB_IDS = [TAB_VERIFICACION_EMPRESAS, TAB_REACTIVACION_EMPRESAS, TAB_SOLICITUDES_CANDIDATOS]
+const REJECT_MODAL_DEFAULT = { open: false, mode: 'verificacion', item: null, comment: '' }
+const CANDIDATE_DOCS_MODAL_DEFAULT = {
+  open: false,
+  candidato: null,
+  loading: false,
+  error: '',
+  items: [],
+}
+const DOCUMENT_PREVIEW_MODAL_DEFAULT = {
+  open: false,
+  url: '',
+  type: '',
+  title: '',
+}
 
 const STATUS_STYLES = {
   pendiente: 'bg-amber-100 text-amber-700',
@@ -71,10 +89,48 @@ function formatDateShort(value) {
   return String(value).slice(0, 10)
 }
 
+function formatDocumentStatus(value) {
+  const map = {
+    pendiente: 'En revision',
+    aprobado: 'Verificado',
+    rechazada: 'Rechazada',
+    rechazado: 'Rechazada',
+    vencido: 'Vencido',
+  }
+  return map[String(value || '').trim().toLowerCase()] || 'Pendiente'
+}
+
 function formatReasonList(codes, labels) {
   const values = Array.isArray(codes) ? codes.filter(Boolean) : []
   if (!values.length) return 'No definido'
   return values.map((code) => labels[String(code || '').trim()] || String(code || '').trim()).join(', ')
+}
+
+function resolveAssetUrl(path) {
+  const value = String(path || '').trim()
+  if (!value) return ''
+  if (value.startsWith('http://') || value.startsWith('https://')) return value
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+  return value.startsWith('/') ? `${apiBase}${value}` : `${apiBase}/${value}`
+}
+
+function getFileExtension(value) {
+  const source = String(value || '').trim().toLowerCase()
+  if (!source) return ''
+  const withoutQuery = source.split('?')[0].split('#')[0]
+  const segments = withoutQuery.split('.')
+  return segments.length > 1 ? segments[segments.length - 1] : ''
+}
+
+function resolvePreviewType(doc, fileUrl) {
+  const ext =
+    getFileExtension(doc?.nombre_original)
+    || getFileExtension(doc?.nombre_archivo)
+    || getFileExtension(doc?.ruta_archivo)
+    || getFileExtension(fileUrl)
+  if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext)) return 'image'
+  if (ext === 'pdf') return 'pdf'
+  return 'other'
 }
 
 function getVisibleRange(meta) {
@@ -117,12 +173,15 @@ export default function AdminSolicitudes() {
   const [metaVerificacionEmpresas, setMetaVerificacionEmpresas] = useState(EMPTY_META)
   const [metaReactivaciones, setMetaReactivaciones] = useState(EMPTY_META)
   const [metaCandidatos, setMetaCandidatos] = useState(EMPTY_META)
+  const [rejectModal, setRejectModal] = useState(REJECT_MODAL_DEFAULT)
+  const [candidateDocsModal, setCandidateDocsModal] = useState(CANDIDATE_DOCS_MODAL_DEFAULT)
+  const [documentPreviewModal, setDocumentPreviewModal] = useState(DOCUMENT_PREVIEW_MODAL_DEFAULT)
 
   const tabs = useMemo(
     () => [
       { id: TAB_VERIFICACION_EMPRESAS, label: 'Verificacion empresas', count: metaVerificacionEmpresas.total },
       { id: TAB_REACTIVACION_EMPRESAS, label: 'Reactivacion empresas', count: metaReactivaciones.total },
-      { id: TAB_SOLICITUDES_CANDIDATOS, label: 'Solicitudes candidatos', count: metaCandidatos.total },
+      { id: TAB_SOLICITUDES_CANDIDATOS, label: 'Verificacion candidatos', count: metaCandidatos.total },
     ],
     [metaVerificacionEmpresas.total, metaReactivaciones.total, metaCandidatos.total]
   )
@@ -214,6 +273,7 @@ export default function AdminSolicitudes() {
       setLoadingCandidatos(true)
       const data = await listVerificationAccounts({
         tipo: 'candidato',
+        has_solicitud: 1,
         estado: estadoCandidatos || undefined,
         q: searchQuery || undefined,
         page: metaCandidatos.page,
@@ -228,6 +288,112 @@ export default function AdminSolicitudes() {
       })
     } finally {
       setLoadingCandidatos(false)
+    }
+  }
+
+  const openRejectModal = (mode, item) => {
+    if (!item?.id) return
+    setRejectModal({ open: true, mode, item, comment: '' })
+  }
+
+  const closeRejectModal = () => {
+    setRejectModal(REJECT_MODAL_DEFAULT)
+  }
+
+  const closeCandidateDocsModal = () => {
+    setCandidateDocsModal(CANDIDATE_DOCS_MODAL_DEFAULT)
+    setDocumentPreviewModal(DOCUMENT_PREVIEW_MODAL_DEFAULT)
+  }
+
+  const closeDocumentPreviewModal = () => {
+    setDocumentPreviewModal(DOCUMENT_PREVIEW_MODAL_DEFAULT)
+  }
+
+  const openDocumentPreviewModal = (doc) => {
+    const fileUrl = resolveAssetUrl(doc?.ruta_archivo)
+    if (!fileUrl) {
+      showToast({ type: 'warning', message: 'El documento no tiene una ruta de archivo valida.' })
+      return
+    }
+    const previewType = resolvePreviewType(doc, fileUrl)
+    setDocumentPreviewModal({
+      open: true,
+      url: fileUrl,
+      type: previewType,
+      title: doc?.nombre_original || doc?.nombre_archivo || 'Documento',
+    })
+  }
+
+  const openCandidateDocsModal = async (candidato) => {
+    const candidatoId = Number(candidato?.candidato_id || 0)
+    if (!candidatoId) {
+      showToast({ type: 'warning', message: 'No se encontro el candidato para consultar documentos.' })
+      return
+    }
+
+    setCandidateDocsModal({
+      open: true,
+      candidato,
+      loading: true,
+      error: '',
+      items: [],
+    })
+
+    try {
+      const response = await getDocumentosByCandidatoId(candidatoId)
+      setCandidateDocsModal((prev) => ({
+        ...prev,
+        loading: false,
+        items: Array.isArray(response?.items) ? response.items : [],
+      }))
+    } catch (error) {
+      setCandidateDocsModal((prev) => ({
+        ...prev,
+        loading: false,
+        error: getPerfilErrorMessage(error, 'No se pudieron cargar los documentos del candidato.'),
+      }))
+    }
+  }
+
+  const submitRejectModal = async () => {
+    const item = rejectModal.item
+    const comment = String(rejectModal.comment || '').trim()
+    if (!item?.id) return
+    if (!comment) {
+      showToast({ type: 'warning', message: 'Debes ingresar un motivo de rechazo.' })
+      return
+    }
+
+    try {
+      if (rejectModal.mode === 'reactivacion') {
+        if (updatingReactivacionId) return
+        setUpdatingReactivacionId(item.id)
+        await updateCompanyReactivationStatus(item.id, {
+          estado: 'rechazada',
+          comentario_admin: comment,
+        })
+        showToast({ type: 'success', message: 'Reactivacion actualizada a Rechazada.' })
+      } else {
+        if (updatingVerificacionId) return
+        setUpdatingVerificacionId(item.id)
+        await updateVerificationStatus(item.id, {
+          estado: 'rechazada',
+          motivo_rechazo: comment,
+          comentario: 'Cuenta rechazada desde bandeja de solicitudes.',
+        })
+        showToast({ type: 'success', message: 'Estado actualizado a Rechazada.' })
+      }
+
+      closeRejectModal()
+      await refreshCurrentTab()
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getVerificationErrorMessage(error, 'No se pudo actualizar la solicitud.'),
+      })
+    } finally {
+      if (rejectModal.mode === 'reactivacion') setUpdatingReactivacionId(null)
+      else setUpdatingVerificacionId(null)
     }
   }
 
@@ -304,6 +470,11 @@ export default function AdminSolicitudes() {
   const handleUpdateVerificationStatus = async (item, estado) => {
     if (!item?.id || updatingVerificacionId) return
 
+    if (estado === 'rechazada') {
+      openRejectModal('verificacion', item)
+      return
+    }
+
     const payload = { estado }
     if (estado === 'aprobada') {
       payload.nivel = 'completo'
@@ -311,12 +482,6 @@ export default function AdminSolicitudes() {
     }
     if (estado === 'en_revision') {
       payload.comentario = 'Cuenta enviada a revision.'
-    }
-    if (estado === 'rechazada') {
-      const motivo = window.prompt('Motivo de rechazo:')
-      if (!motivo || !motivo.trim()) return
-      payload.motivo_rechazo = motivo.trim()
-      payload.comentario = 'Cuenta rechazada desde bandeja de solicitudes.'
     }
 
     try {
@@ -337,12 +502,12 @@ export default function AdminSolicitudes() {
   const handleUpdateReactivationStatus = async (item, estado) => {
     if (!item?.id || updatingReactivacionId) return
 
-    const payload = { estado }
     if (estado === 'rechazada') {
-      const comentario = window.prompt('Comentario de rechazo para la solicitud de reactivacion:')
-      if (!comentario || !comentario.trim()) return
-      payload.comentario_admin = comentario.trim()
+      openRejectModal('reactivacion', item)
+      return
     }
+
+    const payload = { estado }
     if (estado === 'aprobada') {
       payload.comentario_admin = 'Reactivacion aprobada desde bandeja de solicitudes.'
     }
@@ -674,10 +839,10 @@ export default function AdminSolicitudes() {
 
           {tab === TAB_SOLICITUDES_CANDIDATOS ? (
             <>
-              <h2 className="font-heading text-lg font-semibold">Solicitudes de candidatos</h2>
+              <h2 className="font-heading text-lg font-semibold">Verificacion candidatos</h2>
               {loadingCandidatos ? <p className="text-sm text-foreground/70">Cargando solicitudes...</p> : null}
               {!loadingCandidatos && !solicitudesCandidatos.length ? (
-                <p className="text-sm text-foreground/70">No hay solicitudes de candidatos para mostrar.</p>
+                <p className="text-sm text-foreground/70">No hay solicitudes de verificacion de candidatos para mostrar.</p>
               ) : null}
               <div className="space-y-3">
                 {solicitudesCandidatos.map((candidato) => (
@@ -715,6 +880,14 @@ export default function AdminSolicitudes() {
                         En revision
                       </button>
                       <button
+                        className="px-2.5 py-1 border border-border rounded-lg inline-flex items-center gap-1"
+                        onClick={() => openCandidateDocsModal(candidato)}
+                        type="button"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        Ver documentos
+                      </button>
+                      <button
                         className="px-2.5 py-1 border border-emerald-300 text-emerald-700 rounded-lg"
                         onClick={() => handleUpdateVerificationStatus(candidato, 'aprobada')}
                         type="button"
@@ -738,6 +911,195 @@ export default function AdminSolicitudes() {
           ) : null}
         </section>
       </main>
+
+      {candidateDocsModal.open ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={closeCandidateDocsModal} />
+          <div className="relative w-full max-w-3xl rounded-2xl border border-border bg-white p-5 space-y-4 shadow-xl max-h-[85vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-heading text-lg font-semibold">Documentos del candidato</h3>
+                <p className="text-xs text-foreground/60">
+                  {candidateDocsModal.candidato?.candidato_nombre || 'Candidato'}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="px-3 py-1.5 border border-border rounded-lg text-sm"
+                onClick={closeCandidateDocsModal}
+              >
+                Cerrar
+              </button>
+            </div>
+
+            {candidateDocsModal.loading ? (
+              <p className="text-sm text-foreground/70">Cargando documentos...</p>
+            ) : null}
+            {!candidateDocsModal.loading && candidateDocsModal.error ? (
+              <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                {candidateDocsModal.error}
+              </p>
+            ) : null}
+            {!candidateDocsModal.loading && !candidateDocsModal.error && !candidateDocsModal.items.length ? (
+              <p className="text-sm text-foreground/70">No hay documentos para este candidato.</p>
+            ) : null}
+
+            {!candidateDocsModal.loading && !candidateDocsModal.error && candidateDocsModal.items.length ? (
+              <div className="space-y-2">
+                {candidateDocsModal.items.map((doc) => {
+                  const fileUrl = resolveAssetUrl(doc?.ruta_archivo)
+                  return (
+                    <article key={doc.id} className="border border-border rounded-lg p-3 space-y-1.5">
+                      <p className="text-sm font-semibold text-foreground/90">
+                        {doc?.tipo_documento || 'Documento'}
+                        {doc?.lado_documento ? ` - ${doc.lado_documento}` : ''}
+                      </p>
+                      <p className="text-xs text-foreground/70">
+                        Estado: {formatDocumentStatus(doc?.estado)} | Subido: {formatDateShort(doc?.created_at)}
+                      </p>
+                      <p className="text-xs text-foreground/70">
+                        Archivo: {doc?.nombre_original || doc?.nombre_archivo || 'N/D'}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {fileUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => openDocumentPreviewModal(doc)}
+                            className="px-2.5 py-1 border border-border rounded-lg text-xs inline-flex items-center gap-1"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            Ver archivo
+                          </button>
+                        ) : (
+                          <span className="text-xs text-foreground/60">Sin ruta de archivo</span>
+                        )}
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {documentPreviewModal.open ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/45" onClick={closeDocumentPreviewModal} />
+          <div className="relative w-full max-w-5xl rounded-2xl border border-border bg-white p-4 sm:p-5 space-y-3 shadow-xl">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="font-heading text-base sm:text-lg font-semibold truncate">
+                  {documentPreviewModal.title || 'Vista de documento'}
+                </h3>
+                <p className="text-xs text-foreground/60">Vista previa dentro del sistema</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={documentPreviewModal.url}
+                  download
+                  className="px-3 py-1.5 border border-border rounded-lg text-xs inline-flex items-center gap-1"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Descargar
+                </a>
+                <button
+                  type="button"
+                  className="px-3 py-1.5 border border-border rounded-lg text-xs"
+                  onClick={closeDocumentPreviewModal}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-secondary/30 overflow-hidden">
+              {documentPreviewModal.type === 'image' ? (
+                <div className="max-h-[72vh] overflow-auto">
+                  <img
+                    src={documentPreviewModal.url}
+                    alt={documentPreviewModal.title || 'Documento'}
+                    className="w-full h-auto object-contain bg-white"
+                  />
+                </div>
+              ) : null}
+
+              {documentPreviewModal.type === 'pdf' ? (
+                <iframe
+                  title={documentPreviewModal.title || 'Documento PDF'}
+                  src={documentPreviewModal.url}
+                  className="w-full h-[72vh] bg-white"
+                />
+              ) : null}
+
+              {documentPreviewModal.type === 'other' ? (
+                <div className="p-5 space-y-2">
+                  <p className="text-sm text-foreground/75">
+                    Este tipo de archivo no soporta vista previa integrada.
+                  </p>
+                  <a
+                    href={documentPreviewModal.url}
+                    download
+                    className="inline-flex items-center gap-1 px-3 py-1.5 border border-border rounded-lg text-xs"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Descargar archivo
+                  </a>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {rejectModal.open ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={closeRejectModal} />
+          <div className="relative w-full max-w-lg rounded-2xl border border-border bg-white p-5 space-y-4 shadow-xl">
+            <div className="space-y-1">
+              <h3 className="font-heading text-lg font-semibold">
+                {rejectModal.mode === 'reactivacion'
+                  ? 'Rechazar solicitud de reactivacion'
+                  : 'Rechazar solicitud de verificacion'}
+              </h3>
+              <p className="text-sm text-foreground/70">
+                Ingresa un motivo para registrar la decision en el historial.
+              </p>
+            </div>
+
+            <label className="space-y-1 block">
+              <span className="text-xs font-semibold text-foreground/80">Motivo de rechazo</span>
+              <textarea
+                className="w-full border border-border rounded-lg px-3 py-2 text-sm min-h-28"
+                placeholder="Escribe el motivo de rechazo"
+                value={rejectModal.comment}
+                onChange={(event) => setRejectModal((prev) => ({ ...prev, comment: event.target.value }))}
+              />
+            </label>
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="px-3 py-2 border border-border rounded-lg text-sm font-semibold"
+                onClick={closeRejectModal}
+                disabled={updatingVerificacionId === rejectModal.item?.id || updatingReactivacionId === rejectModal.item?.id}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="px-3 py-2 border border-rose-300 text-rose-700 rounded-lg text-sm font-semibold disabled:opacity-60"
+                onClick={submitRejectModal}
+                disabled={updatingVerificacionId === rejectModal.item?.id || updatingReactivacionId === rejectModal.item?.id}
+              >
+                {updatingVerificacionId === rejectModal.item?.id || updatingReactivacionId === rejectModal.item?.id
+                  ? 'Guardando...'
+                  : 'Confirmar rechazo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
