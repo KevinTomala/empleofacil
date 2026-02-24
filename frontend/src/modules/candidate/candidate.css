@@ -114,7 +114,7 @@
   }
 
   .candidate-vacantes-list {
-    max-height: calc(100vh - 240px);
+    max-height: 540px;
     overflow-y: auto;
     padding-right: 0.5rem;
     scrollbar-width: none;

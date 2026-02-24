@@ -218,19 +218,24 @@ export default function CandidateVacantes() {
     }
   }, [])
 
-  async function fetchVacantes() {
+  async function fetchVacantes(overrides = {}) {
     try {
       setLoading(true)
+      const activeQ = 'q' in overrides ? overrides.q : q
+      const activeProv = 'provincia' in overrides ? overrides.provincia : selectedProvince
+      const activeFilters = 'filters' in overrides ? overrides.filters : filters
+      const activePage = 'page' in overrides ? overrides.page : page
+      const activePageSize = 'pageSize' in overrides ? overrides.pageSize : pageSize
       const params = new URLSearchParams()
-      params.set('page', String(page))
-      params.set('page_size', String(pageSize))
-      if (q.trim()) params.set('q', q.trim())
-      if (selectedProvince.trim()) params.set('provincia', selectedProvince.trim())
-      if (filters.city.trim()) params.set('ciudad', filters.city.trim())
-      if (filters.modality) params.set('modalidad', filters.modality)
-      if (filters.contractType) params.set('tipo_contrato', filters.contractType)
-      if (filters.area.trim()) params.set('area', filters.area.trim())
-      if (filters.posted) params.set('posted', filters.posted)
+      params.set('page', String(activePage))
+      params.set('page_size', String(activePageSize))
+      if (activeQ.trim()) params.set('q', activeQ.trim())
+      if (activeProv.trim()) params.set('provincia', activeProv.trim())
+      if (activeFilters.city.trim()) params.set('ciudad', activeFilters.city.trim())
+      if (activeFilters.modality) params.set('modalidad', activeFilters.modality)
+      if (activeFilters.contractType) params.set('tipo_contrato', activeFilters.contractType)
+      if (activeFilters.area.trim()) params.set('area', activeFilters.area.trim())
+      if (activeFilters.posted) params.set('posted', activeFilters.posted)
       const data = await apiRequest(`/api/vacantes?${params.toString()}`)
       setItems(Array.isArray(data?.items) ? data.items : [])
       setTotal(Number(data?.total || 0))
@@ -255,21 +260,17 @@ export default function CandidateVacantes() {
   }
 
   const clearFilters = () => {
+    const emptyFilters = { city: '', area: '', contractType: '', modality: '', posted: '' }
     setQ('')
     setShowFilters(false)
     setSelectedProvince('')
     setProvinceSearch('')
     setCitySearch('')
     setAreaSearch('')
-    setFilters({
-      city: '',
-      area: '',
-      contractType: '',
-      modality: '',
-      posted: ''
-    })
+    setFilters(emptyFilters)
     setPage(1)
     setPageSize(20)
+    fetchVacantes({ q: '', provincia: '', filters: emptyFilters, page: 1, pageSize: 20 })
   }
 
   const postular = async (vacanteId) => {
@@ -280,6 +281,7 @@ export default function CandidateVacantes() {
         body: JSON.stringify({ vacante_id: vacanteId })
       })
       showToast({ type: 'success', message: 'Postulacion registrada.' })
+      setItems(prev => prev.map(v => (v.id === vacanteId ? { ...v, postulado: 1 } : v)))
     } catch (err) {
       const code = err?.payload?.error || err.message
       if (code === 'POSTULACION_DUPLICADA') {
@@ -298,9 +300,24 @@ export default function CandidateVacantes() {
     <div className="candidate-page">
       <Header />
       <main className="page-container candidate-content space-y-8">
-        <section className="space-y-2">
-          <h1 className="font-heading text-3xl sm:text-4xl font-bold">Vacantes activas</h1>
-          <p className="text-foreground/70 max-w-2xl">Filtra oportunidades por mapa, provincia, ciudad y fecha para postular a vacantes activas.</p>
+        <section className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div className="space-y-2">
+            <h1 className="font-heading text-3xl sm:text-4xl font-bold">Vacantes activas</h1>
+            <p className="text-foreground/70 max-w-2xl">Filtra oportunidades por mapa, provincia, ciudad y fecha para postular a vacantes activas.</p>
+          </div>
+
+          <div className="bg-white border border-border rounded-xl p-3 shadow-sm md:min-w-[400px]">
+            <form className="flex items-end gap-2" onSubmit={onSearch}>
+              <label className="text-xs text-foreground/65 flex-1">
+                Buscar
+                <input className="ef-control mt-1 w-full" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Titulo, empresa o ubicacion" />
+              </label>
+              <button className="candidate-cta !mt-0 !w-auto h-9 px-3 flex items-center justify-center" type="submit">Buscar</button>
+              <button className="px-3 h-9 border border-border rounded-lg text-sm text-foreground/70 hover:bg-slate-50 transition-colors" type="button" onClick={clearFilters}>
+                Limpiar
+              </button>
+            </form>
+          </div>
         </section>
 
         <section className="candidate-vacantes-grid">
@@ -572,21 +589,9 @@ export default function CandidateVacantes() {
             )}
           </aside>
 
-          <div className="space-y-4">
-            <section className="bg-white border border-border rounded-xl p-4">
-              <form className="grid md:grid-cols-[1fr_auto_auto] gap-2 items-end" onSubmit={onSearch}>
-                <label className="text-xs text-foreground/65">
-                  Buscar
-                  <input className="ef-control mt-1" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Titulo, empresa o ubicacion" />
-                </label>
-                <button className="candidate-cta md:w-auto" type="submit">Buscar</button>
-                <button className="px-4 py-2 border border-border rounded-lg text-sm" type="button" onClick={clearFilters}>
-                  Limpiar
-                </button>
-              </form>
-            </section>
+          <div className="space-y-3">
 
-            <section className="space-y-3 candidate-vacantes-list">
+            <section className="space-y-1 candidate-vacantes-list">
               {loading && <div className="bg-white border border-border rounded-xl p-5 text-sm text-foreground/70">Cargando vacantes...</div>}
               {!loading && error && <div className="bg-white border border-border rounded-xl p-5 text-sm text-rose-700">{error}</div>}
               {!loading && !error && items.length === 0 && (
@@ -597,24 +602,55 @@ export default function CandidateVacantes() {
                 </div>
               )}
               {!loading && !error && items.map((item) => (
-                <article key={item.id} className="candidate-job-card">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h2 className="font-semibold text-lg">{item.titulo}</h2>
-                      <p className="text-sm text-foreground/70">{item.empresa_nombre || 'Empresa'}</p>
+                <article key={item.id} className="bg-white border border-border rounded-xl p-4 hover:border-primary/30 hover:shadow-md transition-all flex flex-col">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h2 className="font-semibold text-lg text-foreground leading-tight mb-1">{item.titulo}</h2>
+                      <p className="text-sm font-medium text-foreground/70">{item.empresa_nombre || 'Empresa'}</p>
                     </div>
-                    <span className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700">{item.modalidad}</span>
+                    <span className="text-[11px] font-semibold tracking-wide px-2 py-1 rounded-full bg-primary/10 text-primary uppercase whitespace-nowrap">
+                      {item.modalidad}
+                    </span>
                   </div>
-                  <div className="mt-2 text-xs text-foreground/60">
-                    {item.provincia || 'Provincia N/D'} - {item.ciudad || 'Ciudad N/D'} - {item.tipo_contrato}
+
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-foreground/70 mt-1">
+                    <span className="flex items-center gap-1.5 break-all">
+                      <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      {item.provincia || 'Provincia N/D'}, {item.ciudad || 'Ciudad N/D'}
+                    </span>
+                    <span className="flex items-center gap-1.5 break-all">
+                      <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      {item.area || 'Area no definida'}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {item.tipo_contrato?.replace('_', ' ')}
+                    </span>
                   </div>
-                  <div className="mt-2 text-xs text-foreground/60">{item.area || 'Area no definida'}</div>
-                  <div className="mt-2 text-xs text-foreground/60">
-                    Publicada: {String(item.fecha_publicacion || '').slice(0, 10) || 'N/D'}
+
+                  <div className="mt-1.5 pt-3 border-t border-border/50 flex flex-wrap items-center justify-between gap-4">
+                    <div className="text-[11px] text-foreground/50 font-medium">
+                      Publicada: {String(item.fecha_publicacion || '').slice(0, 10) || 'N/D'}
+                    </div>
+                    <button
+                      className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${item.postulado
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed'
+                        : 'bg-primary/80 text-white hover:bg-primary hover:shadow-lg'
+                        }`}
+                      type="button"
+                      disabled={Boolean(item.postulado) || postingId === item.id}
+                      onClick={() => postular(item.id)}
+                    >
+                      {item.postulado ? 'Ya postulado ✔' : (postingId === item.id ? 'Postulando...' : 'Postular ahora')}
+                    </button>
                   </div>
-                  <button className="candidate-cta" type="button" disabled={postingId === item.id} onClick={() => postular(item.id)}>
-                    {postingId === item.id ? 'Postulando...' : 'Postular ahora'}
-                  </button>
                 </article>
               ))}
             </section>
