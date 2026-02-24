@@ -45,6 +45,13 @@ function normalizeTipoContrato(value) {
   return tipo;
 }
 
+function normalizePosted(value) {
+  const posted = toTextOrNull(value);
+  if (!posted) return null;
+  if (!['hoy', '7d', '30d', '90d'].includes(posted)) return null;
+  return posted;
+}
+
 function buildVacantesWhereClause(filters, { ownEmpresaId = null, onlyActive = false } = {}) {
   const where = ['v.deleted_at IS NULL', 'v.activo = 1'];
   const params = [];
@@ -66,6 +73,14 @@ function buildVacantesWhereClause(filters, { ownEmpresaId = null, onlyActive = f
     where.push('v.provincia = ?');
     params.push(filters.provincia);
   }
+  if (filters.ciudad) {
+    where.push('v.ciudad = ?');
+    params.push(filters.ciudad);
+  }
+  if (filters.area) {
+    where.push('v.area = ?');
+    params.push(filters.area);
+  }
   if (filters.modalidad) {
     where.push('v.modalidad = ?');
     params.push(filters.modalidad);
@@ -77,6 +92,17 @@ function buildVacantesWhereClause(filters, { ownEmpresaId = null, onlyActive = f
   if (filters.estado) {
     where.push('v.estado = ?');
     params.push(filters.estado);
+  }
+  if (filters.posted) {
+    if (filters.posted === 'hoy') {
+      where.push('DATE(v.fecha_publicacion) = CURDATE()');
+    } else if (filters.posted === '7d') {
+      where.push('v.fecha_publicacion >= DATE_SUB(NOW(), INTERVAL 7 DAY)');
+    } else if (filters.posted === '30d') {
+      where.push('v.fecha_publicacion >= DATE_SUB(NOW(), INTERVAL 30 DAY)');
+    } else if (filters.posted === '90d') {
+      where.push('v.fecha_publicacion >= DATE_SUB(NOW(), INTERVAL 90 DAY)');
+    }
   }
 
   return {
@@ -90,9 +116,12 @@ async function listVacantes({
   pageSize = 20,
   q = null,
   provincia = null,
+  ciudad = null,
+  area = null,
   modalidad = null,
   tipoContrato = null,
-  estado = null
+  estado = null,
+  posted = null
 } = {}, { ownEmpresaId = null, onlyActive = false } = {}) {
   const safePage = toPage(page);
   const safePageSize = toPageSize(pageSize);
@@ -101,9 +130,12 @@ async function listVacantes({
   const filters = {
     q: toTextOrNull(q),
     provincia: toTextOrNull(provincia),
+    ciudad: toTextOrNull(ciudad),
+    area: toTextOrNull(area),
     modalidad: normalizeModalidad(modalidad),
     tipoContrato: normalizeTipoContrato(tipoContrato),
-    estado: normalizeEstado(estado)
+    estado: normalizeEstado(estado),
+    posted: normalizePosted(posted)
   };
 
   const { whereSql, params } = buildVacantesWhereClause(filters, { ownEmpresaId, onlyActive });
@@ -221,6 +253,7 @@ module.exports = {
   normalizeEstado,
   normalizeModalidad,
   normalizeTipoContrato,
+  normalizePosted,
   listVacantes,
   createVacante,
   findVacanteById,

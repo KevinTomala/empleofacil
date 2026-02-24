@@ -84,6 +84,9 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 ### 8) Vacantes + postulaciones MVP (backend)
 - `POST /api/vacantes` con empresa valida debe responder `201` y `id`.
 - `GET /api/vacantes` debe responder `200` con `items`, `page`, `page_size`, `total` y solo vacantes activas.
+- `GET /api/vacantes?ciudad=Guayaquil` debe responder `200` filtrando por canton/ciudad exacta.
+- `GET /api/vacantes?posted=7d` debe responder `200` filtrando por fecha de publicacion (ultimos 7 dias).
+- `GET /api/vacantes?posted=invalido` debe responder `400 INVALID_PAYLOAD` con `details=posted`.
 - `GET /api/vacantes/mias` debe responder `200` para empresa y `403 COMPANY_ACCESS_REQUIRED` si no hay scope de empresa.
 - `PUT /api/vacantes/:vacanteId` de vacante ajena debe devolver `403 FORBIDDEN`.
 - `PUT /api/vacantes/:vacanteId/estado` debe aceptar `borrador|activa|pausada|cerrada`.
@@ -198,7 +201,10 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
   - en postulados, `Ver perfil` abre drawer real y botones `Copiar email` / `Copiar telefono` muestran feedback.
 - `/app/candidate/vacantes`:
   - carga vacantes reales de `/api/vacantes`,
-  - aplica filtros `q`, `provincia`, `modalidad`, `tipo_contrato`,
+  - inicia en vista mapa de Ecuador y permite click en provincia para abrir filtros compactos,
+  - aplica filtros `q`, `provincia`, `ciudad`, `area`, `modalidad`, `tipo_contrato`, `posted`,
+  - al cambiar filtro reinicia `page=1`,
+  - boton `Reset/Limpiar` limpia filtros y vuelve a vista de mapa,
   - boton `Postular ahora` crea postulacion real,
   - maneja feedback para duplicado y vacante no activa.
 - `/app/candidate/postulaciones`:

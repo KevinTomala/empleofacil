@@ -89,7 +89,7 @@
 - Seccion Vacantes (empresa) en `/app/company/vacantes` consume API real (`/api/vacantes/mias`) con listado, filtros basicos, paginacion, CRUD minimo (crear, editar, cambiar estado) y subvista de postulados por vacante (`/api/postulaciones/empresa`).
 - La subvista de postulados en Vacantes muestra candidatos de una vacante, permite abrir perfil y copiar email/telefono para contacto rapido.
 - Seccion Postulaciones (empresa) en `/app/company/postulaciones` queda como vista legacy de transicion.
-- Seccion Vacantes (candidato) en `/app/candidate/vacantes` consume API real (`/api/vacantes`) con filtros `q`, `provincia`, `modalidad`, `tipo_contrato` y accion de postular (`POST /api/postulaciones`).
+- Seccion Vacantes (candidato) en `/app/candidate/vacantes` consume API real (`/api/vacantes`) con mapa de Ecuador, flujo `mapa -> filtros avanzados`, filtros `q`, `provincia`, `ciudad`, `area`, `modalidad`, `tipo_contrato`, `posted` y accion de postular (`POST /api/postulaciones`).
 - Seccion Postulaciones (candidato) en `/app/candidate/postulaciones` consume API real (`/api/postulaciones/mias`) con paginacion y estado de proceso.
 - Seccion Candidatos (empresa) en `/app/company/candidatos` incluye listado real de acreditados con busqueda `q`, paginacion (`page`, `page_size`) y drawer de perfil legible.
 - Seccion Mensajes (empresa) en `/app/company/mensajes` incluye bandeja, conversacion rapida y plantillas (invitacion, seguimiento, descarte) con contexto visible de vacante.
