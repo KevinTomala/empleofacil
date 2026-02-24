@@ -141,12 +141,151 @@ async function ensureVerificacionDefaults() {
   );
 }
 
+function buildCandidateEligibilityFromDocsRow(row) {
+  const identidadAnverso = Number(row?.identidad_anverso || 0);
+  const identidadReverso = Number(row?.identidad_reverso || 0);
+  const identidadDocs = Number(row?.identidad_docs || 0);
+  const licenciaDocs = Number(row?.licencia_docs || 0);
+  const hasCedulaAmbosLados = identidadAnverso > 0 && identidadReverso > 0;
+  const hasCedulaLegacy = identidadDocs >= 2;
+  const hasLicencia = licenciaDocs >= 1;
+  return hasCedulaAmbosLados || hasCedulaLegacy || hasLicencia;
+}
+
+async function syncCandidateApprovedVerificacionesByDocs({ candidateIds = null, connection = db } = {}) {
+  await ensureVerificationSchema();
+
+  const safeCandidateIds = Array.isArray(candidateIds)
+    ? [...new Set(candidateIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))]
+    : null;
+
+  if (Array.isArray(safeCandidateIds) && safeCandidateIds.length === 0) {
+    return 0;
+  }
+
+  const whereParts = [`v.cuenta_tipo = 'candidato'`, `v.estado = 'aprobada'`];
+  const whereParams = [];
+  if (safeCandidateIds) {
+    whereParts.push('v.candidato_id IN (?)');
+    whereParams.push(safeCandidateIds);
+  }
+
+  const [approvedRows] = await connection.query(
+    `SELECT v.id, v.candidato_id, v.estado
+     FROM verificaciones_cuenta v
+     WHERE ${whereParts.join(' AND ')}`,
+    whereParams
+  );
+  if (!approvedRows.length) return 0;
+
+  const approvedCandidateIds = approvedRows.map((row) => Number(row.candidato_id)).filter((id) => Number.isInteger(id) && id > 0);
+  if (!approvedCandidateIds.length) return 0;
+
+  const [docsRows] = await connection.query(
+    `SELECT
+      candidato_id,
+      MAX(
+        CASE
+          WHEN tipo_documento = 'documento_identidad'
+            AND lado_documento = 'anverso'
+            AND COALESCE(TRIM(ruta_archivo), '') <> ''
+            AND (estado IS NULL OR estado NOT IN ('rechazado', 'vencido'))
+            AND (fecha_vencimiento IS NULL OR fecha_vencimiento >= CURDATE())
+          THEN 1
+          ELSE 0
+        END
+      ) AS identidad_anverso,
+      MAX(
+        CASE
+          WHEN tipo_documento = 'documento_identidad'
+            AND lado_documento = 'reverso'
+            AND COALESCE(TRIM(ruta_archivo), '') <> ''
+            AND (estado IS NULL OR estado NOT IN ('rechazado', 'vencido'))
+            AND (fecha_vencimiento IS NULL OR fecha_vencimiento >= CURDATE())
+          THEN 1
+          ELSE 0
+        END
+      ) AS identidad_reverso,
+      SUM(
+        CASE
+          WHEN tipo_documento = 'documento_identidad'
+            AND COALESCE(TRIM(ruta_archivo), '') <> ''
+            AND (estado IS NULL OR estado NOT IN ('rechazado', 'vencido'))
+            AND (fecha_vencimiento IS NULL OR fecha_vencimiento >= CURDATE())
+          THEN 1
+          ELSE 0
+        END
+      ) AS identidad_docs,
+      SUM(
+        CASE
+          WHEN tipo_documento = 'licencia_conducir'
+            AND COALESCE(TRIM(ruta_archivo), '') <> ''
+            AND (estado IS NULL OR estado NOT IN ('rechazado', 'vencido'))
+            AND (fecha_vencimiento IS NULL OR fecha_vencimiento >= CURDATE())
+          THEN 1
+          ELSE 0
+        END
+      ) AS licencia_docs
+     FROM candidatos_documentos
+     WHERE deleted_at IS NULL
+       AND candidato_id IN (?)
+     GROUP BY candidato_id`,
+    [approvedCandidateIds]
+  );
+
+  const eligibilityByCandidateId = new Map();
+  for (const row of docsRows) {
+    eligibilityByCandidateId.set(Number(row.candidato_id), buildCandidateEligibilityFromDocsRow(row));
+  }
+
+  let changed = 0;
+  for (const row of approvedRows) {
+    const candidatoId = Number(row.candidato_id);
+    if (!eligibilityByCandidateId.get(candidatoId)) {
+      const [result] = await connection.query(
+        `UPDATE verificaciones_cuenta
+         SET estado = 'en_revision',
+             motivo_rechazo = NULL,
+             reviewed_by = NULL,
+             reviewed_at = NULL,
+             updated_at = NOW()
+         WHERE id = ?
+           AND estado = 'aprobada'`,
+        [row.id]
+      );
+
+      if (Number(result?.affectedRows || 0) > 0) {
+        changed += 1;
+        await createEvento(
+          {
+            verificacionId: row.id,
+            accion: 'en_revision',
+            estadoAnterior: 'aprobada',
+            estadoNuevo: 'en_revision',
+            actorUsuarioId: null,
+            actorRol: 'system',
+            comentario: 'Cambio automatico: cedula y licencia vencidas o no vigentes.',
+            metadata: { source: 'candidate_docs_expiry_sync', candidato_id: candidatoId }
+          },
+          connection
+        );
+      }
+    }
+  }
+
+  return changed;
+}
+
 async function selectVerificacionByScope({ tipo, empresaId = null, candidatoId = null }, connection = db) {
   await ensureVerificationSchema();
 
   if (!VALID_VERIFICACION_TIPOS.includes(tipo)) return null;
   if (tipo === 'empresa' && !empresaId) return null;
   if (tipo === 'candidato' && !candidatoId) return null;
+
+  if (tipo === 'candidato' && candidatoId) {
+    await syncCandidateApprovedVerificacionesByDocs({ candidateIds: [candidatoId], connection });
+  }
 
   const [rows] = await connection.query(
     `SELECT
@@ -461,8 +600,7 @@ async function listVerificacionEventos(verificacionId, { limit = 20 } = {}) {
 async function getVerificacionById(verificacionId) {
   await ensureVerificationSchema();
 
-  const [rows] = await db.query(
-    `SELECT
+  const selectSql = `SELECT
       v.*,
       EXISTS(
         SELECT 1
@@ -490,11 +628,23 @@ async function getVerificacionById(verificacionId) {
        ON cc.candidato_id = c.id
       AND cc.deleted_at IS NULL
      WHERE v.id = ?
-     LIMIT 1`,
-    [verificacionId]
-  );
+     LIMIT 1`;
 
-  return mapVerificacionRow(rows[0] || null);
+  const [rows] = await db.query(selectSql, [verificacionId]);
+  const current = rows[0] || null;
+  if (!current) return null;
+
+  if (current.cuenta_tipo === 'candidato' && current.candidato_id) {
+    const changed = await syncCandidateApprovedVerificacionesByDocs({
+      candidateIds: [current.candidato_id]
+    });
+    if (changed > 0) {
+      const [freshRows] = await db.query(selectSql, [verificacionId]);
+      return mapVerificacionRow(freshRows[0] || null);
+    }
+  }
+
+  return mapVerificacionRow(current);
 }
 
 async function listVerificaciones({ tipo = null, estado = null, hasSolicitud = null, q = '', page = 1, pageSize = 20 } = {}) {
@@ -559,8 +709,7 @@ async function listVerificaciones({ tipo = null, estado = null, hasSolicitud = n
     params
   );
 
-  const [rows] = await db.query(
-    `SELECT
+  const listSql = `SELECT
       v.*,
       EXISTS(
         SELECT 1
@@ -599,9 +748,23 @@ async function listVerificaciones({ tipo = null, estado = null, hasSolicitud = n
          ELSE 7
        END ASC,
        v.updated_at DESC
-     LIMIT ? OFFSET ?`,
-    [...params, safePageSize, offset]
-  );
+     LIMIT ? OFFSET ?`;
+  const listParams = [...params, safePageSize, offset];
+
+  let [rows] = await db.query(listSql, listParams);
+  const approvedCandidateIdsOnPage = [...new Set(
+    rows
+      .filter((row) => row.cuenta_tipo === 'candidato' && row.estado === 'aprobada' && row.candidato_id)
+      .map((row) => Number(row.candidato_id))
+      .filter((id) => Number.isInteger(id) && id > 0)
+  )];
+
+  if (approvedCandidateIdsOnPage.length) {
+    const changed = await syncCandidateApprovedVerificacionesByDocs({ candidateIds: approvedCandidateIdsOnPage });
+    if (changed > 0) {
+      [rows] = await db.query(listSql, listParams);
+    }
+  }
 
   return {
     items: rows.map((row) => mapVerificacionRow(row)),

@@ -1954,6 +1954,7 @@ async function hasCandidateVerificationSupportDocuments(candidatoId) {
             AND lado_documento = 'anverso'
             AND COALESCE(TRIM(ruta_archivo), '') <> ''
             AND (estado IS NULL OR estado NOT IN ('rechazado', 'vencido'))
+            AND (fecha_vencimiento IS NULL OR fecha_vencimiento >= CURDATE())
           THEN 1
           ELSE 0
         END
@@ -1964,6 +1965,7 @@ async function hasCandidateVerificationSupportDocuments(candidatoId) {
             AND lado_documento = 'reverso'
             AND COALESCE(TRIM(ruta_archivo), '') <> ''
             AND (estado IS NULL OR estado NOT IN ('rechazado', 'vencido'))
+            AND (fecha_vencimiento IS NULL OR fecha_vencimiento >= CURDATE())
           THEN 1
           ELSE 0
         END
@@ -1973,6 +1975,7 @@ async function hasCandidateVerificationSupportDocuments(candidatoId) {
           WHEN tipo_documento = 'documento_identidad'
             AND COALESCE(TRIM(ruta_archivo), '') <> ''
             AND (estado IS NULL OR estado NOT IN ('rechazado', 'vencido'))
+            AND (fecha_vencimiento IS NULL OR fecha_vencimiento >= CURDATE())
           THEN 1
           ELSE 0
         END
@@ -1982,6 +1985,7 @@ async function hasCandidateVerificationSupportDocuments(candidatoId) {
           WHEN tipo_documento = 'licencia_conducir'
             AND COALESCE(TRIM(ruta_archivo), '') <> ''
             AND (estado IS NULL OR estado NOT IN ('rechazado', 'vencido'))
+            AND (fecha_vencimiento IS NULL OR fecha_vencimiento >= CURDATE())
           THEN 1
           ELSE 0
         END
