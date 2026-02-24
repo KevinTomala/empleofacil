@@ -1267,9 +1267,9 @@ async function getAdemyMapeoRows({ q = null, estado = null, activoFilter = null 
   }
 
   if (q) {
-    where.push('(m.nombre_origen LIKE ? OR CAST(m.origen_empresa_id AS CHAR) LIKE ? OR e.nombre LIKE ? OR e.ruc LIKE ?)');
+    where.push('(m.nombre_origen LIKE ? OR CAST(m.origen_empresa_id AS CHAR) LIKE ? OR e.nombre LIKE ? OR e.ruc LIKE ? OR ce.empresa_nombre LIKE ?)');
     const like = `%${q}%`;
-    params.push(like, like, like, like);
+    params.push(like, like, like, like, like);
   }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
@@ -1287,6 +1287,7 @@ async function getAdemyMapeoRows({ q = null, estado = null, activoFilter = null 
        e.nombre AS empresa_local_nombre,
        e.ruc AS empresa_local_ruc,
        e.email AS empresa_local_email,
+       GROUP_CONCAT(DISTINCT NULLIF(TRIM(ce.empresa_nombre), '') ORDER BY ce.updated_at DESC SEPARATOR ' | ') AS nombres_origen_detectados,
        COUNT(ce.id) AS experiencias_total,
        SUM(CASE WHEN ce.empresa_id IS NULL THEN 1 ELSE 0 END) AS experiencias_sin_vinculo
      FROM integracion_ademy_empresas_empleofacil m
@@ -1519,11 +1520,12 @@ async function vincularEmpresaOrigen(req, res) {
         const [updateResult] = await conn.query(
           `UPDATE candidatos_experiencia
            SET empresa_id = ?,
+               empresa_nombre = ?,
                updated_at = NOW()
            WHERE empresa_origen = ?
              AND empresa_origen_id = ?
              AND deleted_at IS NULL`,
-          [empresaId, ORIGEN, origenEmpresaId]
+          [empresaId, empresaRows[0].nombre, ORIGEN, origenEmpresaId]
         );
         experienciasActualizadas = Number(updateResult?.affectedRows || 0);
       } catch (error) {

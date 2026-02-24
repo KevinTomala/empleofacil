@@ -51,13 +51,14 @@ async function linkExperienciasByEmpresaName(empresaId, empresaNombre, connectio
     const [result] = await connection.query(
       `UPDATE candidatos_experiencia ce
        SET ce.empresa_id = ?,
+           ce.empresa_nombre = ?,
            ce.updated_at = NOW()
        WHERE ce.deleted_at IS NULL
          AND ce.empresa_id IS NULL
          AND ce.empresa_origen IS NULL
          AND ce.empresa_nombre IS NOT NULL
          AND LOWER(TRIM(ce.empresa_nombre)) = LOWER(TRIM(?))`,
-      [safeEmpresaId, safeNombre]
+      [safeEmpresaId, safeNombre, safeNombre]
     );
     return Number(result?.affectedRows || 0);
   } catch (error) {

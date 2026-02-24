@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import './admin.css'
-import { Building2, Link2, Link2Off, RefreshCw, Save, Search, Shuffle } from 'lucide-react'
+import { Building2, Link2, Link2Off, RefreshCw, Search, Shuffle } from 'lucide-react'
 import Header from '../../components/Header'
 import { showToast } from '../../utils/showToast'
 import {
-  actualizarNombreEmpresaOrigen,
   desvincularEmpresaOrigen,
   descartarEmpresaOrigen,
   getIntegracionEmpresasErrorMessage,
@@ -55,28 +54,38 @@ function getOrigenMeta(item) {
   return 'Origen: N/D'
 }
 
+function hasDetectedNames(item) {
+  return !isManualSource(item) && String(item?.nombres_origen_detectados || '').trim() !== ''
+}
+
 export default function AdminEmpresasMapeo() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [estado, setEstado] = useState('pendiente')
+  const [estado, setEstado] = useState('')
   const [searchText, setSearchText] = useState('')
   const [searchApplied, setSearchApplied] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize] = useState(25)
   const [total, setTotal] = useState(0)
   const [selectedOrigenRef, setSelectedOrigenRef] = useState(null)
+  const [selectedOrigenRefs, setSelectedOrigenRefs] = useState([])
   const [empresaQuery, setEmpresaQuery] = useState('')
   const [empresasLocales, setEmpresasLocales] = useState([])
   const [empresasLoading, setEmpresasLoading] = useState(false)
   const [selectedEmpresaId, setSelectedEmpresaId] = useState('')
-  const [nombreOrigenInput, setNombreOrigenInput] = useState('')
   const [confirmAction, setConfirmAction] = useState(null)
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const selectedItem = useMemo(
     () => items.find((item) => getOrigenRef(item) === selectedOrigenRef) || null,
     [items, selectedOrigenRef]
+  )
+  const selectedCount = selectedOrigenRefs.length
+  const allVisibleRefs = useMemo(() => items.map((item) => getOrigenRef(item)).filter(Boolean), [items])
+  const allVisibleSelected = useMemo(
+    () => allVisibleRefs.length > 0 && allVisibleRefs.every((ref) => selectedOrigenRefs.includes(ref)),
+    [allVisibleRefs, selectedOrigenRefs]
   )
 
   const resumen = useMemo(() => {
@@ -100,6 +109,10 @@ export default function AdminEmpresasMapeo() {
       const nextItems = Array.isArray(data?.items) ? data.items : []
       setItems(nextItems)
       setTotal(Number(data?.total || 0))
+      setSelectedOrigenRefs((prev) => {
+        const allowed = new Set(nextItems.map((item) => getOrigenRef(item)).filter(Boolean))
+        return prev.filter((ref) => allowed.has(ref))
+      })
       if (!nextItems.length) {
         setSelectedOrigenRef(null)
       } else if (!nextItems.some((item) => getOrigenRef(item) === selectedOrigenRef)) {
@@ -145,16 +158,10 @@ export default function AdminEmpresasMapeo() {
 
   useEffect(() => {
     if (!selectedItem) {
-      setEmpresaQuery('')
-      setEmpresasLocales([])
       setSelectedEmpresaId('')
       return
     }
-    const initial = selectedItem?.empresa_local_nombre || selectedItem?.nombre_origen || ''
-    setEmpresaQuery(initial)
     setSelectedEmpresaId(selectedItem?.empresa_id ? String(selectedItem.empresa_id) : '')
-    setNombreOrigenInput(selectedItem?.nombre_origen || '')
-    loadEmpresasLocales(initial)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedItem?.origen_ref, selectedItem?.origen_empresa_id])
 
@@ -167,54 +174,73 @@ export default function AdminEmpresasMapeo() {
   const handleSelectItem = (item) => {
     setSelectedOrigenRef(getOrigenRef(item))
     setSelectedEmpresaId(item?.empresa_id ? String(item.empresa_id) : '')
-    setNombreOrigenInput(item?.nombre_origen || '')
   }
 
-  const handleGuardarNombreOrigen = async () => {
-    if (!selectedItem) return
-    const nombre = String(nombreOrigenInput || '').trim()
-    if (!nombre) {
-      showToast({ type: 'warning', message: 'Ingresa el nombre de empresa origen.' })
+  const toggleItemSelection = (itemRef) => {
+    if (!itemRef) return
+    setSelectedOrigenRefs((prev) => (
+      prev.includes(itemRef)
+        ? prev.filter((ref) => ref !== itemRef)
+        : [...prev, itemRef]
+    ))
+  }
+
+  const toggleSelectAllVisible = () => {
+    if (!allVisibleRefs.length) return
+    if (allVisibleSelected) {
+      setSelectedOrigenRefs([])
       return
     }
-
-    try {
-      setSaving(true)
-      const response = await actualizarNombreEmpresaOrigen(getOrigenRef(selectedItem), {
-        nombre_origen: nombre,
-      })
-      showToast({
-        type: 'success',
-        message: `Nombre guardado. Experiencias actualizadas: ${response?.experiencias_actualizadas ?? 0}.`,
-      })
-      await loadMapeo()
-    } catch (error) {
-      showToast({
-        type: 'error',
-        message: getIntegracionEmpresasErrorMessage(error, 'No se pudo guardar el nombre de origen.'),
-      })
-    } finally {
-      setSaving(false)
-    }
+    setSelectedOrigenRefs(allVisibleRefs)
   }
 
   const handleVincular = async () => {
-    if (!selectedItem || !selectedEmpresaId) {
+    const refs = selectedCount > 0
+      ? selectedOrigenRefs
+      : (selectedItem ? [getOrigenRef(selectedItem)] : [])
+    if (!refs.length || !selectedEmpresaId) {
       showToast({ type: 'warning', message: 'Selecciona una empresa local antes de vincular.' })
       return
     }
 
     try {
       setSaving(true)
-      const nombre = String(nombreOrigenInput || '').trim()
-      const response = await vincularEmpresaOrigen(getOrigenRef(selectedItem), {
-        empresa_id: Number(selectedEmpresaId),
-        nombre_origen: nombre || selectedItem.nombre_origen || null,
-      })
-      showToast({
-        type: 'success',
-        message: `Vinculada. Experiencias actualizadas: ${response?.experiencias_actualizadas ?? 0}.`,
-      })
+      let ok = 0
+      let failed = 0
+      let experienciasActualizadas = 0
+
+      for (const ref of refs) {
+        const item = items.find((row) => getOrigenRef(row) === ref)
+        try {
+          const response = await vincularEmpresaOrigen(ref, {
+            empresa_id: Number(selectedEmpresaId),
+            nombre_origen: item?.nombre_origen || null,
+          })
+          ok += 1
+          experienciasActualizadas += Number(response?.experiencias_actualizadas || 0)
+        } catch {
+          failed += 1
+        }
+      }
+
+      if (failed > 0 && ok > 0) {
+        showToast({
+          type: 'warning',
+          message: `Vinculadas ${ok} empresas. Fallaron ${failed}. Experiencias actualizadas: ${experienciasActualizadas}.`,
+        })
+      } else if (failed > 0) {
+        showToast({
+          type: 'error',
+          message: `No se pudo vincular ninguna empresa (${failed} errores).`,
+        })
+      } else {
+        showToast({
+          type: 'success',
+          message: `Vinculadas ${ok} empresas. Experiencias actualizadas: ${experienciasActualizadas}.`,
+        })
+      }
+
+      setSelectedOrigenRefs([])
       await loadMapeo()
     } catch (error) {
       showToast({
@@ -235,9 +261,8 @@ export default function AdminEmpresasMapeo() {
 
     try {
       setSaving(true)
-      const nombre = String(nombreOrigenInput || '').trim()
       const response = await descartarEmpresaOrigen(getOrigenRef(selectedItem), {
-        nombre_origen: nombre || selectedItem.nombre_origen || null,
+        nombre_origen: selectedItem.nombre_origen || null,
       })
       showToast({
         type: 'success',
@@ -341,13 +366,15 @@ export default function AdminEmpresasMapeo() {
         <section className="admin-card p-4">
           <form className="grid lg:grid-cols-[1.1fr_1fr] gap-3" onSubmit={handleSearchSubmit}>
             <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 text-sm text-foreground/60">
-              <Search className="w-4 h-4" />
               <input
                 className="flex-1 bg-transparent outline-none text-sm"
                 placeholder="Buscar por nombre origen, empresa local o ID origen"
                 value={searchText}
                 onChange={(event) => setSearchText(event.target.value)}
               />
+              <button type="submit" className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-100 text-foreground/70" aria-label="Buscar">
+                <Search className="w-4 h-4" />
+              </button>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <select
@@ -363,9 +390,6 @@ export default function AdminEmpresasMapeo() {
                 <option value="vinculada">Vinculada</option>
                 <option value="descartada">Descartada</option>
               </select>
-              <button className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70" type="submit">
-                Buscar
-              </button>
               <button
                 className="px-3 py-2 bg-primary text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1"
                 type="button"
@@ -386,6 +410,18 @@ export default function AdminEmpresasMapeo() {
                 {total} total
               </p>
             </div>
+            <div className="flex items-center justify-between gap-2 text-xs text-foreground/70">
+              <label className="inline-flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 accent-primary"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectAllVisible}
+                />
+                Seleccionar todos (pagina)
+              </label>
+              <span>{selectedCount} seleccionados</span>
+            </div>
             {loading ? <p className="text-sm text-foreground/70">Cargando mapeos...</p> : null}
             {!loading && !items.length ? (
               <p className="text-sm text-foreground/70">No hay registros para el filtro seleccionado.</p>
@@ -401,9 +437,21 @@ export default function AdminEmpresasMapeo() {
                   type="button"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-sm">{getOrigenDisplayName(item)}</p>
-                      <p className="text-xs text-foreground/60 mt-1">{getOrigenMeta(item)}</p>
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        className="mt-1 w-4 h-4 accent-primary"
+                        checked={selectedOrigenRefs.includes(getOrigenRef(item))}
+                        onChange={(event) => {
+                          event.stopPropagation()
+                          toggleItemSelection(getOrigenRef(item))
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                      />
+                      <div>
+                        <p className="font-semibold text-sm">{getOrigenDisplayName(item)}</p>
+                        <p className="text-xs text-foreground/60 mt-1">{getOrigenMeta(item)}</p>
+                      </div>
                     </div>
                     <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_STYLES[item.estado] || STATUS_STYLES.pendiente}`}>
                       {formatStatus(item.estado)}
@@ -412,6 +460,9 @@ export default function AdminEmpresasMapeo() {
                   <div className="mt-2 text-xs text-foreground/60">
                     <p>Experiencias: {Number(item.experiencias_total || 0)}</p>
                     <p>Sin vinculo local: {Number(item.experiencias_sin_vinculo || 0)}</p>
+                    {hasDetectedNames(item) ? (
+                      <p className="truncate">Detectado en experiencias: {item.nombres_origen_detectados}</p>
+                    ) : null}
                     <p>Ultima actualizacion: {formatDateShort(item.updated_at)}</p>
                   </div>
                 </button>
@@ -444,65 +495,29 @@ export default function AdminEmpresasMapeo() {
               <p className="text-sm text-foreground/70">Selecciona una empresa origen para gestionar su vinculo.</p>
             ) : (
               <>
-                <div className="border border-border rounded-xl p-4 space-y-1 text-sm">
-                  <p className="font-semibold">{getOrigenDisplayName(selectedItem)}</p>
-                  <p className="text-foreground/60">{getOrigenMeta(selectedItem)}</p>
-                  <p className="text-foreground/60">
-                    Vinculo actual: {selectedItem.empresa_local_nombre || 'Sin empresa local'}
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs text-foreground/60">Nombre empresa origen</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-white text-foreground"
-                      placeholder={getOrigenDisplayName(selectedItem)}
-                      value={nombreOrigenInput}
-                      onChange={(event) => setNombreOrigenInput(event.target.value)}
-                    />
-                    <button
-                      className="px-3 py-2 border border-border rounded-lg text-xs inline-flex items-center gap-1 disabled:opacity-50"
-                      type="button"
-                      onClick={handleGuardarNombreOrigen}
-                      disabled={saving}
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      Guardar nombre
-                    </button>
-                  </div>
-                </div>
-
                 <div className="space-y-2">
                   <label className="text-xs text-foreground/60">Buscar empresa local</label>
                   <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 text-sm text-foreground/60">
-                    <Search className="w-4 h-4" />
                     <input
                       className="flex-1 bg-transparent outline-none text-sm"
                       placeholder="Nombre, RUC o email"
                       value={empresaQuery}
                       onChange={(event) => setEmpresaQuery(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          loadEmpresasLocales(empresaQuery)
+                        }
+                      }}
                     />
-                  </div>
-                  <div className="flex gap-2">
                     <button
-                      className="px-3 py-2 border border-border rounded-lg text-xs"
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-100 text-foreground/70"
                       type="button"
                       onClick={() => loadEmpresasLocales(empresaQuery)}
                       disabled={empresasLoading}
+                      aria-label="Buscar empresa local"
                     >
-                      {empresasLoading ? 'Buscando...' : 'Buscar'}
-                    </button>
-                    <button
-                      className="px-3 py-2 border border-border rounded-lg text-xs"
-                      type="button"
-                      onClick={() => {
-                        setEmpresaQuery(selectedItem.nombre_origen || '')
-                        loadEmpresasLocales(selectedItem.nombre_origen || '')
-                      }}
-                      disabled={empresasLoading}
-                    >
-                      Sugerir por nombre origen
+                      <Search className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -543,7 +558,7 @@ export default function AdminEmpresasMapeo() {
                     disabled={saving || !selectedEmpresaId}
                   >
                     <Link2 className="w-4 h-4" />
-                    Vincular
+                    {selectedCount > 0 ? `Vincular seleccionados (${selectedCount})` : 'Vincular'}
                   </button>
                   {!isManualSource(selectedItem) && String(selectedItem.estado || '') === 'vinculada' ? (
                     <button
