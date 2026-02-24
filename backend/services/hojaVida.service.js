@@ -2,6 +2,7 @@ const db = require('../db');
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 function toBool(value) {
   return value === 1 || value === true;
@@ -52,6 +53,63 @@ function safeReadDir(dir) {
   } catch (_err) {
     return [];
   }
+}
+
+function guessMimeTypeFromPath(filePath) {
+  const ext = String(path.extname(filePath || '')).toLowerCase();
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  if (ext === '.png') return 'image/png';
+  if (ext === '.webp') return 'image/webp';
+  if (ext === '.gif') return 'image/gif';
+  if (ext === '.bmp') return 'image/bmp';
+  return 'application/octet-stream';
+}
+
+function buildDataUrlFromFile(filePath, tipoMime = null) {
+  try {
+    if (!filePath || !fs.existsSync(filePath)) return null;
+    const buffer = fs.readFileSync(filePath);
+    if (!buffer?.length) return null;
+    const mimeType = String(tipoMime || '').trim() || guessMimeTypeFromPath(filePath);
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function resolveFotoSource(rutaArchivo, tipoMime = null) {
+  const rawPath = String(rutaArchivo || '').trim();
+  if (!rawPath) return null;
+
+  if (rawPath.startsWith('data:image/')) {
+    return rawPath;
+  }
+
+  if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
+    return rawPath;
+  }
+
+  const normalized = rawPath.replace(/\\/g, '/');
+  const localRelative = normalized.startsWith('/uploads/')
+    ? normalized.slice(1)
+    : normalized.startsWith('uploads/')
+      ? normalized
+      : null;
+
+  if (localRelative) {
+    const absolutePath = path.resolve(__dirname, '..', localRelative);
+    const dataUrl = buildDataUrlFromFile(absolutePath, tipoMime);
+    if (dataUrl) return dataUrl;
+    if (fs.existsSync(absolutePath)) return pathToFileURL(absolutePath).href;
+  }
+
+  if (path.isAbsolute(rawPath) && fs.existsSync(rawPath)) {
+    const dataUrl = buildDataUrlFromFile(rawPath, tipoMime);
+    if (dataUrl) return dataUrl;
+    return pathToFileURL(rawPath).href;
+  }
+
+  return null;
 }
 
 async function obtenerHojaVidaPorEstudianteId(estudianteId) {
@@ -226,7 +284,7 @@ async function generarHojaVidaPdfPorEstudianteId(estudianteId) {
   const formaciones = hojaVida.formaciones || [];
   const documentos = hojaVida.documentos || [];
   const fotoDoc = documentos.find((doc) => doc.tipo_documento === 'foto' && doc.ruta_archivo);
-  const fotoSrc = fotoDoc ? `file://${fotoDoc.ruta_archivo}` : null;
+  const fotoSrc = fotoDoc ? resolveFotoSource(fotoDoc.ruta_archivo, fotoDoc.tipo_mime) : null;
 
   const experienciaHtml = experiencias.length
     ? experiencias
@@ -441,7 +499,7 @@ async function generarHojaVidaPdfPorEstudianteId(estudianteId) {
 
   return {
     buffer,
-    fileName: `hoja_vida_${safeName || estudianteId}.pdf`
+    fileName: `${safeName || estudianteId}.pdf`
   };
 }
 

@@ -281,6 +281,9 @@ EmpleoFacil API
 - Query params:
   - `page` (default `1`)
   - `page_size` (default `20`, max `100`)
+  - `q` (titulo de vacante, empresa o ubicacion)
+  - `estado` (`nuevo|en_revision|entrevista|oferta|rechazado`)
+  - `posted` (`hoy|7d|30d|90d`)
 - Respuesta `200`:
 ```json
 {
@@ -301,7 +304,75 @@ EmpleoFacil API
 }
 ```
 - Errores:
+  - `400 INVALID_PAYLOAD` (`details=estado|posted`)
   - `404 CANDIDATO_NOT_FOUND`
+  - `500 POSTULACIONES_FETCH_FAILED`
+
+### GET `/api/postulaciones/mias/resumen`
+- Auth: requerido.
+- Roles: `candidato`.
+- Query params:
+  - `q` (titulo de vacante, empresa o ubicacion)
+  - `posted` (`hoy|7d|30d|90d`)
+- Respuesta `200`:
+```json
+{
+  "total": 12,
+  "by_estado": {
+    "nuevo": 4,
+    "en_revision": 3,
+    "entrevista": 2,
+    "oferta": 1,
+    "rechazado": 2
+  },
+  "en_proceso": 7,
+  "tasa_activa": 83.33
+}
+```
+- Errores:
+  - `400 INVALID_PAYLOAD` (`details=posted`)
+  - `404 CANDIDATO_NOT_FOUND`
+  - `500 POSTULACIONES_FETCH_FAILED`
+
+### GET `/api/postulaciones/mias/:postulacionId`
+- Auth: requerido.
+- Roles: `candidato`.
+- Params:
+  - `postulacionId` (numero positivo)
+- Respuesta `200`:
+```json
+{
+  "id": 103,
+  "vacante_id": 21,
+  "empresa_id": 4,
+  "estado_proceso": "en_revision",
+  "fecha_postulacion": "2026-02-23T13:00:00.000Z",
+  "ultima_actividad": "2026-02-24T09:10:00.000Z",
+  "origen": "portal_empleo",
+  "vacante": {
+    "id": 21,
+    "titulo": "Guardia de seguridad",
+    "area": "Operaciones",
+    "provincia": "Guayas",
+    "ciudad": "Guayaquil",
+    "modalidad": "presencial",
+    "tipo_contrato": "tiempo_completo",
+    "descripcion": "Descripcion completa",
+    "requisitos": "Requisitos completos",
+    "estado": "activa",
+    "fecha_publicacion": "2026-02-20T11:00:00.000Z",
+    "fecha_cierre": "2026-03-20"
+  },
+  "empresa": {
+    "id": 4,
+    "nombre": "ADEMY S.A.S."
+  }
+}
+```
+- Errores:
+  - `400 INVALID_PAYLOAD` (`details=postulacionId`)
+  - `404 CANDIDATO_NOT_FOUND`
+  - `404 POSTULACION_NOT_FOUND`
   - `500 POSTULACIONES_FETCH_FAILED`
 
 ### GET `/api/postulaciones/empresa`
@@ -1204,7 +1275,10 @@ Base: `/api/verificaciones`
 
 ### GET `/api/hoja-vida/:estudianteId`
 - Auth: requerido.
-- Roles: `administrador`, `superadmin`, `empresa`.
+- Roles: `administrador`, `superadmin`, `empresa`, `candidato`.
+- Regla de ownership:
+  - Si el rol es `candidato`, solo puede consultar su propio `:estudianteId`.
+  - Si intenta consultar otro candidato, responde `403 FORBIDDEN`.
 - Respuesta `200`: consolidado de perfil, contacto, domicilio, salud, logistica, educacion, experiencia, formaciones, documentos.
 - Errores:
   - `400 INVALID_ESTUDIANTE_ID`
@@ -1213,7 +1287,10 @@ Base: `/api/verificaciones`
 
 ### GET `/api/hoja-vida/:estudianteId/pdf`
 - Auth: requerido.
-- Roles: `administrador`, `superadmin`, `empresa`.
+- Roles: `administrador`, `superadmin`, `empresa`, `candidato`.
+- Regla de ownership:
+  - Si el rol es `candidato`, solo puede consultar su propio `:estudianteId`.
+  - Si intenta consultar otro candidato, responde `403 FORBIDDEN`.
 - Respuesta `200`:
   - `Content-Type: application/pdf`
   - `Content-Disposition: inline; filename="hoja_vida_<nombre>.pdf"`

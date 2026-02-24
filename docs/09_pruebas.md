@@ -21,7 +21,11 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 
 ### 4) Hoja de vida
 - `GET /api/hoja-vida/:id` con id invalido debe devolver `400 INVALID_ESTUDIANTE_ID`.
+- `GET /api/hoja-vida/:id` con rol `candidato` y su propio id debe devolver `200`.
+- `GET /api/hoja-vida/:id` con rol `candidato` y otro id debe devolver `403 FORBIDDEN`.
 - `GET /api/hoja-vida/:id/pdf` con candidato existente debe devolver `application/pdf`.
+- `GET /api/hoja-vida/:id/pdf` con rol `candidato` y su propio id debe devolver `200`.
+- `GET /api/hoja-vida/:id/pdf` con rol `candidato` y otro id debe devolver `403 FORBIDDEN`.
 - `GET /api/hoja-vida/:id` no debe incluir `perfil.estado_academico`.
 - `GET /api/hoja-vida/:id/pdf` no debe renderizar la linea `Estado academico`.
 
@@ -94,6 +98,13 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - Repetir `POST /api/postulaciones` con mismo `vacante_id` debe devolver `409 POSTULACION_DUPLICADA`.
 - `POST /api/postulaciones` sobre vacante `pausada|cerrada` debe devolver `400 VACANTE_NOT_ACTIVE`.
 - `GET /api/postulaciones/mias` debe devolver historial del candidato autenticado.
+- `GET /api/postulaciones/mias?q=guardia` debe filtrar por termino esperado.
+- `GET /api/postulaciones/mias?estado=entrevista` debe filtrar por estado.
+- `GET /api/postulaciones/mias?posted=30d` debe filtrar por fecha de postulacion.
+- `GET /api/postulaciones/mias?estado=invalido` debe responder `400 INVALID_PAYLOAD` con `details=estado`.
+- `GET /api/postulaciones/mias?posted=invalido` debe responder `400 INVALID_PAYLOAD` con `details=posted`.
+- `GET /api/postulaciones/mias/resumen` debe devolver totales consistentes con el historial filtrado (`q`, `posted`).
+- `GET /api/postulaciones/mias/:id` debe devolver `200` para postulacion propia y `404 POSTULACION_NOT_FOUND` para ajena/inexistente.
 - `GET /api/postulaciones/empresa` debe devolver solo postulaciones de vacantes de su empresa.
 
 ## Checklist de regresion rapida
@@ -159,6 +170,10 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - En `Externa`, solo se muestran campos del contrato limpio (`categoria_formacion`, `subtipo_formacion`, `institucion`, `nombre_programa`, `titulo_obtenido`, `fecha_aprobacion`, `fecha_emision`, `fecha_vencimiento`).
 - En `Externa`, el campo `Institucion` muestra sugerencias del catalogo (`/api/perfil/centros-capacitacion`) y permite texto libre.
 - El dashboard de perfil actualiza progreso total al completar secciones de Fase 2.
+- En `/app/candidate/perfil` aparecen botones `Previsualizar curriculum` y `Descargar PDF`.
+- `Previsualizar curriculum` muestra una vista HTML/CSS del curriculum en el panel derecho (sin iframe PDF).
+- `Descargar PDF` descarga archivo con nombre enviado por `Content-Disposition` (o fallback).
+- Si no se hace clic en `Previsualizar curriculum`, el panel derecho mantiene la vista normal de secciones.
 - El drawer de empresa muestra `idiomas`, `experiencia`, `formacion` y `documentos` del candidato.
 
 ### 7) Perfil empresa (frontend)
@@ -208,9 +223,11 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
   - boton `Postular ahora` crea postulacion real,
   - maneja feedback para duplicado y vacante no activa.
 - `/app/candidate/postulaciones`:
-  - carga datos de `/api/postulaciones/mias`,
-  - muestra vacante, empresa, fecha y estado de proceso,
-  - maneja estado vacio, error y paginacion.
+  - carga lista de `/api/postulaciones/mias` con filtros `q`, `estado`, `posted`,
+  - carga resumen de metricas desde `/api/postulaciones/mias/resumen`,
+  - usa cards seleccionables con panel de detalle (desktop) y modal de detalle (mobile),
+  - carga detalle desde `/api/postulaciones/mias/:postulacionId`,
+  - maneja estado vacio general, vacio por filtro, error de lista, error de detalle y paginacion.
 - `/app/company/postulaciones`:
   - se mantiene como vista legacy de transicion (no flujo principal).
 - Validacion final:

@@ -7,14 +7,14 @@ const router = express.Router();
 router.get(
   '/:estudianteId/pdf',
   authRequired,
-  requireRole(['administrador', 'superadmin', 'empresa']),
+  requireRole(['administrador', 'superadmin', 'empresa', 'candidato']),
   getHojaVidaPdf
 );
 
 router.get(
   '/:estudianteId',
   authRequired,
-  requireRole(['administrador', 'superadmin', 'empresa']),
+  requireRole(['administrador', 'superadmin', 'empresa', 'candidato']),
   getHojaVida
 );
 

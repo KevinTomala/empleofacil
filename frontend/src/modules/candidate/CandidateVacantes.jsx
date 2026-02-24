@@ -62,6 +62,7 @@ export default function CandidateVacantes() {
   const [allVacantes, setAllVacantes] = useState([])
   const [loading, setLoading] = useState(true)
   const [postingId, setPostingId] = useState(null)
+  const [selectedVacante, setSelectedVacante] = useState(null)
   const [error, setError] = useState('')
   const [q, setQ] = useState('')
   const [showFilters, setShowFilters] = useState(false)
@@ -635,21 +636,30 @@ export default function CandidateVacantes() {
                     </span>
                   </div>
 
-                  <div className="mt-1.5 pt-3 border-t border-border/50 flex flex-wrap items-center justify-between gap-4">
+                  <div className="mt-1.5 pt-3 border-t border-border/50 flex flex-wrap items-center justify-between gap-2">
                     <div className="text-[11px] text-foreground/50 font-medium">
                       Publicada: {String(item.fecha_publicacion || '').slice(0, 10) || 'N/D'}
                     </div>
-                    <button
-                      className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${item.postulado
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed'
-                        : 'bg-primary/80 text-white hover:bg-primary hover:shadow-lg'
-                        }`}
-                      type="button"
-                      disabled={Boolean(item.postulado) || postingId === item.id}
-                      onClick={() => postular(item.id)}
-                    >
-                      {item.postulado ? 'Ya postulado ✔' : (postingId === item.id ? 'Postulando...' : 'Postular ahora')}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-border text-foreground/70 hover:bg-slate-50 transition-colors"
+                        type="button"
+                        onClick={() => setSelectedVacante(item)}
+                      >
+                        Ver detalles
+                      </button>
+                      <button
+                        className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${item.postulado
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed'
+                          : 'bg-primary/80 text-white hover:bg-primary hover:shadow-lg'
+                          }`}
+                        type="button"
+                        disabled={Boolean(item.postulado) || postingId === item.id}
+                        onClick={() => postular(item.id)}
+                      >
+                        {item.postulado ? 'Ya postulado ✔' : (postingId === item.id ? 'Postulando...' : 'Postular ahora')}
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -682,6 +692,134 @@ export default function CandidateVacantes() {
           </div>
         </section>
       </main>
+
+      {selectedVacante && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setSelectedVacante(null) }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setSelectedVacante(null) }}
+          tabIndex={-1}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-start justify-between gap-4 p-6 border-b border-border">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[11px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-primary/10 text-primary uppercase">
+                    {selectedVacante.modalidad}
+                  </span>
+                  <span className="text-[11px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase">
+                    {selectedVacante.tipo_contrato?.replace(/_/g, ' ')}
+                  </span>
+                  {selectedVacante.postulado ? (
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Ya postulado ✔</span>
+                  ) : null}
+                </div>
+                <h2 className="font-heading font-bold text-xl text-foreground leading-tight">{selectedVacante.titulo}</h2>
+                <p className="text-sm font-medium text-foreground/70 mt-0.5">{selectedVacante.empresa_nombre || 'Empresa'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedVacante(null)}
+                className="text-foreground/40 hover:text-foreground transition-colors p-1 rounded-lg hover:bg-slate-100 flex-shrink-0 mt-0.5"
+                aria-label="Cerrar"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Detail fields */}
+            <div className="p-6 space-y-5 flex-1">
+              {/* Meta info row */}
+              <div className="flex flex-wrap gap-4 text-xs text-foreground/70">
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  {selectedVacante.provincia || 'N/D'}, {selectedVacante.ciudad || 'N/D'}
+                </span>
+                {selectedVacante.area && (
+                  <span className="flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    {selectedVacante.area}
+                  </span>
+                )}
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Publicada: {String(selectedVacante.fecha_publicacion || '').slice(0, 10) || 'N/D'}
+                </span>
+                {selectedVacante.fecha_cierre && (
+                  <span className="flex items-center gap-1.5 text-amber-600 font-medium">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Cierra: {String(selectedVacante.fecha_cierre || '').slice(0, 10)}
+                  </span>
+                )}
+              </div>
+
+              {selectedVacante.descripcion && (
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-2">Descripción</h3>
+                  <p className="text-sm text-foreground/75 whitespace-pre-line leading-relaxed">{selectedVacante.descripcion}</p>
+                </div>
+              )}
+
+              {selectedVacante.requisitos && (
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-2">Requisitos</h3>
+                  <p className="text-sm text-foreground/75 whitespace-pre-line leading-relaxed">{selectedVacante.requisitos}</p>
+                </div>
+              )}
+
+              {!selectedVacante.descripcion && !selectedVacante.requisitos && (
+                <p className="text-sm text-foreground/50 italic">El empleador no añadió descripción ni requisitos.
+                </p>
+              )}
+            </div>
+
+            {/* Modal footer */}
+            <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setSelectedVacante(null)}
+                className="px-4 py-2 text-sm rounded-xl border border-border text-foreground/70 hover:bg-slate-50 transition-colors"
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(selectedVacante.postulado) || postingId === selectedVacante.id}
+                onClick={async () => {
+                  await postular(selectedVacante.id)
+                  setSelectedVacante(prev => prev ? { ...prev, postulado: 1 } : prev)
+                }}
+                className={`px-5 py-2 text-sm font-semibold rounded-xl transition-all duration-200 ${selectedVacante.postulado
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed'
+                  : 'bg-primary text-white hover:bg-primary/90 hover:shadow-md'
+                  }`}
+              >
+                {selectedVacante.postulado
+                  ? 'Ya postulado ✔'
+                  : postingId === selectedVacante.id
+                    ? 'Postulando...'
+                    : 'Postular ahora'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

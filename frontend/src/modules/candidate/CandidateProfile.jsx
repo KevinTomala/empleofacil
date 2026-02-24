@@ -1,8 +1,8 @@
-import { AlertCircle, CheckCircle2, Lock } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Download, Eye, Lock } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Header from '../../components/Header'
-import { getMyPerfil, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
+import { getMyHojaVida, getMyHojaVidaPdf, getMyPerfil, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
 import { buildProfileSections, getNextPendingRoute, getProfileProgressMetrics } from './profileSections'
 
 export default function CandidateProfile() {
@@ -11,6 +11,12 @@ export default function CandidateProfile() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [photoError, setPhotoError] = useState(false)
+  const [loadingPdf, setLoadingPdf] = useState(false)
+  const [pdfError, setPdfError] = useState('')
+  const [pdfPreviewInlineOpen, setPdfPreviewInlineOpen] = useState(false)
+  const [pdfBlobCache, setPdfBlobCache] = useState(null)
+  const [pdfFileName, setPdfFileName] = useState('hoja_vida.pdf')
+  const [curriculumPreviewData, setCurriculumPreviewData] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -162,6 +168,102 @@ export default function CandidateProfile() {
     )
   }
 
+  async function getCurriculumPdf({ useCache = true } = {}) {
+    const candidatoId = Number(perfil?.datos_basicos?.id || 0)
+    if (!Number.isInteger(candidatoId) || candidatoId <= 0) {
+      throw new Error('INVALID_ESTUDIANTE_ID')
+    }
+
+    if (useCache && pdfBlobCache) {
+      return { blob: pdfBlobCache, fileName: pdfFileName }
+    }
+
+    const fallbackFileName = `${candidatoNombre.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 80) || candidatoId}.pdf`
+    const response = await getMyHojaVidaPdf({ candidatoId, defaultFileName: fallbackFileName })
+    setPdfBlobCache(response.blob)
+    setPdfFileName(response.fileName || `hoja_vida_${candidatoId}.pdf`)
+    return response
+  }
+
+  async function getCurriculumPreviewData({ useCache = true } = {}) {
+    const candidatoId = Number(perfil?.datos_basicos?.id || 0)
+    if (!Number.isInteger(candidatoId) || candidatoId <= 0) {
+      throw new Error('INVALID_ESTUDIANTE_ID')
+    }
+    if (useCache && curriculumPreviewData) return curriculumPreviewData
+    const data = await getMyHojaVida({ candidatoId })
+    setCurriculumPreviewData(data)
+    return data
+  }
+
+  function resolveAssetUrl(path) {
+    const value = String(path || '').trim()
+    if (!value) return ''
+    if (value.startsWith('http://') || value.startsWith('https://')) return value
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+    return value.startsWith('/') ? `${apiBase}${value}` : `${apiBase}/${value}`
+  }
+
+  function formatDateShort(value) {
+    if (!value) return 'N/D'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return String(value)
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear()
+    return `${day}/${month}/${year}`
+  }
+
+  function renderValue(value) {
+    if (value === null || value === undefined || value === '') return 'N/D'
+    if (value === true || value === 1) return 'Si'
+    if (value === false || value === 0) return 'No'
+    return String(value)
+  }
+
+  function closePdfPreview() {
+    setPdfPreviewInlineOpen(false)
+  }
+
+  async function handlePreviewCurriculum() {
+    try {
+      setLoadingPdf(true)
+      setPdfError('')
+      await getCurriculumPreviewData({ useCache: false })
+      setPdfPreviewInlineOpen(true)
+    } catch (err) {
+      setPdfError(getPerfilErrorMessage(err, 'No se pudo previsualizar el curriculum.'))
+    } finally {
+      setLoadingPdf(false)
+    }
+  }
+
+  async function handleDownloadCurriculum() {
+    try {
+      setLoadingPdf(true)
+      setPdfError('')
+      const { blob, fileName } = await getCurriculumPdf({ useCache: false })
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = fileName || 'hoja_vida.pdf'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(objectUrl)
+    } catch (err) {
+      setPdfError(getPerfilErrorMessage(err, 'No se pudo descargar el curriculum.'))
+    } finally {
+      setLoadingPdf(false)
+    }
+  }
+
+  const previewFotoUrl = useMemo(() => {
+    const documentos = Array.isArray(curriculumPreviewData?.documentos) ? curriculumPreviewData.documentos : []
+    const foto = documentos.find((doc) => doc?.tipo_documento === 'foto' && doc?.ruta_archivo)
+    return foto?.ruta_archivo ? resolveAssetUrl(foto.ruta_archivo) : ''
+  }, [curriculumPreviewData])
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -201,6 +303,33 @@ export default function CandidateProfile() {
             >
               Continuar perfil
             </button>
+            <div className="rounded-xl border border-border bg-white p-3 space-y-2">
+              <h2 className="text-sm font-semibold text-foreground">Curriculum</h2>
+              <div className="grid gap-2">
+                <button
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                  type="button"
+                  onClick={handlePreviewCurriculum}
+                  disabled={loadingPdf || loading}
+                >
+                  <Eye className="w-4 h-4" />
+                  Previsualizar curriculum
+                </button>
+                <button
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                  type="button"
+                  onClick={handleDownloadCurriculum}
+                  disabled={loadingPdf || loading}
+                >
+                  <Download className="w-4 h-4" />
+                  Descargar PDF
+                </button>
+              </div>
+              {loadingPdf ? <p className="text-xs text-foreground/60">Preparando archivo...</p> : null}
+              {pdfError ? (
+                <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{pdfError}</p>
+              ) : null}
+            </div>
 
             {loading && <p className="text-xs text-foreground/60">Cargando estado del perfil...</p>}
             {!loading && error && (
@@ -252,29 +381,167 @@ export default function CandidateProfile() {
           </div>
 
           <div className="flex-1 space-y-7">
-            <section className="space-y-3">
-              <div>
-                <h2 className="text-sm font-semibold text-foreground">Perfil obligatorio</h2>
-                <p className="text-xs text-foreground/65">Fase 1. Debe estar completo para postular.</p>
-              </div>
-              <div className="space-y-3">{requiredSections.map((section) => renderSectionCard(section))}</div>
-            </section>
+            {pdfPreviewInlineOpen ? (
+              <section className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground">Previsualizacion de curriculum</h2>
+                    <p className="text-xs text-foreground/65">Vista HTML/CSS del formato</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 border border-border rounded-lg text-xs"
+                    onClick={closePdfPreview}
+                  >
+                    Cerrar vista previa
+                  </button>
+                </div>
+                <div className="rounded-xl border border-border bg-white overflow-hidden">
+                  {curriculumPreviewData ? (
+                    <div className="max-h-[78vh] overflow-auto p-5 sm:p-6 space-y-4 text-[13px] text-slate-800">
+                      <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+                        <div className="space-y-1 min-w-0">
+                          <h3 className="text-2xl font-bold text-slate-900">Hoja de Vida</h3>
+                          <p className="text-lg font-semibold">
+                            {renderValue(curriculumPreviewData?.perfil?.nombre_completo)}
+                          </p>
+                          <p>Documento: {renderValue(curriculumPreviewData?.perfil?.documento_identidad)}</p>
+                          <p>Email: {renderValue(curriculumPreviewData?.contacto?.email)}</p>
+                          <p>Celular: {renderValue(curriculumPreviewData?.contacto?.telefono_celular)}</p>
+                        </div>
+                        <div className="w-[106px] h-[132px] border border-slate-300 rounded bg-slate-50 overflow-hidden flex items-center justify-center text-[10px] text-slate-500 text-center shrink-0">
+                          {previewFotoUrl ? (
+                            <img src={previewFotoUrl} alt="Foto carnet" className="w-full h-full object-cover" />
+                          ) : (
+                            <span>FOTO TAMANO CARNET</span>
+                          )}
+                        </div>
+                      </header>
 
-            <section className="space-y-3">
-              <div>
-                <h2 className="text-sm font-semibold text-foreground">Perfil recomendado</h2>
-                <p className="text-xs text-foreground/65">Mejora tu visibilidad y coincidencia.</p>
-              </div>
-              <div className="space-y-3">{recommendedSections.map((section) => renderSectionCard(section))}</div>
-            </section>
+                      <section className="space-y-2">
+                        <h4 className="font-semibold text-sm border-b border-slate-200 pb-1">Perfil</h4>
+                        <div className="grid sm:grid-cols-2 gap-2">
+                          <p>Nombres: {renderValue(curriculumPreviewData?.perfil?.nombres)}</p>
+                          <p>Apellidos: {renderValue(curriculumPreviewData?.perfil?.apellidos)}</p>
+                          <p>Nacionalidad: {renderValue(curriculumPreviewData?.perfil?.nacionalidad)}</p>
+                          <p>Nacimiento: {formatDateShort(curriculumPreviewData?.perfil?.fecha_nacimiento)}</p>
+                          <p>Edad: {renderValue(curriculumPreviewData?.perfil?.edad)}</p>
+                          <p>Sexo: {renderValue(curriculumPreviewData?.perfil?.sexo)}</p>
+                          <p>Estado civil: {renderValue(curriculumPreviewData?.perfil?.estado_civil)}</p>
+                        </div>
+                      </section>
 
-            <section className="space-y-3">
-              <div>
-                <h2 className="text-sm font-semibold text-foreground">Perfil avanzado</h2>
-                <p className="text-xs text-foreground/65">Fase 2. Secciones en despliegue progresivo.</p>
-              </div>
-              <div className="space-y-3">{phase2Sections.map((section) => renderSectionCard(section))}</div>
-            </section>
+                      <section className="space-y-2">
+                        <h4 className="font-semibold text-sm border-b border-slate-200 pb-1">Contacto y Domicilio</h4>
+                        <div className="grid sm:grid-cols-2 gap-2">
+                          <p>Telefono fijo: {renderValue(curriculumPreviewData?.contacto?.telefono_fijo)}</p>
+                          <p>
+                            Emergencia: {renderValue(curriculumPreviewData?.contacto?.contacto_emergencia_nombre)} - {renderValue(curriculumPreviewData?.contacto?.contacto_emergencia_telefono)}
+                          </p>
+                          <p>Pais: {renderValue(curriculumPreviewData?.domicilio?.pais)}</p>
+                          <p>Provincia: {renderValue(curriculumPreviewData?.domicilio?.provincia)}</p>
+                          <p>Canton: {renderValue(curriculumPreviewData?.domicilio?.canton)}</p>
+                          <p>Parroquia: {renderValue(curriculumPreviewData?.domicilio?.parroquia)}</p>
+                          <p>Direccion: {renderValue(curriculumPreviewData?.domicilio?.direccion)}</p>
+                          <p>Codigo postal: {renderValue(curriculumPreviewData?.domicilio?.codigo_postal)}</p>
+                        </div>
+                      </section>
+
+                      <section className="space-y-2">
+                        <h4 className="font-semibold text-sm border-b border-slate-200 pb-1">Salud y Logistica</h4>
+                        <div className="grid sm:grid-cols-2 gap-2">
+                          <p>Tipo de sangre: {renderValue(curriculumPreviewData?.salud?.tipo_sangre)}</p>
+                          <p>Estatura: {renderValue(curriculumPreviewData?.salud?.estatura)}</p>
+                          <p>Peso: {renderValue(curriculumPreviewData?.salud?.peso)}</p>
+                          <p>Tatuaje: {renderValue(curriculumPreviewData?.salud?.tatuaje)}</p>
+                          <p>Movilizacion: {renderValue(curriculumPreviewData?.logistica?.movilizacion)}</p>
+                          <p>Tipo vehiculo: {renderValue(curriculumPreviewData?.logistica?.tipo_vehiculo)}</p>
+                          <p>Licencia: {renderValue(curriculumPreviewData?.logistica?.licencia)}</p>
+                          <p>Disponible viajar: {renderValue(curriculumPreviewData?.logistica?.disp_viajar)}</p>
+                          <p>Disponible turnos: {renderValue(curriculumPreviewData?.logistica?.disp_turnos)}</p>
+                          <p>Disponible fines semana: {renderValue(curriculumPreviewData?.logistica?.disp_fines_semana)}</p>
+                        </div>
+                      </section>
+
+                      <section className="space-y-2">
+                        <h4 className="font-semibold text-sm border-b border-slate-200 pb-1">Educacion</h4>
+                        <div className="grid sm:grid-cols-2 gap-2">
+                          <p>Nivel: {renderValue(curriculumPreviewData?.educacion_general?.nivel_estudio)}</p>
+                          <p>Institucion: {renderValue(curriculumPreviewData?.educacion_general?.institucion)}</p>
+                          <p>Titulo: {renderValue(curriculumPreviewData?.educacion_general?.titulo_obtenido)}</p>
+                        </div>
+                      </section>
+
+                      <section className="space-y-2">
+                        <h4 className="font-semibold text-sm border-b border-slate-200 pb-1">Experiencia Laboral</h4>
+                        {Array.isArray(curriculumPreviewData?.experiencia_laboral) && curriculumPreviewData.experiencia_laboral.length ? (
+                          <div className="space-y-2">
+                            {curriculumPreviewData.experiencia_laboral.map((item, idx) => (
+                              <article key={item.id || idx} className="border border-slate-200 rounded-lg p-2.5">
+                                <p className="font-semibold">{idx + 1}. {renderValue(item.cargo)}</p>
+                                <p>Empresa: {renderValue(item.empresa_nombre || item.empresa_id)}</p>
+                                <p>Periodo: {formatDateShort(item.fecha_inicio)} - {item.actualmente_trabaja ? 'Actual' : formatDateShort(item.fecha_fin)}</p>
+                                <p>Contrato: {renderValue(item.tipo_contrato)}</p>
+                                <p>Descripcion: {renderValue(item.descripcion)}</p>
+                              </article>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-600">Sin experiencia registrada.</p>
+                        )}
+                      </section>
+
+                      <section className="space-y-2">
+                        <h4 className="font-semibold text-sm border-b border-slate-200 pb-1">Formaciones</h4>
+                        {Array.isArray(curriculumPreviewData?.formaciones) && curriculumPreviewData.formaciones.length ? (
+                          <div className="space-y-2">
+                            {curriculumPreviewData.formaciones.map((item, idx) => (
+                              <article key={item.id || idx} className="border border-slate-200 rounded-lg p-2.5">
+                                <p className="font-semibold">{idx + 1}. {renderValue(item.nombre_programa)}</p>
+                                <p>Categoria/Subtipo: {renderValue(item.categoria_formacion)} / {renderValue(item.subtipo_formacion)}</p>
+                                <p>Institucion: {renderValue(item.institucion)}</p>
+                                <p>Titulo: {renderValue(item.titulo_obtenido)}</p>
+                                <p>Aprobacion: {formatDateShort(item.fecha_aprobacion)}</p>
+                              </article>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-600">Sin formaciones registradas.</p>
+                        )}
+                      </section>
+                    </div>
+                  ) : (
+                    <p className="p-4 text-sm text-foreground/70">No se pudo cargar la previsualizacion.</p>
+                  )}
+                </div>
+              </section>
+            ) : (
+              <>
+                <section className="space-y-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground">Perfil obligatorio</h2>
+                    <p className="text-xs text-foreground/65">Fase 1. Debe estar completo para postular.</p>
+                  </div>
+                  <div className="space-y-3">{requiredSections.map((section) => renderSectionCard(section))}</div>
+                </section>
+
+                <section className="space-y-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground">Perfil recomendado</h2>
+                    <p className="text-xs text-foreground/65">Mejora tu visibilidad y coincidencia.</p>
+                  </div>
+                  <div className="space-y-3">{recommendedSections.map((section) => renderSectionCard(section))}</div>
+                </section>
+
+                <section className="space-y-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground">Perfil avanzado</h2>
+                    <p className="text-xs text-foreground/65">Fase 2. Secciones en despliegue progresivo.</p>
+                  </div>
+                  <div className="space-y-3">{phase2Sections.map((section) => renderSectionCard(section))}</div>
+                </section>
+              </>
+            )}
           </div>
         </section>
       </main>
