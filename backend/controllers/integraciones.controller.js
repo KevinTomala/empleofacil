@@ -1110,6 +1110,250 @@ function normalizeMapEstado(value) {
   return null;
 }
 
+function normalizeCompanyNameKey(value) {
+  const normalized = normalizeCompanyName(value);
+  return normalized ? normalized.toLowerCase() : null;
+}
+
+function encodeBase64Url(value) {
+  return Buffer.from(String(value || ''), 'utf8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function decodeBase64Url(value) {
+  const text = toTextOrNull(value);
+  if (!text) return null;
+  try {
+    const base64 = text
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(Math.ceil(text.length / 4) * 4, '=');
+    return Buffer.from(base64, 'base64').toString('utf8');
+  } catch (_error) {
+    return null;
+  }
+}
+
+function buildOrigenRefAdemy(origenEmpresaId) {
+  const id = toPositiveIntOrNull(origenEmpresaId);
+  if (!id) return null;
+  return `ademy:${id}`;
+}
+
+function buildOrigenRefManual(nombreEmpresaKey) {
+  const key = normalizeCompanyNameKey(nombreEmpresaKey);
+  if (!key) return null;
+  return `manual:${encodeBase64Url(key)}`;
+}
+
+function parseEmpresaOrigenRef(value) {
+  const raw = toTextOrNull(value);
+  if (!raw) return null;
+
+  const legacyId = toPositiveIntOrNull(raw);
+  if (legacyId) {
+    return {
+      tipo_origen: 'ademy',
+      origen_empresa_id: legacyId,
+      origen_ref: buildOrigenRefAdemy(legacyId)
+    };
+  }
+
+  const ademyMatch = /^ademy:(\d+)$/.exec(raw);
+  if (ademyMatch) {
+    const id = toPositiveIntOrNull(ademyMatch[1]);
+    if (!id) return null;
+    return {
+      tipo_origen: 'ademy',
+      origen_empresa_id: id,
+      origen_ref: buildOrigenRefAdemy(id)
+    };
+  }
+
+  const manualMatch = /^manual:([A-Za-z0-9_-]+)$/.exec(raw);
+  if (manualMatch) {
+    const decoded = decodeBase64Url(manualMatch[1]);
+    const key = normalizeCompanyNameKey(decoded);
+    if (!key) return null;
+    return {
+      tipo_origen: 'manual_empleofacil',
+      empresa_nombre_key: key,
+      origen_ref: buildOrigenRefManual(key)
+    };
+  }
+
+  return null;
+}
+
+function getEstadoOrderValue(estado) {
+  const normalized = String(estado || '').trim();
+  if (normalized === 'pendiente') return 0;
+  if (normalized === 'vinculada') return 1;
+  if (normalized === 'descartada') return 2;
+  return 3;
+}
+
+function toTimestamp(value) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function compareMapeoRows(a, b) {
+  const estadoDiff = getEstadoOrderValue(a?.estado) - getEstadoOrderValue(b?.estado);
+  if (estadoDiff !== 0) return estadoDiff;
+
+  const experienciasA = Number(a?.experiencias_total || 0);
+  const experienciasB = Number(b?.experiencias_total || 0);
+  if (experienciasA !== experienciasB) return experienciasB - experienciasA;
+
+  const updatedDiff = toTimestamp(b?.updated_at) - toTimestamp(a?.updated_at);
+  if (updatedDiff !== 0) return updatedDiff;
+
+  const nombreA = String(a?.nombre_origen || '').toLowerCase();
+  const nombreB = String(b?.nombre_origen || '').toLowerCase();
+  return nombreA.localeCompare(nombreB, 'es');
+}
+
+function mapAdemyMapeoRow(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    origen_ref: buildOrigenRefAdemy(row?.origen_empresa_id),
+    tipo_origen: 'ademy'
+  };
+}
+
+function mapManualMapeoRow(row) {
+  const nombreKey = toTextOrNull(row?.empresa_nombre_key);
+  const nombreOrigen = normalizeCompanyName(row?.nombre_origen) || nombreKey;
+  const origenRef = buildOrigenRefManual(nombreKey || nombreOrigen);
+  if (!nombreOrigen || !origenRef) return null;
+  return {
+    id: origenRef,
+    origen: 'manual_empleofacil',
+    origen_ref: origenRef,
+    origen_empresa_id: null,
+    nombre_origen: nombreOrigen,
+    empresa_id: null,
+    estado: 'pendiente',
+    activo: 1,
+    created_at: row?.created_at || null,
+    updated_at: row?.updated_at || row?.created_at || null,
+    empresa_local_nombre: null,
+    empresa_local_ruc: null,
+    empresa_local_email: null,
+    experiencias_total: Number(row?.experiencias_total || 0),
+    experiencias_sin_vinculo: Number(row?.experiencias_sin_vinculo || 0),
+    tipo_origen: 'manual_empleofacil'
+  };
+}
+
+async function getAdemyMapeoRows({ q = null, estado = null, activoFilter = null } = {}) {
+  const where = ['m.origen = ?'];
+  const params = [ORIGEN];
+
+  if (estado) {
+    where.push('m.estado = ?');
+    params.push(estado);
+  }
+
+  if (activoFilter === '0' || activoFilter === '1') {
+    where.push('m.activo = ?');
+    params.push(Number(activoFilter));
+  }
+
+  if (q) {
+    where.push('(m.nombre_origen LIKE ? OR CAST(m.origen_empresa_id AS CHAR) LIKE ? OR e.nombre LIKE ? OR e.ruc LIKE ?)');
+    const like = `%${q}%`;
+    params.push(like, like, like, like);
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const [rows] = await db.query(
+    `SELECT
+       m.id,
+       m.origen,
+       m.origen_empresa_id,
+       m.nombre_origen,
+       m.empresa_id,
+       m.estado,
+       m.activo,
+       m.created_at,
+       m.updated_at,
+       e.nombre AS empresa_local_nombre,
+       e.ruc AS empresa_local_ruc,
+       e.email AS empresa_local_email,
+       COUNT(ce.id) AS experiencias_total,
+       SUM(CASE WHEN ce.empresa_id IS NULL THEN 1 ELSE 0 END) AS experiencias_sin_vinculo
+     FROM integracion_ademy_empresas_empleofacil m
+     LEFT JOIN empresas e
+       ON e.id = m.empresa_id
+      AND e.deleted_at IS NULL
+     LEFT JOIN candidatos_experiencia ce
+       ON ce.empresa_origen = m.origen
+      AND ce.empresa_origen_id = m.origen_empresa_id
+      AND ce.deleted_at IS NULL
+     ${whereSql}
+     GROUP BY
+       m.id,
+       m.origen,
+       m.origen_empresa_id,
+       m.nombre_origen,
+       m.empresa_id,
+       m.estado,
+       m.activo,
+       m.created_at,
+       m.updated_at,
+       e.nombre,
+       e.ruc,
+       e.email`,
+    params
+  );
+  return rows.map(mapAdemyMapeoRow);
+}
+
+async function getManualMapeoRows({ q = null, estado = null, activoFilter = null } = {}) {
+  if (estado && estado !== 'pendiente') return [];
+  if (activoFilter === '0') return [];
+
+  const where = [
+    'ce.deleted_at IS NULL',
+    'ce.empresa_id IS NULL',
+    'ce.empresa_origen IS NULL',
+    'ce.empresa_origen_id IS NULL',
+    'ce.empresa_nombre IS NOT NULL',
+    "TRIM(ce.empresa_nombre) <> ''"
+  ];
+  const params = [];
+
+  if (q) {
+    where.push('ce.empresa_nombre LIKE ?');
+    params.push(`%${q}%`);
+  }
+
+  const [rows] = await db.query(
+    `SELECT
+       LOWER(TRIM(ce.empresa_nombre)) AS empresa_nombre_key,
+       MIN(TRIM(ce.empresa_nombre)) AS nombre_origen,
+       MIN(ce.created_at) AS created_at,
+       MAX(ce.updated_at) AS updated_at,
+       COUNT(*) AS experiencias_total,
+       COUNT(*) AS experiencias_sin_vinculo
+     FROM candidatos_experiencia ce
+     WHERE ${where.join(' AND ')}
+     GROUP BY LOWER(TRIM(ce.empresa_nombre))`,
+    params
+  );
+
+  return rows
+    .map((row) => mapManualMapeoRow(row))
+    .filter(Boolean);
+}
+
 async function runInTransaction(work) {
   const conn = await db.getConnection();
   try {
@@ -1137,91 +1381,16 @@ async function listEmpresasMapeo(req, res) {
   const estado = normalizeMapEstado(req.query.estado);
   const activoFilter = req.query.activo;
 
-  const where = ['m.origen = ?'];
-  const params = [ORIGEN];
-
-  if (estado) {
-    where.push('m.estado = ?');
-    params.push(estado);
-  }
-
-  if (activoFilter === '0' || activoFilter === '1') {
-    where.push('m.activo = ?');
-    params.push(Number(activoFilter));
-  }
-
-  if (q) {
-    where.push('(m.nombre_origen LIKE ? OR CAST(m.origen_empresa_id AS CHAR) LIKE ? OR e.nombre LIKE ? OR e.ruc LIKE ?)');
-    const like = `%${q}%`;
-    params.push(like, like, like, like);
-  }
-
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-
   try {
-    const [countRows] = await db.query(
-      `SELECT COUNT(*) AS total
-       FROM integracion_ademy_empresas_empleofacil m
-       LEFT JOIN empresas e
-         ON e.id = m.empresa_id
-        AND e.deleted_at IS NULL
-       ${whereSql}`,
-      params
-    );
-
-    const [rows] = await db.query(
-      `SELECT
-         m.id,
-         m.origen,
-         m.origen_empresa_id,
-         m.nombre_origen,
-         m.empresa_id,
-         m.estado,
-         m.activo,
-         m.created_at,
-         m.updated_at,
-         e.nombre AS empresa_local_nombre,
-         e.ruc AS empresa_local_ruc,
-         e.email AS empresa_local_email,
-         COUNT(ce.id) AS experiencias_total,
-         SUM(CASE WHEN ce.empresa_id IS NULL THEN 1 ELSE 0 END) AS experiencias_sin_vinculo
-       FROM integracion_ademy_empresas_empleofacil m
-       LEFT JOIN empresas e
-         ON e.id = m.empresa_id
-        AND e.deleted_at IS NULL
-       LEFT JOIN candidatos_experiencia ce
-         ON ce.empresa_origen = m.origen
-        AND ce.empresa_origen_id = m.origen_empresa_id
-        AND ce.deleted_at IS NULL
-       ${whereSql}
-       GROUP BY
-         m.id,
-         m.origen,
-         m.origen_empresa_id,
-         m.nombre_origen,
-         m.empresa_id,
-         m.estado,
-         m.activo,
-         m.created_at,
-         m.updated_at,
-         e.nombre,
-         e.ruc,
-         e.email
-       ORDER BY
-         CASE m.estado
-           WHEN 'pendiente' THEN 0
-           WHEN 'vinculada' THEN 1
-           ELSE 2
-         END,
-         experiencias_total DESC,
-         m.updated_at DESC
-       LIMIT ? OFFSET ?`,
-      [...params, pageSize, offset]
-    );
-
-    const total = Number(countRows?.[0]?.total || 0);
+    const [ademyRows, manualRows] = await Promise.all([
+      getAdemyMapeoRows({ q, estado, activoFilter }),
+      getManualMapeoRows({ q, estado, activoFilter })
+    ]);
+    const allRows = [...ademyRows, ...manualRows].sort(compareMapeoRows);
+    const total = allRows.length;
+    const items = allRows.slice(offset, offset + pageSize);
     return res.json({
-      items: rows,
+      items,
       page,
       page_size: pageSize,
       total
@@ -1271,11 +1440,11 @@ async function searchEmpresasLocales(req, res) {
 }
 
 async function vincularEmpresaOrigen(req, res) {
-  const origenEmpresaId = toPositiveIntOrNull(req.params.origenEmpresaId);
+  const origenRef = parseEmpresaOrigenRef(req.params.origenEmpresaId);
   const empresaId = toPositiveIntOrNull(req.body?.empresa_id);
   const nombreOrigen = toTextOrNull(req.body?.nombre_origen);
 
-  if (!origenEmpresaId) {
+  if (!origenRef) {
     return res.status(400).json({ error: 'INVALID_ORIGEN_EMPRESA_ID' });
   }
   if (!empresaId) {
@@ -1297,6 +1466,41 @@ async function vincularEmpresaOrigen(req, res) {
         return { error: 'EMPRESA_NOT_FOUND' };
       }
 
+      if (origenRef.tipo_origen === 'manual_empleofacil') {
+        const [updateResult] = await conn.query(
+          `UPDATE candidatos_experiencia
+           SET empresa_id = ?,
+               empresa_nombre = ?,
+               updated_at = NOW()
+           WHERE deleted_at IS NULL
+             AND empresa_id IS NULL
+             AND empresa_origen IS NULL
+             AND empresa_origen_id IS NULL
+             AND LOWER(TRIM(empresa_nombre)) = ?`,
+          [empresaId, empresaRows[0].nombre, origenRef.empresa_nombre_key]
+        );
+
+        const experienciasActualizadas = Number(updateResult?.affectedRows || 0);
+        return {
+          ok: true,
+          mapping: {
+            id: origenRef.origen_ref,
+            origen: 'manual_empleofacil',
+            origen_ref: origenRef.origen_ref,
+            origen_empresa_id: null,
+            nombre_origen: nombreOrigen || empresaRows[0].nombre,
+            empresa_id: empresaId,
+            estado: 'vinculada',
+            activo: 1,
+            empresa_local_nombre: empresaRows[0].nombre,
+            empresa_local_ruc: empresaRows[0].ruc,
+            empresa_local_email: empresaRows[0].email
+          },
+          experiencias_actualizadas: experienciasActualizadas
+        };
+      }
+
+      const origenEmpresaId = origenRef.origen_empresa_id;
       await conn.query(
         `INSERT INTO integracion_ademy_empresas_empleofacil (
           origen, origen_empresa_id, empresa_id, nombre_origen, estado, activo
@@ -1349,7 +1553,7 @@ async function vincularEmpresaOrigen(req, res) {
 
       return {
         ok: true,
-        mapping: mappingRows[0] || null,
+        mapping: mapAdemyMapeoRow(mappingRows[0] || null),
         experiencias_actualizadas: experienciasActualizadas
       };
     });
@@ -1370,10 +1574,10 @@ async function vincularEmpresaOrigen(req, res) {
 }
 
 async function actualizarNombreEmpresaOrigen(req, res) {
-  const origenEmpresaId = toPositiveIntOrNull(req.params.origenEmpresaId);
+  const origenRef = parseEmpresaOrigenRef(req.params.origenEmpresaId);
   const nombreOrigen = normalizeCompanyName(req.body?.nombre_origen);
 
-  if (!origenEmpresaId) {
+  if (!origenRef) {
     return res.status(400).json({ error: 'INVALID_ORIGEN_EMPRESA_ID' });
   }
   if (!nombreOrigen) {
@@ -1382,6 +1586,37 @@ async function actualizarNombreEmpresaOrigen(req, res) {
 
   try {
     const result = await runInTransaction(async (conn) => {
+      if (origenRef.tipo_origen === 'manual_empleofacil') {
+        const [updateResult] = await conn.query(
+          `UPDATE candidatos_experiencia
+           SET empresa_nombre = ?,
+               updated_at = NOW()
+           WHERE deleted_at IS NULL
+             AND empresa_id IS NULL
+             AND empresa_origen IS NULL
+             AND empresa_origen_id IS NULL
+             AND LOWER(TRIM(empresa_nombre)) = ?`,
+          [nombreOrigen, origenRef.empresa_nombre_key]
+        );
+
+        const nextKey = normalizeCompanyNameKey(nombreOrigen);
+        return {
+          ok: true,
+          mapping: {
+            id: buildOrigenRefManual(nextKey),
+            origen: 'manual_empleofacil',
+            origen_ref: buildOrigenRefManual(nextKey),
+            origen_empresa_id: null,
+            nombre_origen: nombreOrigen,
+            empresa_id: null,
+            estado: 'pendiente',
+            activo: 1
+          },
+          experiencias_actualizadas: Number(updateResult?.affectedRows || 0)
+        };
+      }
+
+      const origenEmpresaId = origenRef.origen_empresa_id;
       await conn.query(
         `INSERT INTO integracion_ademy_empresas_empleofacil (
           origen, origen_empresa_id, empresa_id, nombre_origen, estado, activo
@@ -1432,7 +1667,7 @@ async function actualizarNombreEmpresaOrigen(req, res) {
 
       return {
         ok: true,
-        mapping: mappingRows[0] || null,
+        mapping: mapAdemyMapeoRow(mappingRows[0] || null),
         experiencias_actualizadas: experienciasActualizadas
       };
     });
@@ -1450,15 +1685,19 @@ async function actualizarNombreEmpresaOrigen(req, res) {
 }
 
 async function descartarEmpresaOrigen(req, res) {
-  const origenEmpresaId = toPositiveIntOrNull(req.params.origenEmpresaId);
+  const origenRef = parseEmpresaOrigenRef(req.params.origenEmpresaId);
   const nombreOrigen = toTextOrNull(req.body?.nombre_origen);
 
-  if (!origenEmpresaId) {
+  if (!origenRef) {
     return res.status(400).json({ error: 'INVALID_ORIGEN_EMPRESA_ID' });
+  }
+  if (origenRef.tipo_origen === 'manual_empleofacil') {
+    return res.status(400).json({ error: 'MANUAL_SOURCE_DISCARD_NOT_SUPPORTED' });
   }
 
   try {
     const result = await runInTransaction(async (conn) => {
+      const origenEmpresaId = origenRef.origen_empresa_id;
       await conn.query(
         `INSERT INTO integracion_ademy_empresas_empleofacil (
           origen, origen_empresa_id, empresa_id, nombre_origen, estado, activo
@@ -1499,7 +1738,7 @@ async function descartarEmpresaOrigen(req, res) {
 
       return {
         ok: true,
-        mapping: mappingRows[0] || null,
+        mapping: mapAdemyMapeoRow(mappingRows[0] || null),
         experiencias_actualizadas: experienciasActualizadas
       };
     });
@@ -1516,6 +1755,88 @@ async function descartarEmpresaOrigen(req, res) {
   }
 }
 
+async function desvincularEmpresaOrigen(req, res) {
+  const origenRef = parseEmpresaOrigenRef(req.params.origenEmpresaId);
+
+  if (!origenRef) {
+    return res.status(400).json({ error: 'INVALID_ORIGEN_EMPRESA_ID' });
+  }
+  if (origenRef.tipo_origen === 'manual_empleofacil') {
+    return res.status(400).json({ error: 'MANUAL_SOURCE_UNLINK_NOT_SUPPORTED' });
+  }
+
+  try {
+    const result = await runInTransaction(async (conn) => {
+      const origenEmpresaId = origenRef.origen_empresa_id;
+      const [upsertResult] = await conn.query(
+        `INSERT INTO integracion_ademy_empresas_empleofacil (
+          origen, origen_empresa_id, empresa_id, nombre_origen, estado, activo
+        ) VALUES (?, ?, NULL, NULL, 'pendiente', 1)
+        ON DUPLICATE KEY UPDATE
+          empresa_id = NULL,
+          estado = 'pendiente',
+          activo = 1,
+          updated_at = NOW()`,
+        [ORIGEN, origenEmpresaId]
+      );
+
+      let experienciasActualizadas = 0;
+      try {
+        const [updateResult] = await conn.query(
+          `UPDATE candidatos_experiencia
+           SET empresa_id = NULL,
+               updated_at = NOW()
+           WHERE empresa_origen = ?
+             AND empresa_origen_id = ?
+             AND deleted_at IS NULL`,
+          [ORIGEN, origenEmpresaId]
+        );
+        experienciasActualizadas = Number(updateResult?.affectedRows || 0);
+      } catch (error) {
+        if (!isMissingColumnError(error)) throw error;
+      }
+
+      const [mappingRows] = await conn.query(
+        `SELECT
+           m.id,
+           m.origen,
+           m.origen_empresa_id,
+           m.nombre_origen,
+           m.empresa_id,
+           m.estado,
+           m.activo,
+           m.updated_at,
+           e.nombre AS empresa_local_nombre
+         FROM integracion_ademy_empresas_empleofacil m
+         LEFT JOIN empresas e
+           ON e.id = m.empresa_id
+          AND e.deleted_at IS NULL
+         WHERE m.origen = ?
+           AND m.origen_empresa_id = ?
+         LIMIT 1`,
+        [ORIGEN, origenEmpresaId]
+      );
+
+      return {
+        ok: true,
+        inserted: Number(upsertResult?.affectedRows || 0) > 0,
+        mapping: mapAdemyMapeoRow(mappingRows[0] || null),
+        experiencias_actualizadas: experienciasActualizadas
+      };
+    });
+
+    return res.json(result);
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      return res.status(409).json({ error: 'MAPPING_TABLE_NOT_FOUND' });
+    }
+    if (isMissingColumnError(error)) {
+      return res.status(409).json({ error: 'MAPPING_SCHEMA_OUTDATED' });
+    }
+    return res.status(500).json({ error: 'MAPPING_UNLINK_FAILED', details: error.message });
+  }
+}
+
 module.exports = {
   importAcreditados,
   runAcreditadosImport,
@@ -1524,6 +1845,7 @@ module.exports = {
   vincularEmpresaOrigen,
   actualizarNombreEmpresaOrigen,
   descartarEmpresaOrigen,
+  desvincularEmpresaOrigen,
   listarConvocatorias: async (_req, res) => {
     try {
       const items = await fetchConvocatorias();

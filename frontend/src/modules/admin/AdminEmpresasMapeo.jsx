@@ -5,6 +5,7 @@ import Header from '../../components/Header'
 import { showToast } from '../../utils/showToast'
 import {
   actualizarNombreEmpresaOrigen,
+  desvincularEmpresaOrigen,
   descartarEmpresaOrigen,
   getIntegracionEmpresasErrorMessage,
   listEmpresasMapeo,
@@ -32,6 +33,28 @@ function formatDateShort(value) {
   return String(value).slice(0, 10)
 }
 
+function isManualSource(item) {
+  return String(item?.tipo_origen || item?.origen || '').trim() === 'manual_empleofacil'
+}
+
+function getOrigenRef(item) {
+  if (item?.origen_ref) return String(item.origen_ref)
+  if (item?.origen === 'ademy' && item?.origen_empresa_id) return `ademy:${item.origen_empresa_id}`
+  return ''
+}
+
+function getOrigenDisplayName(item) {
+  if (item?.nombre_origen) return item.nombre_origen
+  if (item?.origen === 'ademy' && item?.origen_empresa_id) return `Empresa ADEMY #${item.origen_empresa_id}`
+  return 'Empresa sin nombre'
+}
+
+function getOrigenMeta(item) {
+  if (item?.origen === 'ademy' && item?.origen_empresa_id) return `Origen ID: ${item.origen_empresa_id}`
+  if (isManualSource(item)) return 'Origen: EmpleoFacil (manual)'
+  return 'Origen: N/D'
+}
+
 export default function AdminEmpresasMapeo() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -42,17 +65,18 @@ export default function AdminEmpresasMapeo() {
   const [page, setPage] = useState(1)
   const [pageSize] = useState(25)
   const [total, setTotal] = useState(0)
-  const [selectedOrigenEmpresaId, setSelectedOrigenEmpresaId] = useState(null)
+  const [selectedOrigenRef, setSelectedOrigenRef] = useState(null)
   const [empresaQuery, setEmpresaQuery] = useState('')
   const [empresasLocales, setEmpresasLocales] = useState([])
   const [empresasLoading, setEmpresasLoading] = useState(false)
   const [selectedEmpresaId, setSelectedEmpresaId] = useState('')
   const [nombreOrigenInput, setNombreOrigenInput] = useState('')
+  const [confirmAction, setConfirmAction] = useState(null)
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const selectedItem = useMemo(
-    () => items.find((item) => Number(item.origen_empresa_id) === Number(selectedOrigenEmpresaId)) || null,
-    [items, selectedOrigenEmpresaId]
+    () => items.find((item) => getOrigenRef(item) === selectedOrigenRef) || null,
+    [items, selectedOrigenRef]
   )
 
   const resumen = useMemo(() => {
@@ -77,10 +101,10 @@ export default function AdminEmpresasMapeo() {
       setItems(nextItems)
       setTotal(Number(data?.total || 0))
       if (!nextItems.length) {
-        setSelectedOrigenEmpresaId(null)
-      } else if (!nextItems.some((item) => Number(item.origen_empresa_id) === Number(selectedOrigenEmpresaId))) {
+        setSelectedOrigenRef(null)
+      } else if (!nextItems.some((item) => getOrigenRef(item) === selectedOrigenRef)) {
         const first = nextItems[0]
-        setSelectedOrigenEmpresaId(Number(first.origen_empresa_id))
+        setSelectedOrigenRef(getOrigenRef(first))
         setSelectedEmpresaId(first?.empresa_id ? String(first.empresa_id) : '')
       }
     } catch (error) {
@@ -132,7 +156,7 @@ export default function AdminEmpresasMapeo() {
     setNombreOrigenInput(selectedItem?.nombre_origen || '')
     loadEmpresasLocales(initial)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedItem?.origen_empresa_id])
+  }, [selectedItem?.origen_ref, selectedItem?.origen_empresa_id])
 
   const handleSearchSubmit = async (event) => {
     event.preventDefault()
@@ -141,7 +165,7 @@ export default function AdminEmpresasMapeo() {
   }
 
   const handleSelectItem = (item) => {
-    setSelectedOrigenEmpresaId(Number(item.origen_empresa_id))
+    setSelectedOrigenRef(getOrigenRef(item))
     setSelectedEmpresaId(item?.empresa_id ? String(item.empresa_id) : '')
     setNombreOrigenInput(item?.nombre_origen || '')
   }
@@ -150,13 +174,13 @@ export default function AdminEmpresasMapeo() {
     if (!selectedItem) return
     const nombre = String(nombreOrigenInput || '').trim()
     if (!nombre) {
-      showToast({ type: 'warning', message: 'Ingresa el nombre de empresa en ADEMY.' })
+      showToast({ type: 'warning', message: 'Ingresa el nombre de empresa origen.' })
       return
     }
 
     try {
       setSaving(true)
-      const response = await actualizarNombreEmpresaOrigen(selectedItem.origen_empresa_id, {
+      const response = await actualizarNombreEmpresaOrigen(getOrigenRef(selectedItem), {
         nombre_origen: nombre,
       })
       showToast({
@@ -183,7 +207,7 @@ export default function AdminEmpresasMapeo() {
     try {
       setSaving(true)
       const nombre = String(nombreOrigenInput || '').trim()
-      const response = await vincularEmpresaOrigen(selectedItem.origen_empresa_id, {
+      const response = await vincularEmpresaOrigen(getOrigenRef(selectedItem), {
         empresa_id: Number(selectedEmpresaId),
         nombre_origen: nombre || selectedItem.nombre_origen || null,
       })
@@ -204,15 +228,15 @@ export default function AdminEmpresasMapeo() {
 
   const handleDescartar = async () => {
     if (!selectedItem) return
-    const ok = window.confirm(
-      'Se marcara como descartada y se quitara la vinculacion local de las experiencias asociadas. Continuar?'
-    )
-    if (!ok) return
+    if (isManualSource(selectedItem)) {
+      showToast({ type: 'warning', message: 'Los origenes manuales no se pueden descartar; usa vincular o renombrar.' })
+      return
+    }
 
     try {
       setSaving(true)
       const nombre = String(nombreOrigenInput || '').trim()
-      const response = await descartarEmpresaOrigen(selectedItem.origen_empresa_id, {
+      const response = await descartarEmpresaOrigen(getOrigenRef(selectedItem), {
         nombre_origen: nombre || selectedItem.nombre_origen || null,
       })
       showToast({
@@ -230,6 +254,65 @@ export default function AdminEmpresasMapeo() {
     }
   }
 
+  const handleDesvincular = async () => {
+    if (!selectedItem) return
+    if (isManualSource(selectedItem)) {
+      showToast({ type: 'warning', message: 'Los origenes manuales no soportan desvinculacion desde este mapeo.' })
+      return
+    }
+
+    try {
+      setSaving(true)
+      const response = await desvincularEmpresaOrigen(getOrigenRef(selectedItem))
+      showToast({
+        type: 'success',
+        message: `Desvinculada. Experiencias actualizadas: ${response?.experiencias_actualizadas ?? 0}.`,
+      })
+      await loadMapeo()
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getIntegracionEmpresasErrorMessage(error, 'No se pudo desvincular la empresa.'),
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const closeConfirmModal = () => {
+    if (saving) return
+    setConfirmAction(null)
+  }
+
+  const confirmConfig = useMemo(() => {
+    if (!confirmAction || !selectedItem) return null
+    if (confirmAction === 'desvincular') {
+      return {
+        title: 'Desvincular empresa',
+        message: 'Se eliminara el vinculo local y el origen volvera a estado pendiente para reasignarlo. Continuar?',
+        confirmLabel: 'Desvincular',
+      }
+    }
+    if (confirmAction === 'descartar') {
+      return {
+        title: 'Descartar empresa origen',
+        message: 'Se marcara como descartada y se quitara la vinculacion local de las experiencias asociadas. Continuar?',
+        confirmLabel: 'Descartar',
+      }
+    }
+    return null
+  }, [confirmAction, selectedItem])
+
+  const handleConfirmAction = async () => {
+    if (!confirmAction) return
+    if (confirmAction === 'desvincular') {
+      await handleDesvincular()
+    } else if (confirmAction === 'descartar') {
+      await handleDescartar()
+    }
+    setConfirmAction(null)
+  }
+
   return (
     <div className="admin-scope min-h-screen bg-secondary">
       <Header />
@@ -238,13 +321,13 @@ export default function AdminEmpresasMapeo() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-2">
               <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">
-                <Shuffle className="w-4 h-4" /> Integracion ADEMY
+                <Shuffle className="w-4 h-4" /> Integracion de origenes
               </span>
               <h1 className="admin-title font-heading text-2xl sm:text-3xl font-bold">
                 Mapeo de empresas de experiencia
               </h1>
               <p className="text-sm text-foreground/70 max-w-2xl">
-                Vincula empresas externas reportadas por ADEMY con empresas locales de EmpleoFacil sin crear usuarios reclutadores automaticamente.
+                Vincula empresas origen (ADEMY o registradas manualmente por candidatos) con empresas locales de EmpleoFacil.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -310,17 +393,17 @@ export default function AdminEmpresasMapeo() {
             <div className="admin-list space-y-3">
               {items.map((item) => (
                 <button
-                  key={item.id}
+                  key={getOrigenRef(item) || item.id}
                   className={`w-full text-left border rounded-xl p-4 ${
-                    Number(selectedItem?.id) === Number(item.id) ? 'border-primary bg-primary/5' : 'border-border'
+                    getOrigenRef(selectedItem) === getOrigenRef(item) ? 'border-primary bg-primary/5' : 'border-border'
                   }`}
                   onClick={() => handleSelectItem(item)}
                   type="button"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-semibold text-sm">{item.nombre_origen || `Empresa ADEMY #${item.origen_empresa_id}`}</p>
-                      <p className="text-xs text-foreground/60 mt-1">Origen ID: {item.origen_empresa_id}</p>
+                      <p className="font-semibold text-sm">{getOrigenDisplayName(item)}</p>
+                      <p className="text-xs text-foreground/60 mt-1">{getOrigenMeta(item)}</p>
                     </div>
                     <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_STYLES[item.estado] || STATUS_STYLES.pendiente}`}>
                       {formatStatus(item.estado)}
@@ -362,19 +445,19 @@ export default function AdminEmpresasMapeo() {
             ) : (
               <>
                 <div className="border border-border rounded-xl p-4 space-y-1 text-sm">
-                  <p className="font-semibold">{selectedItem.nombre_origen || `Empresa ADEMY #${selectedItem.origen_empresa_id}`}</p>
-                  <p className="text-foreground/60">Origen ID: {selectedItem.origen_empresa_id}</p>
+                  <p className="font-semibold">{getOrigenDisplayName(selectedItem)}</p>
+                  <p className="text-foreground/60">{getOrigenMeta(selectedItem)}</p>
                   <p className="text-foreground/60">
                     Vinculo actual: {selectedItem.empresa_local_nombre || 'Sin empresa local'}
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs text-foreground/60">Nombre empresa en ADEMY</label>
+                  <label className="text-xs text-foreground/60">Nombre empresa origen</label>
                   <div className="flex items-center gap-2">
                     <input
                       className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-white text-foreground"
-                      placeholder={`Empresa ADEMY #${selectedItem.origen_empresa_id}`}
+                      placeholder={getOrigenDisplayName(selectedItem)}
                       value={nombreOrigenInput}
                       onChange={(event) => setNombreOrigenInput(event.target.value)}
                     />
@@ -462,21 +545,62 @@ export default function AdminEmpresasMapeo() {
                     <Link2 className="w-4 h-4" />
                     Vincular
                   </button>
-                  <button
-                    className="px-4 py-2 border border-rose-300 text-rose-700 rounded-lg text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50"
-                    type="button"
-                    onClick={handleDescartar}
-                    disabled={saving}
-                  >
-                    <Link2Off className="w-4 h-4" />
-                    Descartar
-                  </button>
+                  {!isManualSource(selectedItem) && String(selectedItem.estado || '') === 'vinculada' ? (
+                    <button
+                      className="px-4 py-2 border border-amber-300 text-amber-700 rounded-lg text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50"
+                      type="button"
+                      onClick={() => setConfirmAction('desvincular')}
+                      disabled={saving}
+                    >
+                      <Link2Off className="w-4 h-4" />
+                      Desvincular
+                    </button>
+                  ) : null}
+                  {!isManualSource(selectedItem) ? (
+                    <button
+                      className="px-4 py-2 border border-rose-300 text-rose-700 rounded-lg text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50"
+                      type="button"
+                      onClick={() => setConfirmAction('descartar')}
+                      disabled={saving || String(selectedItem.estado || '') === 'descartada'}
+                    >
+                      <Link2Off className="w-4 h-4" />
+                      Descartar
+                    </button>
+                  ) : null}
                 </div>
               </>
             )}
           </aside>
         </section>
       </main>
+      {confirmConfig ? (
+        <div className="fixed inset-0 z-50 bg-black/45 px-4 py-6 flex items-center justify-center" role="presentation" onClick={closeConfirmModal}>
+          <div className="w-full max-w-md rounded-2xl border border-border bg-white p-5 space-y-4 shadow-xl" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+            <div className="space-y-1">
+              <h3 className="font-heading text-lg font-semibold">{confirmConfig.title}</h3>
+              <p className="text-sm text-foreground/70">{confirmConfig.message}</p>
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="px-3 py-2 border border-border rounded-lg text-sm text-foreground/70 disabled:opacity-50"
+                onClick={closeConfirmModal}
+                disabled={saving}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-white disabled:opacity-50"
+                onClick={handleConfirmAction}
+                disabled={saving}
+              >
+                {saving ? 'Procesando...' : confirmConfig.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

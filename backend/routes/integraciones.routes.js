@@ -8,7 +8,8 @@ const {
   searchEmpresasLocales,
   vincularEmpresaOrigen,
   actualizarNombreEmpresaOrigen,
-  descartarEmpresaOrigen
+  descartarEmpresaOrigen,
+  desvincularEmpresaOrigen
 } = require('../controllers/integraciones.controller');
 const { authRequired, requireRole } = require('../middlewares/auth.middleware');
 
@@ -21,6 +22,7 @@ router.get('/ademy/convocatorias/:id/promociones', authRequired, requireRole(['a
 router.get('/ademy/empresas-mapeo', authRequired, requireRole(['administrador', 'superadmin']), listEmpresasMapeo);
 router.get('/ademy/empresas-locales', authRequired, requireRole(['administrador', 'superadmin']), searchEmpresasLocales);
 router.put('/ademy/empresas-mapeo/:origenEmpresaId/vincular', authRequired, requireRole(['administrador', 'superadmin']), vincularEmpresaOrigen);
+router.put('/ademy/empresas-mapeo/:origenEmpresaId/desvincular', authRequired, requireRole(['administrador', 'superadmin']), desvincularEmpresaOrigen);
 router.put('/ademy/empresas-mapeo/:origenEmpresaId/nombre', authRequired, requireRole(['administrador', 'superadmin']), actualizarNombreEmpresaOrigen);
 router.put('/ademy/empresas-mapeo/:origenEmpresaId/descartar', authRequired, requireRole(['administrador', 'superadmin']), descartarEmpresaOrigen);
 

@@ -14,7 +14,10 @@ function parseIntegracionEmpresasError(error, fallbackMessage) {
   if (code === 'MAPPING_LIST_FAILED') return 'No se pudo cargar el listado de mapeos.'
   if (code === 'MAPPING_NAME_UPDATE_FAILED') return 'No se pudo guardar el nombre de empresa origen.'
   if (code === 'MAPPING_UPDATE_FAILED') return 'No se pudo vincular la empresa.'
+  if (code === 'MAPPING_UNLINK_FAILED') return 'No se pudo desvincular la empresa.'
   if (code === 'MAPPING_DISCARD_FAILED') return 'No se pudo descartar la empresa origen.'
+  if (code === 'MANUAL_SOURCE_DISCARD_NOT_SUPPORTED') return 'Las empresas ingresadas manualmente no se pueden descartar; debes vincularlas o renombrarlas.'
+  if (code === 'MANUAL_SOURCE_UNLINK_NOT_SUPPORTED') return 'Las empresas manuales no soportan desvinculacion desde este mapeo.'
   if (code === 'EMPRESAS_SEARCH_FAILED') return 'No se pudo buscar empresas locales.'
   if (normalized.includes('failed to fetch')) return 'No se pudo conectar con el servidor.'
 
@@ -48,21 +51,32 @@ export async function searchEmpresasLocales(params = {}) {
 }
 
 export async function vincularEmpresaOrigen(origenEmpresaId, payload = {}) {
-  return apiRequest(`/api/integraciones/ademy/empresas-mapeo/${origenEmpresaId}/vincular`, {
+  const origenRef = encodeURIComponent(String(origenEmpresaId || ''))
+  return apiRequest(`/api/integraciones/ademy/empresas-mapeo/${origenRef}/vincular`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   })
 }
 
 export async function actualizarNombreEmpresaOrigen(origenEmpresaId, payload = {}) {
-  return apiRequest(`/api/integraciones/ademy/empresas-mapeo/${origenEmpresaId}/nombre`, {
+  const origenRef = encodeURIComponent(String(origenEmpresaId || ''))
+  return apiRequest(`/api/integraciones/ademy/empresas-mapeo/${origenRef}/nombre`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function desvincularEmpresaOrigen(origenEmpresaId, payload = {}) {
+  const origenRef = encodeURIComponent(String(origenEmpresaId || ''))
+  return apiRequest(`/api/integraciones/ademy/empresas-mapeo/${origenRef}/desvincular`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   })
 }
 
 export async function descartarEmpresaOrigen(origenEmpresaId, payload = {}) {
-  return apiRequest(`/api/integraciones/ademy/empresas-mapeo/${origenEmpresaId}/descartar`, {
+  const origenRef = encodeURIComponent(String(origenEmpresaId || ''))
+  return apiRequest(`/api/integraciones/ademy/empresas-mapeo/${origenRef}/descartar`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   })
