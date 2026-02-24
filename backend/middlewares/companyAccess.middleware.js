@@ -1,4 +1,5 @@
 const db = require('../db');
+const { resolveEmpresaIdForUser } = require('../services/companyPerfil.service');
 
 async function resolveCompanyContextByUserId(userId) {
   const [rows] = await db.query(
@@ -27,6 +28,17 @@ async function resolveCompanyContextByUserId(userId) {
   };
 }
 
+async function hasAnyCompanyLinkByUserId(userId) {
+  const [rows] = await db.query(
+    `SELECT 1
+     FROM empresas_usuarios
+     WHERE usuario_id = ?
+     LIMIT 1`,
+    [userId]
+  );
+  return Boolean(rows.length);
+}
+
 function companyContextRequired() {
   return async (req, res, next) => {
     try {
@@ -35,7 +47,16 @@ function companyContextRequired() {
         return res.status(401).json({ error: 'AUTH_REQUIRED' });
       }
 
-      const context = await resolveCompanyContextByUserId(userId);
+      let context = await resolveCompanyContextByUserId(userId);
+
+      if (!context && req.user?.rol === 'empresa') {
+        const hasPreviousLinks = await hasAnyCompanyLinkByUserId(userId);
+        if (!hasPreviousLinks) {
+          await resolveEmpresaIdForUser(userId, { autoCreate: true });
+          context = await resolveCompanyContextByUserId(userId);
+        }
+      }
+
       if (!context) {
         return res.status(403).json({ error: 'COMPANY_ACCESS_REQUIRED' });
       }
