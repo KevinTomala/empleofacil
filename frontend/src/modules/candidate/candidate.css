@@ -51,7 +51,7 @@
   grid-template-columns: 1fr;
 }
 
-.candidate-filters-row .candidate-filter-inline select {
+.candidate-filters-row .candidate-filter-inline .ef-control {
   min-width: 0;
   width: 100%;
 }
@@ -90,19 +90,9 @@
   color: color-mix(in oklch, var(--color-foreground) 70%, white);
 }
 
-.candidate-filter-inline select {
-  border: 1px solid var(--color-border);
-  border-radius: 0.75rem;
-  padding: 0.35rem 0.5rem;
-  background: color-mix(in oklch, var(--color-secondary) 70%, white);
-  color: var(--color-foreground);
+.candidate-filter-inline .ef-control {
   font-size: 0.8rem;
-}
-
-.candidate-filter-inline select:focus {
-  outline: none;
-  border-color: color-mix(in oklch, var(--color-primary) 70%, white);
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-primary) 20%, transparent);
+  padding: 0.35rem 0.5rem;
 }
 
 .candidate-reset {
@@ -161,4 +151,21 @@
 .candidate-filters-panel {
   display: grid;
   gap: 1rem;
+}
+
+@media (max-width: 1023px) {
+  .candidate-map-card {
+    position: static;
+    top: auto;
+  }
+
+  .candidate-vacantes-list {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .candidate-filters-row .candidate-reset {
+    justify-self: start;
+  }
 }

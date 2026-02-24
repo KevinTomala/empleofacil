@@ -3,6 +3,7 @@ const {
   normalizeEstado,
   normalizeModalidad,
   normalizeTipoContrato,
+  normalizePosted,
   listVacantes,
   createVacante,
   findVacanteById,
@@ -94,14 +95,22 @@ function validateUpdateVacantePayload(payload) {
 }
 
 async function listVacantesPublic(req, res) {
+  const postedParam = req.query.posted != null ? String(req.query.posted).trim() : '';
+  if (postedParam && !normalizePosted(postedParam)) {
+    return res.status(400).json({ error: 'INVALID_PAYLOAD', details: 'posted' });
+  }
+
   try {
     const result = await listVacantes({
       page: req.query.page,
       pageSize: req.query.page_size,
       q: req.query.q,
       provincia: req.query.provincia,
+      ciudad: req.query.ciudad,
+      area: req.query.area,
       modalidad: req.query.modalidad,
-      tipoContrato: req.query.tipo_contrato
+      tipoContrato: req.query.tipo_contrato,
+      posted: req.query.posted
     }, { onlyActive: true });
 
     return res.json(result);
@@ -111,6 +120,11 @@ async function listVacantesPublic(req, res) {
 }
 
 async function listMyVacantes(req, res) {
+  const postedParam = req.query.posted != null ? String(req.query.posted).trim() : '';
+  if (postedParam && !normalizePosted(postedParam)) {
+    return res.status(400).json({ error: 'INVALID_PAYLOAD', details: 'posted' });
+  }
+
   try {
     const empresaId = await resolveEmpresaScope(req, { allowAdminParam: true });
     if (!empresaId) return res.status(403).json({ error: 'COMPANY_ACCESS_REQUIRED' });
@@ -120,9 +134,12 @@ async function listMyVacantes(req, res) {
       pageSize: req.query.page_size,
       q: req.query.q,
       provincia: req.query.provincia,
+      ciudad: req.query.ciudad,
+      area: req.query.area,
       modalidad: req.query.modalidad,
       tipoContrato: req.query.tipo_contrato,
-      estado: req.query.estado
+      estado: req.query.estado,
+      posted: req.query.posted
     }, { ownEmpresaId: empresaId });
 
     return res.json(result);
@@ -183,10 +200,10 @@ async function updateVacanteEstadoHandler(req, res) {
     if (!vacante || vacante.deleted_at) return res.status(404).json({ error: 'VACANTE_NOT_FOUND' });
     if (vacante.empresa_id !== empresaId) return res.status(403).json({ error: 'FORBIDDEN' });
 
-    const patch = {
-      estado,
-      fecha_cierre: estado === 'cerrada' ? new Date().toISOString().slice(0, 10) : null
-    };
+    const patch = { estado };
+    if (estado === 'cerrada' && !vacante.fecha_cierre) {
+      patch.fecha_cierre = new Date().toISOString().slice(0, 10);
+    }
     const affected = await updateVacante(vacanteId, patch);
     if (!affected) return res.status(404).json({ error: 'VACANTE_NOT_FOUND' });
     return res.json({ ok: true });

@@ -146,8 +146,11 @@ EmpleoFacil API
   - `page_size` (default `20`, max `100`)
   - `q` (titulo, area, ubicacion o empresa)
   - `provincia` (exacto)
+  - `ciudad` (exacto)
+  - `area` (exacto)
   - `modalidad` (`presencial|remoto|hibrido`)
   - `tipo_contrato` (`tiempo_completo|medio_tiempo|por_horas|temporal|indefinido|otro`)
+  - `posted` (`hoy|7d|30d|90d`)
 - Respuesta `200`:
 ```json
 {
@@ -177,7 +180,7 @@ EmpleoFacil API
 - Auth: requerido.
 - Roles: `empresa`, `administrador`, `superadmin`.
 - Query params:
-  - `page`, `page_size`, `q`, `provincia`, `modalidad`, `tipo_contrato`, `estado`
+  - `page`, `page_size`, `q`, `provincia`, `ciudad`, `area`, `modalidad`, `tipo_contrato`, `posted`, `estado`
   - `empresa_id` (solo admin/superadmin, opcional)
 - Respuesta `200`: mismo contrato `{ items, page, page_size, total }`.
 - Errores:
