@@ -32,6 +32,8 @@ coverage/
 docker-data/
 mysql-data/
 backend/.cache/puppeteer/
+backend/uploads/
+backend/storage/
 .vscode
 AGENTS.md
 docker-compose.prod.yml

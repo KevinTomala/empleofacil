@@ -75,7 +75,8 @@ RUN mkdir -p /app/.cache/puppeteer && \
 # ==========================
 # Create required directories
 # ==========================
-RUN mkdir -p /app/storage/documentos/candidatos \
+RUN mkdir -p /app/storage/uploads \
+    /app/storage/documentos/candidatos \
     /app/storage/contratos \
     /app/storage/centros \
  && chmod -R 755 /app/storage

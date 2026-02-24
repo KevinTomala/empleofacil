@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const {
   findCandidatoIdByUserId,
   existsCandidato,
@@ -38,6 +40,13 @@ const {
   deleteDocumento,
   runAutomaticReviewForDocumento
 } = require('../services/perfilCandidato.service');
+const {
+  ensureDirSync,
+  sanitizePathSegment,
+  resolveAbsoluteUploadPath,
+  getPublicUploadPathFromAbsolute,
+  getAbsoluteUploadPathFromPublic
+} = require('../utils/uploadPaths');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -492,6 +501,162 @@ function parsePositiveInt(value) {
   return n;
 }
 
+function buildCandidateDirectoryName(candidate) {
+  const doc = sanitizePathSegment(candidate?.documento_identidad, {
+    fallback: `ID${candidate?.id || 'CANDIDATO'}`,
+    maxLength: 40,
+    uppercase: true
+  });
+  const names = sanitizePathSegment(`${candidate?.nombres || ''}_${candidate?.apellidos || ''}`, {
+    fallback: `CANDIDATO_${candidate?.id || ''}`,
+    maxLength: 120,
+    uppercase: true
+  });
+  return `${doc}_${names}`.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+function resolveUploadType(req, { tipoDocumento = null, ladoDocumento = null } = {}) {
+  const url = String(req.originalUrl || req.path || '').toLowerCase();
+  if (url.includes('/experiencia/') && url.includes('/certificado')) {
+    return { category: 'certificado_experiencia', baseName: 'certificado_experiencia' };
+  }
+  if (url.includes('/formacion/') && url.includes('/certificado')) {
+    return { category: 'certificado_formacion', baseName: 'certificado_formacion' };
+  }
+
+  const safeTipo = sanitizePathSegment(tipoDocumento ?? req.body?.tipo_documento, {
+    fallback: 'documento',
+    maxLength: 60
+  });
+  const safeLado = sanitizePathSegment(ladoDocumento ?? req.body?.lado_documento, {
+    fallback: '',
+    maxLength: 20
+  });
+
+  if (safeTipo === 'documento_identidad' && safeLado) {
+    const sideType = `${safeTipo}_${safeLado}`;
+    return { category: sideType, baseName: sideType };
+  }
+
+  return { category: safeTipo, baseName: safeTipo };
+}
+
+function resolveCandidateFolder(req) {
+  const fromUpload = typeof req.uploadCandidateFolder === 'string' ? req.uploadCandidateFolder.trim() : '';
+  if (fromUpload) return fromUpload;
+
+  if (req.uploadCandidate) {
+    return buildCandidateDirectoryName(req.uploadCandidate);
+  }
+
+  return sanitizePathSegment(req.candidatoId, {
+    fallback: 'CANDIDATO',
+    maxLength: 40,
+    uppercase: true
+  });
+}
+
+function resolveCedulaToken(req) {
+  const fallback = req.uploadCandidate?.id || req.candidatoId || 'CANDIDATO';
+  return sanitizePathSegment(req.uploadCandidate?.documento_identidad, {
+    fallback: `ID${fallback}`,
+    maxLength: 40,
+    uppercase: true
+  });
+}
+
+function resolveFileExtension(file) {
+  const fromOriginal = path.extname(file?.originalname || '').toLowerCase();
+  const fromFilename = path.extname(file?.filename || '').toLowerCase();
+  const fromPath = path.extname(file?.path || '').toLowerCase();
+  return fromOriginal || fromFilename || fromPath || '';
+}
+
+function resolveDeterministicFilePath(directory, basename, extension) {
+  const candidatePath = path.join(directory, `${basename}${extension}`);
+  if (fs.existsSync(candidatePath)) {
+    fs.unlinkSync(candidatePath);
+  }
+  return candidatePath;
+}
+
+function moveFileSync(sourcePath, targetPath) {
+  if (!sourcePath || !targetPath) return;
+  if (path.resolve(sourcePath) === path.resolve(targetPath)) return;
+  try {
+    fs.renameSync(sourcePath, targetPath);
+  } catch (error) {
+    if (error?.code !== 'EXDEV') throw error;
+    fs.copyFileSync(sourcePath, targetPath);
+    fs.unlinkSync(sourcePath);
+  }
+}
+
+function finalizeUploadedFile(req, options = {}) {
+  if (!req.file) return;
+  if (req.uploadFileFinalized) return;
+
+  const { category, baseName } = resolveUploadType(req, options);
+  const candidateFolder = resolveCandidateFolder(req);
+  const cedulaToken = resolveCedulaToken(req);
+  const extension = resolveFileExtension(req.file);
+
+  const targetDir = resolveAbsoluteUploadPath('candidatos', candidateFolder, category);
+  ensureDirSync(targetDir);
+
+  const targetBaseName = sanitizePathSegment(`${baseName}_${cedulaToken}`, {
+    fallback: `documento_${cedulaToken}`,
+    maxLength: 180
+  });
+  const targetPath = resolveDeterministicFilePath(targetDir, targetBaseName, extension);
+
+  moveFileSync(req.file.path, targetPath);
+
+  req.file.filename = path.basename(targetPath);
+  req.file.path = targetPath;
+  req.file.destination = targetDir;
+  req.uploadPublicPath = getPublicUploadPathFromAbsolute(targetPath);
+  req.uploadFileFinalized = true;
+}
+
+function resolveUploadedFilePublicPath(req) {
+  const explicitPath = typeof req.uploadPublicPath === 'string' ? req.uploadPublicPath.trim() : '';
+  if (explicitPath.startsWith('/uploads/')) return explicitPath;
+
+  const fromAbsolutePath = getPublicUploadPathFromAbsolute(req.file?.path);
+  if (fromAbsolutePath) return fromAbsolutePath;
+
+  if (req.file?.filename) {
+    return `/uploads/candidatos/${req.file.filename}`;
+  }
+  return null;
+}
+
+function buildUploadedFileMeta(req, options = {}) {
+  if (!req.file) return null;
+  finalizeUploadedFile(req, options);
+  return {
+    nombre_archivo: req.file.filename,
+    nombre_original: req.file.originalname,
+    ruta_archivo: resolveUploadedFilePublicPath(req),
+    tipo_mime: req.file.mimetype,
+    tamanio_kb: Math.max(1, Math.round(req.file.size / 1024))
+  };
+}
+
+function safeRemoveManagedUploadFile(publicPath) {
+  if (typeof publicPath !== 'string' || !publicPath.trim()) return;
+  const absolutePath = getAbsoluteUploadPathFromPublic(publicPath);
+  if (!absolutePath) return;
+  try {
+    if (fs.existsSync(absolutePath)) {
+      fs.unlinkSync(absolutePath);
+    }
+  } catch (_error) {
+    // Evita que un fallo de limpieza rompa la respuesta principal.
+  }
+}
+
 function normalizeDocumentoMetadataByTypeAndSide({ tipoDocumento, ladoDocumento, payload = {} } = {}) {
   const normalized = { ...payload };
   if (tipoDocumento === 'documento_identidad' && ladoDocumento === 'reverso') {
@@ -730,12 +895,9 @@ async function createExperienciaCertificadoHandler(req, res) {
 
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
 
+  const fileMeta = buildUploadedFileMeta(req);
   const certificado = await createExperienciaCertificado(req.candidatoId, experienciaId, {
-    nombre_archivo: req.file.filename,
-    nombre_original: req.file.originalname,
-    ruta_archivo: `/uploads/candidatos/${req.file.filename}`,
-    tipo_mime: req.file.mimetype,
-    tamanio_kb: Math.max(1, Math.round(req.file.size / 1024)),
+    ...fileMeta,
     fecha_emision: meta?.fecha_emision ?? null,
     descripcion: meta?.descripcion ?? null,
     estado: meta?.estado ?? 'pendiente'
@@ -756,11 +918,7 @@ async function updateExperienciaCertificadoHandler(req, res) {
 
   const patch = { ...(meta || {}) };
   if (req.file) {
-    patch.nombre_archivo = req.file.filename;
-    patch.nombre_original = req.file.originalname;
-    patch.ruta_archivo = `/uploads/candidatos/${req.file.filename}`;
-    patch.tipo_mime = req.file.mimetype;
-    patch.tamanio_kb = Math.max(1, Math.round(req.file.size / 1024));
+    Object.assign(patch, buildUploadedFileMeta(req));
   }
 
   if (!Object.keys(patch).length) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
@@ -870,12 +1028,9 @@ async function createFormacionCertificadoHandler(req, res) {
   }
 
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const fileMeta = buildUploadedFileMeta(req);
   const cert = await createFormacionCertificado(req.candidatoId, formacionId, {
-    nombre_archivo: req.file.filename,
-    nombre_original: req.file.originalname,
-    ruta_archivo: `/uploads/candidatos/${req.file.filename}`,
-    tipo_mime: req.file.mimetype,
-    tamanio_kb: Math.max(1, Math.round(req.file.size / 1024)),
+    ...fileMeta,
     fecha_emision: meta?.fecha_emision ?? null,
     descripcion: meta?.descripcion ?? null,
     estado: meta?.estado ?? 'pendiente'
@@ -897,11 +1052,7 @@ async function updateFormacionCertificadoHandler(req, res) {
 
   const patch = { ...(meta || {}) };
   if (req.file) {
-    patch.nombre_archivo = req.file.filename;
-    patch.nombre_original = req.file.originalname;
-    patch.ruta_archivo = `/uploads/candidatos/${req.file.filename}`;
-    patch.tipo_mime = req.file.mimetype;
-    patch.tamanio_kb = Math.max(1, Math.round(req.file.size / 1024));
+    Object.assign(patch, buildUploadedFileMeta(req));
   }
 
   if (!Object.keys(patch).length) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
@@ -959,24 +1110,14 @@ async function createDocumentoHandler(req, res) {
 
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
 
-  if (tipoDocumento === 'documento_identidad') {
-    const existsSameSide = await existsDocumentoByTipoLado(req.candidatoId, {
-      tipoDocumento,
-      ladoDocumento
-    });
-    if (existsSameSide) {
-      return res.status(409).json({ error: 'DOCUMENTO_IDENTIDAD_SIDE_ALREADY_EXISTS' });
-    }
-  }
-
+  const fileMeta = buildUploadedFileMeta(req, {
+    tipoDocumento,
+    ladoDocumento: tipoDocumento === 'documento_identidad' ? ladoDocumento : null
+  });
   const payload = {
     tipo_documento: tipoDocumento,
     lado_documento: tipoDocumento === 'documento_identidad' ? ladoDocumento : null,
-    nombre_archivo: req.file.filename,
-    nombre_original: req.file.originalname,
-    ruta_archivo: `/uploads/candidatos/${req.file.filename}`,
-    tipo_mime: req.file.mimetype,
-    tamanio_kb: Math.max(1, Math.round(req.file.size / 1024)),
+    ...fileMeta,
     fecha_emision: req.body?.fecha_emision || null,
     fecha_vencimiento: req.body?.fecha_vencimiento || null,
     numero_documento: req.body?.numero_documento || null,
@@ -993,12 +1134,53 @@ async function createDocumentoHandler(req, res) {
     payload
   });
 
-  const created = await createDocumento(req.candidatoId, normalizedPayload);
-  await runAutomaticReviewForDocumento(created.id, {
-    actorUsuarioId: req.user?.id || null,
-    metadata: { trigger: 'upload' }
+  const existingDocs = (await listDocumentos(req.candidatoId)).filter((item) => {
+    const sameType = item.tipo_documento === normalizedPayload.tipo_documento;
+    const currentSide = item.lado_documento || null;
+    const nextSide = normalizedPayload.lado_documento || null;
+    return sameType && currentSide === nextSide;
   });
-  return res.status(201).json({ ok: true, id: created.id });
+
+  if (!existingDocs.length) {
+    const created = await createDocumento(req.candidatoId, normalizedPayload);
+    await runAutomaticReviewForDocumento(created.id, {
+      actorUsuarioId: req.user?.id || null,
+      metadata: { trigger: 'upload' }
+    });
+    return res.status(201).json({ ok: true, id: created.id });
+  }
+
+  const targetDoc = existingDocs[0];
+  const previousPath = targetDoc.ruta_archivo;
+  const replacementPatch = { ...normalizedPayload };
+  delete replacementPatch.subido_rol;
+  const affected = await updateDocumento(req.candidatoId, targetDoc.id, replacementPatch);
+  if (!affected) return res.status(404).json({ error: 'DOCUMENTO_NOT_FOUND' });
+
+  let deletedDuplicates = 0;
+  for (const duplicate of existingDocs.slice(1)) {
+    const removed = await deleteDocumento(req.candidatoId, duplicate.id);
+    if (removed) {
+      deletedDuplicates += 1;
+      safeRemoveManagedUploadFile(duplicate.ruta_archivo);
+    }
+  }
+
+  if (previousPath !== normalizedPayload.ruta_archivo) {
+    safeRemoveManagedUploadFile(previousPath);
+  }
+
+  await runAutomaticReviewForDocumento(targetDoc.id, {
+    actorUsuarioId: req.user?.id || null,
+    metadata: { trigger: 'upload_replace' }
+  });
+
+  return res.json({
+    ok: true,
+    id: targetDoc.id,
+    replaced: true,
+    deleted_duplicates: deletedDuplicates
+  });
 }
 
 async function updateDocumentoHandler(req, res, { allowEstado }) {

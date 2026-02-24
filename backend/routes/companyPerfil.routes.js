@@ -1,8 +1,8 @@
 const express = require('express');
-const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { authRequired, requireRole } = require('../middlewares/auth.middleware');
+const { ensureDirSync, resolveAbsoluteUploadPath } = require('../utils/uploadPaths');
 const {
   companyContextRequired,
   requireCompanyAnyWrite,
@@ -29,11 +29,8 @@ const {
 } = require('../controllers/verificaciones.controller');
 
 const router = express.Router();
-const logosDir = path.join(__dirname, '..', 'uploads', 'empresas', 'logos');
-
-if (!fs.existsSync(logosDir)) {
-  fs.mkdirSync(logosDir, { recursive: true });
-}
+const logosDir = resolveAbsoluteUploadPath('empresas', 'logos');
+ensureDirSync(logosDir);
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, logosDir),

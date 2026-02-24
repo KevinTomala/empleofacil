@@ -1,5 +1,5 @@
 const fs = require('fs');
-const path = require('path');
+const { getAbsoluteUploadPathFromPublic } = require('../utils/uploadPaths');
 const {
   VALID_ROLES_EMPRESA,
   VALID_ESTADOS_EMPRESA_USUARIO,
@@ -270,12 +270,9 @@ function removeLocalLogoIfManaged(logoUrl) {
   if (!logoUrl || typeof logoUrl !== 'string') return;
   if (!logoUrl.startsWith(LOGO_UPLOAD_PREFIX)) return;
 
-  const relativePath = logoUrl
-    .replace(/^\//, '')
-    .split('/')
-    .filter(Boolean);
+  const localPath = getAbsoluteUploadPathFromPublic(logoUrl);
+  if (!localPath) return;
 
-  const localPath = path.join(__dirname, '..', ...relativePath);
   if (fs.existsSync(localPath)) {
     fs.unlinkSync(localPath);
   }

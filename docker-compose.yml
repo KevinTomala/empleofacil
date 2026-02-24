@@ -32,9 +32,11 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
+      - backend_uploads_data:/app/storage/uploads
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       BACKEND_PORT: ${BACKEND_PORT:-3000}
+      UPLOADS_ROOT: ${UPLOADS_ROOT:-/app/storage/uploads}
       DB_HOST: mysql
       DB_PORT: 3306
       DB_USER: ${DB_USER:-root}
@@ -96,3 +98,4 @@ networks:
 
 volumes:
   mysql_data:
+  backend_uploads_data:

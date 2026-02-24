@@ -1,8 +1,14 @@
 const express = require('express');
-const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const db = require('../db');
 const { authRequired, requireRole } = require('../middlewares/auth.middleware');
+const {
+  ensureDirSync,
+  sanitizePathSegment,
+  resolveAbsoluteUploadPath,
+  getPublicUploadPathFromAbsolute
+} = require('../utils/uploadPaths');
 const {
   getMyPerfil,
   getPerfilById,
@@ -84,16 +90,118 @@ const {
 
 const router = express.Router();
 
-const uploadsDir = path.join(__dirname, '..', 'uploads', 'candidatos');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+function parsePositiveInt(value) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
+function buildCandidateDirectoryName(candidate) {
+  const doc = sanitizePathSegment(candidate.documento_identidad, {
+    fallback: `ID${candidate.id}`,
+    maxLength: 40,
+    uppercase: true
+  });
+  const names = sanitizePathSegment(`${candidate.nombres || ''}_${candidate.apellidos || ''}`, {
+    fallback: `CANDIDATO_${candidate.id}`,
+    maxLength: 120,
+    uppercase: true
+  });
+  return `${doc}_${names}`.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+function resolveDocumentCategory(req) {
+  const url = String(req.originalUrl || req.path || '').toLowerCase();
+
+  if (url.includes('/experiencia/') && url.includes('/certificado')) {
+    return 'certificado_experiencia';
+  }
+  if (url.includes('/formacion/') && url.includes('/certificado')) {
+    return 'certificado_formacion';
+  }
+
+  const tipoDocumento = sanitizePathSegment(req.body?.tipo_documento, {
+    fallback: 'documento',
+    maxLength: 60
+  });
+  const ladoDocumento = sanitizePathSegment(req.body?.lado_documento, {
+    fallback: '',
+    maxLength: 20
+  });
+
+  if (tipoDocumento === 'documento_identidad' && ladoDocumento) {
+    return `${tipoDocumento}_${ladoDocumento}`;
+  }
+  return tipoDocumento;
+}
+
+async function resolveCandidateForUpload(req) {
+  const fromParam = parsePositiveInt(req.params?.candidatoId);
+  if (req.params?.candidatoId !== undefined && !fromParam) {
+    throw new Error('INVALID_CANDIDATO_ID');
+  }
+
+  if (fromParam) {
+    const [rows] = await db.query(
+      `SELECT id, documento_identidad, nombres, apellidos
+       FROM candidatos
+       WHERE id = ?
+         AND deleted_at IS NULL
+       LIMIT 1`,
+      [fromParam]
+    );
+    return rows[0] || null;
+  }
+
+  const userId = parsePositiveInt(req.user?.id);
+  if (!userId) return null;
+
+  const [rows] = await db.query(
+    `SELECT id, documento_identidad, nombres, apellidos
+     FROM candidatos
+     WHERE usuario_id = ?
+       AND deleted_at IS NULL
+     LIMIT 1`,
+    [userId]
+  );
+  return rows[0] || null;
+}
+
+async function resolveUploadDestination(req) {
+  const candidate = await resolveCandidateForUpload(req);
+  if (!candidate) {
+    throw new Error('CANDIDATO_NOT_FOUND');
+  }
+
+  const candidateFolder = buildCandidateDirectoryName(candidate);
+  const categoryFolder = resolveDocumentCategory(req);
+  const destination = resolveAbsoluteUploadPath('candidatos', candidateFolder, categoryFolder);
+  ensureDirSync(destination);
+  req.uploadCandidate = candidate;
+  req.uploadCandidateFolder = candidateFolder;
+  req.uploadCategoryFolder = categoryFolder;
+  return destination;
 }
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
-  filename: (_req, file, cb) => {
+  destination: (req, _file, cb) => {
+    resolveUploadDestination(req)
+      .then((destination) => {
+        req.uploadDestination = destination;
+        cb(null, destination);
+      })
+      .catch((error) => cb(error));
+  },
+  filename: (req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
-    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+    const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    const absolutePath = path.join(req.uploadDestination || '', filename);
+    const publicPath = getPublicUploadPathFromAbsolute(absolutePath);
+    if (!publicPath) {
+      return cb(new Error('INVALID_UPLOAD_DESTINATION'));
+    }
+    req.uploadPublicPath = publicPath;
+    cb(null, filename);
   }
 });
 

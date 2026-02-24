@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const path = require('path');
 const db = require('./db');
 const { startAdemySyncJob } = require('./jobs/ademySync.job');
+const { UPLOADS_ROOT, ensureDirSync } = require('./utils/uploadPaths');
 
 const authRoutes = require('./routes/auth.routes');
 const integracionesRoutes = require('./routes/integraciones.routes');
@@ -25,6 +26,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+ensureDirSync(UPLOADS_ROOT);
 
 app.get('/healthz', (req, res) => {
   res.status(200).json({ status: 'OK' });
@@ -43,12 +45,22 @@ app.use('/api/company', companyPerfilRoutes);
 app.use('/api/verificaciones', verificacionesRoutes);
 app.use('/api/vacantes', vacantesRoutes);
 app.use('/api/postulaciones', postulacionesRoutes);
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(UPLOADS_ROOT));
+const legacyUploadsRoot = path.join(__dirname, 'uploads');
+if (path.resolve(legacyUploadsRoot) !== path.resolve(UPLOADS_ROOT)) {
+  app.use('/uploads', express.static(legacyUploadsRoot));
+}
 
 app.use((err, _req, res, _next) => {
   if (!err) return res.status(500).json({ error: 'INTERNAL_ERROR' });
   if (err.message === 'INVALID_FILE_TYPE') {
     return res.status(400).json({ error: 'INVALID_FILE_TYPE' });
+  }
+  if (err.message === 'INVALID_CANDIDATO_ID') {
+    return res.status(400).json({ error: 'INVALID_CANDIDATO_ID' });
+  }
+  if (err.message === 'CANDIDATO_NOT_FOUND') {
+    return res.status(404).json({ error: 'CANDIDATO_NOT_FOUND' });
   }
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: 'FILE_TOO_LARGE' });
