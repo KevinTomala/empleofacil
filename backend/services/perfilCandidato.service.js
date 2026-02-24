@@ -1,5 +1,25 @@
 const db = require('../db');
 let candidateDocumentsSchemaReadyPromise = null;
+const VALID_DOCUMENTO_ESTADOS = ['pendiente', 'aprobado', 'rechazado', 'vencido'];
+const VALID_DOCUMENTO_EVENTO_ACCIONES = ['subido', 'auto_precheck', 'aprobado', 'rechazado', 'vencido', 'reabierto'];
+const VALID_DOCUMENTO_EVENTO_ORIGENES = ['manual', 'automatico', 'mixto'];
+const VALID_DOCUMENTO_EVENTO_ACTOR_ROLES = ['candidato', 'administrador', 'superadmin', 'system'];
+
+function toMysqlDateTime(value = new Date()) {
+  return new Date(value).toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function normalizeDocumentoEventoActorRol(actorRol) {
+  const normalized = String(actorRol || '').trim().toLowerCase();
+  if (VALID_DOCUMENTO_EVENTO_ACTOR_ROLES.includes(normalized)) return normalized;
+  return 'system';
+}
+
+function normalizeDocumentoEventoOrigen(origen) {
+  const normalized = String(origen || '').trim().toLowerCase();
+  if (VALID_DOCUMENTO_EVENTO_ORIGENES.includes(normalized)) return normalized;
+  return 'manual';
+}
 
 async function ensureCandidateDocumentsSchema() {
   if (candidateDocumentsSchemaReadyPromise) return candidateDocumentsSchemaReadyPromise;
@@ -32,6 +52,39 @@ async function ensureCandidateDocumentsSchema() {
     } catch (error) {
       if (String(error?.code || '') !== 'ER_DUP_KEYNAME') throw error;
     }
+
+    try {
+      await db.query(
+        `ALTER TABLE candidatos_documentos
+         ADD INDEX idx_candidatos_documentos_candidato_estado (candidato_id, estado)`
+      );
+    } catch (error) {
+      if (String(error?.code || '') !== 'ER_DUP_KEYNAME') throw error;
+    }
+
+    await db.query(
+      `CREATE TABLE IF NOT EXISTS candidatos_documentos_verificaciones (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        documento_id BIGINT NOT NULL,
+        candidato_id BIGINT NOT NULL,
+        accion ENUM('subido','auto_precheck','aprobado','rechazado','vencido','reabierto') NOT NULL,
+        estado_anterior ENUM('pendiente','aprobado','rechazado','vencido') NULL,
+        estado_nuevo ENUM('pendiente','aprobado','rechazado','vencido') NULL,
+        actor_usuario_id BIGINT NULL,
+        actor_rol ENUM('candidato','administrador','superadmin','system') NOT NULL DEFAULT 'system',
+        comentario TEXT NULL,
+        origen ENUM('manual','automatico','mixto') NOT NULL DEFAULT 'manual',
+        metadata JSON NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_candidatos_docs_verif_documento FOREIGN KEY (documento_id) REFERENCES candidatos_documentos(id) ON DELETE CASCADE,
+        CONSTRAINT fk_candidatos_docs_verif_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
+        CONSTRAINT fk_candidatos_docs_verif_actor FOREIGN KEY (actor_usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+        INDEX idx_candidatos_docs_verif_documento (documento_id),
+        INDEX idx_candidatos_docs_verif_candidato (candidato_id),
+        INDEX idx_candidatos_docs_verif_accion (accion),
+        INDEX idx_candidatos_docs_verif_created_at (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    );
   })();
 
   try {
@@ -1284,6 +1337,578 @@ async function existsFormacion(candidatoId, formacionId) {
   return Boolean(rows.length);
 }
 
+function mapDocumentoAdminRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    candidato_id: row.candidato_id,
+    tipo_documento: row.tipo_documento,
+    lado_documento: row.lado_documento,
+    nombre_archivo: row.nombre_archivo,
+    nombre_original: row.nombre_original,
+    ruta_archivo: row.ruta_archivo,
+    tipo_mime: row.tipo_mime,
+    tamanio_kb: row.tamanio_kb,
+    fecha_emision: row.fecha_emision,
+    fecha_vencimiento: row.fecha_vencimiento,
+    numero_documento: row.numero_documento,
+    descripcion: row.descripcion,
+    estado: row.estado,
+    observaciones: row.observaciones,
+    subido_por: row.subido_por,
+    verificado_por: row.verificado_por,
+    verificado_por_nombre: row.verificado_por_nombre || null,
+    fecha_verificacion: row.fecha_verificacion,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    candidato_nombre: row.candidato_nombre || null,
+    candidato_documento: row.candidato_documento || null,
+    candidato_email: row.candidato_email || null,
+    verificacion_cuenta_id: row.verificacion_cuenta_id || null,
+    verificacion_cuenta_estado: row.verificacion_cuenta_estado || null,
+    has_solicitud_verificacion: Boolean(Number(row.has_solicitud_verificacion || 0))
+  };
+}
+
+async function createDocumentoVerificationEvent(
+  {
+    documentoId,
+    candidatoId,
+    accion,
+    estadoAnterior = null,
+    estadoNuevo = null,
+    actorUsuarioId = null,
+    actorRol = 'system',
+    comentario = null,
+    origen = 'manual',
+    metadata = null
+  },
+  connection = db
+) {
+  if (!VALID_DOCUMENTO_EVENTO_ACCIONES.includes(accion)) return;
+  if (estadoAnterior && !VALID_DOCUMENTO_ESTADOS.includes(estadoAnterior)) estadoAnterior = null;
+  if (estadoNuevo && !VALID_DOCUMENTO_ESTADOS.includes(estadoNuevo)) estadoNuevo = null;
+
+  await connection.query(
+    `INSERT INTO candidatos_documentos_verificaciones (
+      documento_id,
+      candidato_id,
+      accion,
+      estado_anterior,
+      estado_nuevo,
+      actor_usuario_id,
+      actor_rol,
+      comentario,
+      origen,
+      metadata
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      documentoId,
+      candidatoId,
+      accion,
+      estadoAnterior,
+      estadoNuevo,
+      actorUsuarioId,
+      normalizeDocumentoEventoActorRol(actorRol),
+      comentario,
+      normalizeDocumentoEventoOrigen(origen),
+      metadata ? JSON.stringify(metadata) : null
+    ]
+  );
+}
+
+async function listDocumentoVerificationEvents(documentoId, { limit = 20 } = {}) {
+  await ensureCandidateDocumentsSchema();
+
+  const safeLimit = Math.max(1, Math.min(Number(limit || 20), 100));
+  const [rows] = await db.query(
+    `SELECT
+      e.id,
+      e.documento_id,
+      e.candidato_id,
+      e.accion,
+      e.estado_anterior,
+      e.estado_nuevo,
+      e.actor_usuario_id,
+      e.actor_rol,
+      e.comentario,
+      e.origen,
+      e.metadata,
+      e.created_at,
+      u.nombre_completo AS actor_nombre
+     FROM candidatos_documentos_verificaciones e
+     LEFT JOIN usuarios u
+       ON u.id = e.actor_usuario_id
+     WHERE e.documento_id = ?
+     ORDER BY e.id DESC
+     LIMIT ?`,
+    [documentoId, safeLimit]
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    documento_id: row.documento_id,
+    candidato_id: row.candidato_id,
+    accion: row.accion,
+    estado_anterior: row.estado_anterior,
+    estado_nuevo: row.estado_nuevo,
+    actor_usuario_id: row.actor_usuario_id,
+    actor_rol: row.actor_rol,
+    actor_nombre: row.actor_nombre || null,
+    comentario: row.comentario || null,
+    origen: row.origen,
+    metadata: (() => {
+      if (!row.metadata) return null;
+      if (typeof row.metadata === 'object') return row.metadata;
+      try {
+        return JSON.parse(row.metadata);
+      } catch (_error) {
+        return null;
+      }
+    })(),
+    created_at: row.created_at
+  }));
+}
+
+async function getDocumentoByIdForAdminReview(documentoId, { connection = db } = {}) {
+  await ensureCandidateDocumentsSchema();
+
+  const [rows] = await connection.query(
+    `SELECT
+      d.id,
+      d.candidato_id,
+      d.tipo_documento,
+      d.lado_documento,
+      d.nombre_archivo,
+      d.nombre_original,
+      d.ruta_archivo,
+      d.tipo_mime,
+      d.tamanio_kb,
+      d.fecha_emision,
+      d.fecha_vencimiento,
+      d.numero_documento,
+      d.descripcion,
+      d.estado,
+      d.observaciones,
+      d.subido_por,
+      d.verificado_por,
+      d.fecha_verificacion,
+      d.created_at,
+      d.updated_at,
+      uv.nombre_completo AS verificado_por_nombre,
+      CONCAT(c.nombres, ' ', c.apellidos) AS candidato_nombre,
+      c.documento_identidad AS candidato_documento,
+      cc.email AS candidato_email,
+      v.id AS verificacion_cuenta_id,
+      v.estado AS verificacion_cuenta_estado,
+      EXISTS(
+        SELECT 1
+        FROM verificaciones_cuenta_eventos ve
+        WHERE ve.verificacion_id = v.id
+          AND ve.accion = 'solicitada'
+      ) AS has_solicitud_verificacion
+     FROM candidatos_documentos d
+     INNER JOIN candidatos c
+       ON c.id = d.candidato_id
+      AND c.deleted_at IS NULL
+     LEFT JOIN candidatos_contacto cc
+       ON cc.candidato_id = c.id
+      AND cc.deleted_at IS NULL
+     LEFT JOIN usuarios uv
+       ON uv.id = d.verificado_por
+     LEFT JOIN verificaciones_cuenta v
+       ON v.cuenta_tipo = 'candidato'
+      AND v.candidato_id = c.id
+     WHERE d.id = ?
+       AND d.deleted_at IS NULL
+     LIMIT 1`,
+    [documentoId]
+  );
+
+  return mapDocumentoAdminRow(rows[0] || null);
+}
+
+function buildDocumentosAdminReviewWhere({ estado = null, tipoDocumento = null, candidatoId = null, hasSolicitud = null, q = '' } = {}) {
+  const where = ['d.deleted_at IS NULL'];
+  const params = [];
+
+  if (estado && VALID_DOCUMENTO_ESTADOS.includes(estado)) {
+    where.push('d.estado = ?');
+    params.push(estado);
+  }
+
+  if (tipoDocumento) {
+    where.push('d.tipo_documento = ?');
+    params.push(tipoDocumento);
+  }
+
+  if (Number.isInteger(Number(candidatoId)) && Number(candidatoId) > 0) {
+    where.push('d.candidato_id = ?');
+    params.push(Number(candidatoId));
+  }
+
+  if (hasSolicitud === true) {
+    where.push(`EXISTS(
+      SELECT 1
+      FROM verificaciones_cuenta v1
+      INNER JOIN verificaciones_cuenta_eventos ve1
+        ON ve1.verificacion_id = v1.id
+       AND ve1.accion = 'solicitada'
+      WHERE v1.cuenta_tipo = 'candidato'
+        AND v1.candidato_id = d.candidato_id
+    )`);
+  }
+
+  const search = String(q || '').trim();
+  if (search) {
+    const like = `%${search}%`;
+    where.push(`(
+      CONCAT(c.nombres, ' ', c.apellidos) LIKE ?
+      OR c.documento_identidad LIKE ?
+      OR cc.email LIKE ?
+      OR d.numero_documento LIKE ?
+      OR d.nombre_original LIKE ?
+      OR d.tipo_documento LIKE ?
+    )`);
+    params.push(like, like, like, like, like, like);
+  }
+
+  return {
+    whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '',
+    params
+  };
+}
+
+async function listDocumentosForAdminReview({
+  estado = null,
+  tipoDocumento = null,
+  candidatoId = null,
+  hasSolicitud = null,
+  q = '',
+  page = 1,
+  pageSize = 20
+} = {}) {
+  await ensureCandidateDocumentsSchema();
+
+  const safePage = Math.max(Number(page || 1), 1);
+  const safePageSize = Math.min(Math.max(Number(pageSize || 20), 1), 100);
+  const offset = (safePage - 1) * safePageSize;
+  const { whereSql, params } = buildDocumentosAdminReviewWhere({
+    estado,
+    tipoDocumento,
+    candidatoId,
+    hasSolicitud,
+    q
+  });
+
+  const [countRows] = await db.query(
+    `SELECT COUNT(*) AS total
+     FROM candidatos_documentos d
+     INNER JOIN candidatos c
+       ON c.id = d.candidato_id
+      AND c.deleted_at IS NULL
+     LEFT JOIN candidatos_contacto cc
+       ON cc.candidato_id = c.id
+      AND cc.deleted_at IS NULL
+     ${whereSql}`,
+    params
+  );
+
+  const [rows] = await db.query(
+    `SELECT
+      d.id,
+      d.candidato_id,
+      d.tipo_documento,
+      d.lado_documento,
+      d.nombre_archivo,
+      d.nombre_original,
+      d.ruta_archivo,
+      d.tipo_mime,
+      d.tamanio_kb,
+      d.fecha_emision,
+      d.fecha_vencimiento,
+      d.numero_documento,
+      d.descripcion,
+      d.estado,
+      d.observaciones,
+      d.subido_por,
+      d.verificado_por,
+      d.fecha_verificacion,
+      d.created_at,
+      d.updated_at,
+      uv.nombre_completo AS verificado_por_nombre,
+      CONCAT(c.nombres, ' ', c.apellidos) AS candidato_nombre,
+      c.documento_identidad AS candidato_documento,
+      cc.email AS candidato_email,
+      v.id AS verificacion_cuenta_id,
+      v.estado AS verificacion_cuenta_estado,
+      EXISTS(
+        SELECT 1
+        FROM verificaciones_cuenta_eventos ve
+        WHERE ve.verificacion_id = v.id
+          AND ve.accion = 'solicitada'
+      ) AS has_solicitud_verificacion
+     FROM candidatos_documentos d
+     INNER JOIN candidatos c
+       ON c.id = d.candidato_id
+      AND c.deleted_at IS NULL
+     LEFT JOIN candidatos_contacto cc
+       ON cc.candidato_id = c.id
+      AND cc.deleted_at IS NULL
+     LEFT JOIN usuarios uv
+       ON uv.id = d.verificado_por
+     LEFT JOIN verificaciones_cuenta v
+       ON v.cuenta_tipo = 'candidato'
+      AND v.candidato_id = c.id
+     ${whereSql}
+     ORDER BY
+      CASE d.estado
+        WHEN 'pendiente' THEN 1
+        WHEN 'rechazado' THEN 2
+        WHEN 'vencido' THEN 3
+        WHEN 'aprobado' THEN 4
+        ELSE 5
+      END ASC,
+      d.updated_at DESC
+     LIMIT ? OFFSET ?`,
+    [...params, safePageSize, offset]
+  );
+
+  return {
+    items: rows.map((row) => mapDocumentoAdminRow(row)),
+    page: safePage,
+    page_size: safePageSize,
+    total: Number(countRows[0]?.total || 0)
+  };
+}
+
+function resolveDocumentoReviewAction(estadoNuevo) {
+  if (estadoNuevo === 'aprobado') return 'aprobado';
+  if (estadoNuevo === 'rechazado') return 'rechazado';
+  if (estadoNuevo === 'vencido') return 'vencido';
+  return 'reabierto';
+}
+
+async function reviewDocumentoById({
+  documentoId,
+  estado,
+  comentario = null,
+  actorUsuarioId = null,
+  actorRol = 'system',
+  origen = 'manual',
+  metadata = null
+} = {}) {
+  await ensureCandidateDocumentsSchema();
+  if (!VALID_DOCUMENTO_ESTADOS.includes(estado)) return null;
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query(
+      `SELECT id, candidato_id, estado, observaciones
+       FROM candidatos_documentos
+       WHERE id = ?
+         AND deleted_at IS NULL
+       LIMIT 1
+       FOR UPDATE`,
+      [documentoId]
+    );
+
+    const current = rows[0];
+    if (!current) {
+      await connection.rollback();
+      return null;
+    }
+
+    const reviewAt = toMysqlDateTime();
+    const isTerminalStatus = ['aprobado', 'rechazado', 'vencido'].includes(estado);
+    const nextObservaciones = comentario !== null ? comentario : current.observaciones;
+
+    await connection.query(
+      `UPDATE candidatos_documentos
+       SET estado = ?,
+           observaciones = ?,
+           verificado_por = ?,
+           fecha_verificacion = ?,
+           updated_at = NOW()
+       WHERE id = ?`,
+      [
+        estado,
+        nextObservaciones,
+        isTerminalStatus ? actorUsuarioId : null,
+        isTerminalStatus ? reviewAt : null,
+        documentoId
+      ]
+    );
+
+    await createDocumentoVerificationEvent(
+      {
+        documentoId: current.id,
+        candidatoId: current.candidato_id,
+        accion: resolveDocumentoReviewAction(estado),
+        estadoAnterior: current.estado,
+        estadoNuevo: estado,
+        actorUsuarioId,
+        actorRol,
+        comentario,
+        origen,
+        metadata
+      },
+      connection
+    );
+
+    await connection.commit();
+    return getDocumentoByIdForAdminReview(documentoId);
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function runAutomaticReviewForDocumento(documentoId, { actorUsuarioId = null, metadata = null } = {}) {
+  await ensureCandidateDocumentsSchema();
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query(
+      `SELECT
+        id,
+        candidato_id,
+        tipo_documento,
+        lado_documento,
+        ruta_archivo,
+        numero_documento,
+        fecha_vencimiento,
+        estado
+       FROM candidatos_documentos
+       WHERE id = ?
+         AND deleted_at IS NULL
+       LIMIT 1
+       FOR UPDATE`,
+      [documentoId]
+    );
+
+    const current = rows[0];
+    if (!current) {
+      await connection.rollback();
+      return null;
+    }
+
+    const flags = [];
+    if (!String(current.ruta_archivo || '').trim()) {
+      flags.push('missing_file_path');
+    }
+    if (current.tipo_documento === 'documento_identidad' && !current.lado_documento) {
+      flags.push('identidad_side_missing');
+    }
+    if (current.tipo_documento === 'documento_identidad' && current.lado_documento === 'anverso' && !current.numero_documento) {
+      flags.push('identidad_front_number_missing');
+    }
+    if (current.tipo_documento === 'licencia_conducir' && !current.numero_documento) {
+      flags.push('licencia_number_missing');
+    }
+
+    const nowDate = new Date();
+    nowDate.setHours(0, 0, 0, 0);
+    if (current.fecha_vencimiento) {
+      const expiry = new Date(current.fecha_vencimiento);
+      if (!Number.isNaN(expiry.getTime()) && expiry < nowDate) {
+        flags.push('expired_document');
+      }
+    }
+
+    let nextEstado = current.estado;
+    if (flags.includes('expired_document')) {
+      nextEstado = 'vencido';
+    } else if (current.estado === 'vencido') {
+      nextEstado = 'pendiente';
+    }
+
+    const changed = nextEstado !== current.estado;
+    if (changed) {
+      await connection.query(
+        `UPDATE candidatos_documentos
+         SET estado = ?,
+             verificado_por = NULL,
+             fecha_verificacion = NULL,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [nextEstado, current.id]
+      );
+    }
+
+    await createDocumentoVerificationEvent(
+      {
+        documentoId: current.id,
+        candidatoId: current.candidato_id,
+        accion: 'auto_precheck',
+        estadoAnterior: current.estado,
+        estadoNuevo: nextEstado,
+        actorUsuarioId,
+        actorRol: 'system',
+        comentario: flags.length ? `Reglas detectadas: ${flags.join(', ')}` : 'Precheck automatico sin observaciones.',
+        origen: 'automatico',
+        metadata: {
+          flags,
+          changed,
+          ...(metadata && typeof metadata === 'object' ? metadata : {})
+        }
+      },
+      connection
+    );
+
+    await connection.commit();
+    return {
+      changed,
+      flags,
+      documento: await getDocumentoByIdForAdminReview(documentoId)
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function runAutomaticReviewForPendingDocuments({ limit = 100, actorUsuarioId = null } = {}) {
+  await ensureCandidateDocumentsSchema();
+
+  const safeLimit = Math.max(1, Math.min(Number(limit || 100), 500));
+  const [rows] = await db.query(
+    `SELECT id
+     FROM candidatos_documentos
+     WHERE deleted_at IS NULL
+       AND estado IN ('pendiente', 'vencido')
+     ORDER BY updated_at DESC
+     LIMIT ?`,
+    [safeLimit]
+  );
+
+  let changed = 0;
+  let withFlags = 0;
+  for (const row of rows) {
+    const result = await runAutomaticReviewForDocumento(row.id, {
+      actorUsuarioId,
+      metadata: { trigger: 'batch_admin' }
+    });
+    if (!result) continue;
+    if (result.changed) changed += 1;
+    if (Array.isArray(result.flags) && result.flags.length) withFlags += 1;
+  }
+
+  return {
+    processed: rows.length,
+    changed,
+    with_flags: withFlags
+  };
+}
+
 async function listDocumentos(candidatoId) {
   await ensureCandidateDocumentsSchema();
 
@@ -1427,6 +2052,19 @@ async function createDocumento(candidatoId, payload) {
       payload.subido_por ?? null
     ]
   );
+
+  await createDocumentoVerificationEvent({
+    documentoId: result.insertId,
+    candidatoId,
+    accion: 'subido',
+    estadoAnterior: null,
+    estadoNuevo: payload.estado ?? 'pendiente',
+    actorUsuarioId: payload.subido_por ?? null,
+    actorRol: payload.subido_rol || 'candidato',
+    comentario: payload.observaciones || null,
+    origen: 'manual'
+  });
+
   return { id: result.insertId };
 }
 
@@ -1519,11 +2157,18 @@ module.exports = {
   deleteFormacion,
   existsFormacion,
   listDocumentos,
+  listDocumentosForAdminReview,
+  getDocumentoByIdForAdminReview,
+  listDocumentoVerificationEvents,
+  reviewDocumentoById,
+  runAutomaticReviewForDocumento,
+  runAutomaticReviewForPendingDocuments,
   hasCandidateVerificationSupportDocuments,
   createDocumento,
   existsDocumentoByTipoLado,
   updateDocumento,
-  deleteDocumento
+  deleteDocumento,
+  VALID_DOCUMENTO_ESTADOS
 };
 
 

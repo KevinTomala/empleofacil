@@ -86,6 +86,29 @@ const legalChecklist = [
   'La plataforma puede reportar uso indebido a la autoridad.'
 ]
 
+function normalizeDateOnly(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  const iso = raw.slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null
+  return iso
+}
+
+function isDocumentoExpired(item) {
+  const dateOnly = normalizeDateOnly(item?.fecha_vencimiento)
+  if (!dateOnly) return false
+  const expiry = new Date(`${dateOnly}T00:00:00`)
+  if (Number.isNaN(expiry.getTime())) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return expiry < today
+}
+
+function isDocumentoLockedByVerification(item) {
+  const status = String(item?.estado || '').trim().toLowerCase()
+  return status === 'aprobado' && !isDocumentoExpired(item)
+}
+
 export default function ProfileDocumentos() {
   const navigate = useNavigate()
   const [items, setItems] = useState([])
@@ -292,6 +315,11 @@ export default function ProfileDocumentos() {
   }
 
   const handleEdit = (item) => {
+    if (isDocumentoLockedByVerification(item)) {
+      showToast({ type: 'warning', message: 'Documento verificado vigente. No se puede editar.' })
+      return
+    }
+
     const isIdentityBackItem = item.tipo_documento === 'documento_identidad' && item.lado_documento === 'reverso'
     setEditingId(item.id)
     setForm({
@@ -309,6 +337,11 @@ export default function ProfileDocumentos() {
 
   const handleDelete = async (id) => {
     try {
+      const target = items.find((item) => item.id === id)
+      if (target && isDocumentoLockedByVerification(target)) {
+        showToast({ type: 'warning', message: 'Documento verificado vigente. No se puede eliminar.' })
+        return
+      }
       await deleteMyDocumento(id)
       await loadDocumentos()
       if (editingId === id) resetForm()
@@ -615,29 +648,53 @@ export default function ProfileDocumentos() {
           )}
           {!loading && items.length > 0 && (
             <div className="space-y-2">
-              {items.map((item) => (
-                <article key={item.id} className="border border-border rounded-lg px-3 py-2 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium">
-                      {item.tipo_documento}
-                      {item.tipo_documento === 'documento_identidad' && item.lado_documento
-                        ? ` - ${item.lado_documento}`
-                        : ''}
-                    </p>
-                    <p className="text-xs text-foreground/60">
-                      Estado: {item.estado} | Archivo: {item.nombre_original || item.nombre_archivo}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button type="button" className="px-3 py-1.5 text-xs border border-border rounded-lg" onClick={() => handleEdit(item)}>
-                      Editar
-                    </button>
-                    <button type="button" className="px-3 py-1.5 text-xs border border-rose-300 text-rose-700 rounded-lg" onClick={() => handleDelete(item.id)}>
-                      Eliminar
-                    </button>
-                  </div>
-                </article>
-              ))}
+              {items.map((item) => {
+                const expired = isDocumentoExpired(item)
+                const lockedByVerification = isDocumentoLockedByVerification(item)
+                const statusText = lockedByVerification
+                  ? 'Verificado'
+                  : expired
+                  ? 'Vencido'
+                  : item.estado
+
+                return (
+                  <article key={item.id} className="border border-border rounded-lg px-3 py-2 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium">
+                        {item.tipo_documento}
+                        {item.tipo_documento === 'documento_identidad' && item.lado_documento
+                          ? ` - ${item.lado_documento}`
+                          : ''}
+                      </p>
+                      <p className="text-xs text-foreground/60">
+                        Estado: {statusText} | Archivo: {item.nombre_original || item.nombre_archivo}
+                      </p>
+                      {expired ? (
+                        <p className="text-xs text-amber-700">
+                          Documento vencido: debes actualizarlo para mantenerlo verificado.
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {lockedByVerification ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2.5 py-1 text-xs font-semibold">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Verificado
+                        </span>
+                      ) : (
+                        <>
+                          <button type="button" className="px-3 py-1.5 text-xs border border-border rounded-lg" onClick={() => handleEdit(item)}>
+                            Editar
+                          </button>
+                          <button type="button" className="px-3 py-1.5 text-xs border border-rose-300 text-rose-700 rounded-lg" onClick={() => handleDelete(item.id)}>
+                            Eliminar
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </article>
+                )
+              })}
             </div>
           )}
         </section>

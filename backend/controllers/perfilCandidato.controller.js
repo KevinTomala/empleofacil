@@ -31,7 +31,8 @@ const {
   createDocumento,
   existsDocumentoByTipoLado,
   updateDocumento,
-  deleteDocumento
+  deleteDocumento,
+  runAutomaticReviewForDocumento
 } = require('../services/perfilCandidato.service');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -910,6 +911,7 @@ async function createDocumentoHandler(req, res) {
     descripcion: req.body?.descripcion || null,
     observaciones: req.body?.observaciones || null,
     subido_por: req.user?.id || null,
+    subido_rol: req.user?.rol || 'candidato',
     estado: 'pendiente'
   };
 
@@ -920,6 +922,10 @@ async function createDocumentoHandler(req, res) {
   });
 
   const created = await createDocumento(req.candidatoId, normalizedPayload);
+  await runAutomaticReviewForDocumento(created.id, {
+    actorUsuarioId: req.user?.id || null,
+    metadata: { trigger: 'upload' }
+  });
   return res.status(201).json({ ok: true, id: created.id });
 }
 
@@ -935,8 +941,13 @@ async function updateDocumentoHandler(req, res, { allowEstado }) {
   }
 
   if (allowEstado && patch.estado) {
-    patch.verificado_por = req.user?.id || null;
-    patch.fecha_verificacion = new Date();
+    const reviewed = ['aprobado', 'rechazado', 'vencido'].includes(patch.estado);
+    patch.verificado_por = reviewed ? (req.user?.id || null) : null;
+    patch.fecha_verificacion = reviewed ? new Date() : null;
+  } else if (!allowEstado) {
+    patch.estado = 'pendiente';
+    patch.verificado_por = null;
+    patch.fecha_verificacion = null;
   }
 
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
@@ -960,6 +971,14 @@ async function updateDocumentoHandler(req, res, { allowEstado }) {
 
   const affected = await updateDocumento(req.candidatoId, documentoId, normalizedPatch);
   if (!affected) return res.status(404).json({ error: 'DOCUMENTO_NOT_FOUND' });
+
+  if (!allowEstado) {
+    await runAutomaticReviewForDocumento(documentoId, {
+      actorUsuarioId: req.user?.id || null,
+      metadata: { trigger: 'candidate_update' }
+    });
+  }
+
   return res.json({ ok: true });
 }
 

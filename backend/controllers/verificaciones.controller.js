@@ -6,7 +6,13 @@ const {
 } = require('../services/companyPerfil.service');
 const {
   findCandidatoIdByUserId,
-  hasCandidateVerificationSupportDocuments
+  hasCandidateVerificationSupportDocuments,
+  VALID_DOCUMENTO_ESTADOS,
+  getDocumentoByIdForAdminReview,
+  listDocumentoVerificationEvents,
+  listDocumentosForAdminReview,
+  reviewDocumentoById,
+  runAutomaticReviewForPendingDocuments
 } = require('../services/perfilCandidato.service');
 const {
   VALID_VERIFICACION_ESTADOS,
@@ -256,6 +262,111 @@ async function reviewVerificacionAdmin(req, res) {
   }
 }
 
+async function listDocumentosCandidatosAdmin(req, res) {
+  try {
+    const estado = parseNullableString(req.query.estado);
+    const tipoDocumento = parseNullableString(req.query.tipo_documento);
+    const candidatoId = parsePositiveInt(req.query.candidato_id);
+    const hasSolicitud = parseBooleanFlag(req.query.has_solicitud);
+    const q = parseNullableString(req.query.q) || '';
+    const page = parsePositiveInt(req.query.page) || 1;
+    const pageSize = parsePositiveInt(req.query.page_size) || 20;
+
+    if (estado && !VALID_DOCUMENTO_ESTADOS.includes(estado)) {
+      return res.status(400).json({ error: 'INVALID_DOCUMENTO_ESTADO' });
+    }
+
+    const result = await listDocumentosForAdminReview({
+      estado,
+      tipoDocumento,
+      candidatoId,
+      hasSolicitud,
+      q,
+      page,
+      pageSize
+    });
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({
+      error: 'DOCUMENT_REVIEW_FETCH_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+async function getDocumentoCandidatoAdmin(req, res) {
+  const documentoId = parsePositiveInt(req.params.documentoId);
+  if (!documentoId) return res.status(400).json({ error: 'INVALID_DOCUMENTO_ID' });
+
+  try {
+    const item = await getDocumentoByIdForAdminReview(documentoId);
+    if (!item) return res.status(404).json({ error: 'DOCUMENTO_NOT_FOUND' });
+
+    const eventos = await listDocumentoVerificationEvents(documentoId, {
+      limit: parsePositiveInt(req.query.limit) || 20
+    });
+
+    return res.json({ item, eventos });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'DOCUMENT_REVIEW_FETCH_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+async function reviewDocumentoCandidatoAdmin(req, res) {
+  const documentoId = parsePositiveInt(req.params.documentoId);
+  if (!documentoId) return res.status(400).json({ error: 'INVALID_DOCUMENTO_ID' });
+
+  const payload = req.body || {};
+  const estado = parseNullableString(payload.estado);
+  const comentario = parseNullableString(payload.comentario || payload.observaciones || payload.motivo_rechazo);
+
+  if (!estado || !VALID_DOCUMENTO_ESTADOS.includes(estado)) {
+    return res.status(400).json({ error: 'INVALID_DOCUMENTO_ESTADO' });
+  }
+  if (estado === 'rechazado' && !comentario) {
+    return res.status(400).json({ error: 'MOTIVO_RECHAZO_REQUIRED' });
+  }
+
+  try {
+    const item = await reviewDocumentoById({
+      documentoId,
+      estado,
+      comentario,
+      actorUsuarioId: req.user?.id || null,
+      actorRol: req.user?.rol || 'administrador',
+      origen: 'manual',
+      metadata: { source: 'admin_queue' }
+    });
+    if (!item) return res.status(404).json({ error: 'DOCUMENTO_NOT_FOUND' });
+
+    return res.json({ ok: true, item });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'DOCUMENT_REVIEW_UPDATE_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
+async function runDocumentosAutoPrecheckAdmin(req, res) {
+  try {
+    const limit = parsePositiveInt(req.body?.limit) || parsePositiveInt(req.query?.limit) || 100;
+    const resumen = await runAutomaticReviewForPendingDocuments({
+      limit,
+      actorUsuarioId: req.user?.id || null
+    });
+    return res.json({ ok: true, resumen });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'DOCUMENT_REVIEW_UPDATE_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
 async function listReactivacionesEmpresaAdmin(req, res) {
   try {
     const estado = parseNullableString(req.query.estado);
@@ -331,6 +442,10 @@ module.exports = {
   listVerificacionesAdmin,
   getVerificacionByIdAdmin,
   reviewVerificacionAdmin,
+  listDocumentosCandidatosAdmin,
+  getDocumentoCandidatoAdmin,
+  reviewDocumentoCandidatoAdmin,
+  runDocumentosAutoPrecheckAdmin,
   listReactivacionesEmpresaAdmin,
   reviewReactivacionEmpresaAdmin
 };

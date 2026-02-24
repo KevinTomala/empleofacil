@@ -18,6 +18,12 @@ function parseVerificationError(error, fallbackMessage) {
     return 'Tu backend no tiene habilitadas las rutas de reactivacion de empresas. Reinicia/actualiza el backend.'
   }
   if (code === 'INVALID_ESTADO') return 'El estado indicado no es valido.'
+  if (code === 'INVALID_TIPO_DOCUMENTO') return 'El tipo de documento indicado no es valido.'
+  if (code === 'INVALID_DOCUMENTO_ID') return 'El documento seleccionado no es valido.'
+  if (code === 'INVALID_DOCUMENTO_ESTADO') return 'El estado del documento no es valido.'
+  if (code === 'DOCUMENTO_NOT_FOUND') return 'No se encontro el documento.'
+  if (code === 'DOCUMENT_REVIEW_FETCH_FAILED') return 'No se pudo cargar la cola documental.'
+  if (code === 'DOCUMENT_REVIEW_UPDATE_FAILED') return 'No se pudo actualizar la verificacion documental.'
   if (code === 'INVALID_NIVEL') return 'El nivel indicado no es valido.'
   if (code === 'CANDIDATE_VERIFICATION_DOCUMENTS_REQUIRED') {
     return 'Para verificar candidato debes subir cedula por ambos lados o licencia de conducir vigente.'
@@ -59,6 +65,42 @@ export async function getVerificationAccountById(verificacionId, params = {}) {
 export async function updateVerificationStatus(verificacionId, payload) {
   return apiRequest(`/api/verificaciones/cuentas/${verificacionId}/estado`, {
     method: 'PUT',
+    body: JSON.stringify(payload || {})
+  })
+}
+
+export async function listCandidateDocumentsForReview(params = {}) {
+  const query = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && String(value).trim() !== '') {
+      query.append(key, String(value))
+    }
+  })
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return apiRequest(`/api/verificaciones/documentos/candidatos${suffix}`)
+}
+
+export async function getCandidateDocumentForReview(documentoId, params = {}) {
+  const query = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && String(value).trim() !== '') {
+      query.append(key, String(value))
+    }
+  })
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return apiRequest(`/api/verificaciones/documentos/candidatos/${documentoId}${suffix}`)
+}
+
+export async function updateCandidateDocumentReviewStatus(documentoId, payload) {
+  return apiRequest(`/api/verificaciones/documentos/candidatos/${documentoId}/estado`, {
+    method: 'PUT',
+    body: JSON.stringify(payload || {})
+  })
+}
+
+export async function runCandidateDocumentsAutoPrecheck(payload = {}) {
+  return apiRequest('/api/verificaciones/documentos/candidatos/auto-precheck', {
+    method: 'POST',
     body: JSON.stringify(payload || {})
   })
 }

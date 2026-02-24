@@ -19,8 +19,11 @@ import { showToast } from '../../utils/showToast'
 import { getDocumentosByCandidatoId, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
 import {
   getVerificationErrorMessage,
+  listCandidateDocumentsForReview,
   listCompanyReactivationRequests,
+  runCandidateDocumentsAutoPrecheck,
   listVerificationAccounts,
+  updateCandidateDocumentReviewStatus,
   updateCompanyReactivationStatus,
   updateVerificationStatus,
 } from '../../services/verificaciones.api'
@@ -28,7 +31,13 @@ import {
 const TAB_VERIFICACION_EMPRESAS = 'verificacion_empresas'
 const TAB_REACTIVACION_EMPRESAS = 'reactivacion_empresas'
 const TAB_SOLICITUDES_CANDIDATOS = 'solicitudes_candidatos'
-const VALID_TAB_IDS = [TAB_VERIFICACION_EMPRESAS, TAB_REACTIVACION_EMPRESAS, TAB_SOLICITUDES_CANDIDATOS]
+const TAB_DOCUMENTOS_CANDIDATOS = 'documentos_candidatos'
+const VALID_TAB_IDS = [
+  TAB_VERIFICACION_EMPRESAS,
+  TAB_REACTIVACION_EMPRESAS,
+  TAB_SOLICITUDES_CANDIDATOS,
+  TAB_DOCUMENTOS_CANDIDATOS
+]
 const REJECT_MODAL_DEFAULT = { open: false, mode: 'verificacion', item: null, comment: '' }
 const CANDIDATE_DOCS_MODAL_DEFAULT = {
   open: false,
@@ -51,6 +60,29 @@ const STATUS_STYLES = {
   rechazada: 'bg-rose-100 text-rose-700',
   suspendida: 'bg-rose-100 text-rose-700',
   vencida: 'bg-slate-200 text-slate-700',
+}
+
+const DOCUMENT_STATUS_STYLES = {
+  pendiente: 'bg-amber-100 text-amber-700',
+  aprobado: 'bg-emerald-100 text-emerald-700',
+  rechazado: 'bg-rose-100 text-rose-700',
+  vencido: 'bg-slate-200 text-slate-700'
+}
+
+const DOCUMENT_TYPE_LABELS = {
+  documento_identidad: 'Cedula',
+  carnet_tipo_sangre: 'Carnet tipo sangre',
+  libreta_militar: 'Libreta militar',
+  certificado_antecedentes: 'Certificado antecedentes',
+  certificado_consejo_judicatura: 'Consejo judicatura',
+  examen_toxicologico: 'Examen toxicologico',
+  examen_psicologico: 'Examen psicologico',
+  registro_biometrico: 'Registro biometrico',
+  licencia_conducir: 'Licencia conducir',
+  certificado_estudios: 'Certificado estudios',
+  foto: 'Foto',
+  carta_compromiso: 'Carta compromiso',
+  otro: 'Otro'
 }
 
 const REACTIVATION_REASON_LABELS = {
@@ -158,21 +190,29 @@ export default function AdminSolicitudes() {
   const [estadoVerificacionEmpresas, setEstadoVerificacionEmpresas] = useState('')
   const [estadoReactivaciones, setEstadoReactivaciones] = useState('')
   const [estadoCandidatos, setEstadoCandidatos] = useState('')
+  const [estadoDocumentosCandidatos, setEstadoDocumentosCandidatos] = useState('')
+  const [tipoDocumentoCandidatos, setTipoDocumentoCandidatos] = useState('')
+  const [soloSolicitudesDocumentales, setSoloSolicitudesDocumentales] = useState(false)
 
   const [loadingVerificacionEmpresas, setLoadingVerificacionEmpresas] = useState(true)
   const [loadingReactivaciones, setLoadingReactivaciones] = useState(false)
   const [loadingCandidatos, setLoadingCandidatos] = useState(false)
+  const [loadingDocumentosCandidatos, setLoadingDocumentosCandidatos] = useState(false)
 
   const [updatingVerificacionId, setUpdatingVerificacionId] = useState(null)
   const [updatingReactivacionId, setUpdatingReactivacionId] = useState(null)
+  const [updatingDocumentoId, setUpdatingDocumentoId] = useState(null)
+  const [runningDocumentAutoPrecheck, setRunningDocumentAutoPrecheck] = useState(false)
 
   const [verificacionEmpresas, setVerificacionEmpresas] = useState([])
   const [reactivaciones, setReactivaciones] = useState([])
   const [solicitudesCandidatos, setSolicitudesCandidatos] = useState([])
+  const [documentosCandidatos, setDocumentosCandidatos] = useState([])
 
   const [metaVerificacionEmpresas, setMetaVerificacionEmpresas] = useState(EMPTY_META)
   const [metaReactivaciones, setMetaReactivaciones] = useState(EMPTY_META)
   const [metaCandidatos, setMetaCandidatos] = useState(EMPTY_META)
+  const [metaDocumentosCandidatos, setMetaDocumentosCandidatos] = useState(EMPTY_META)
   const [rejectModal, setRejectModal] = useState(REJECT_MODAL_DEFAULT)
   const [candidateDocsModal, setCandidateDocsModal] = useState(CANDIDATE_DOCS_MODAL_DEFAULT)
   const [documentPreviewModal, setDocumentPreviewModal] = useState(DOCUMENT_PREVIEW_MODAL_DEFAULT)
@@ -182,22 +222,26 @@ export default function AdminSolicitudes() {
       { id: TAB_VERIFICACION_EMPRESAS, label: 'Verificacion empresas', count: metaVerificacionEmpresas.total },
       { id: TAB_REACTIVACION_EMPRESAS, label: 'Reactivacion empresas', count: metaReactivaciones.total },
       { id: TAB_SOLICITUDES_CANDIDATOS, label: 'Verificacion candidatos', count: metaCandidatos.total },
+      { id: TAB_DOCUMENTOS_CANDIDATOS, label: 'Documentos candidatos', count: metaDocumentosCandidatos.total },
     ],
-    [metaVerificacionEmpresas.total, metaReactivaciones.total, metaCandidatos.total]
+    [metaVerificacionEmpresas.total, metaReactivaciones.total, metaCandidatos.total, metaDocumentosCandidatos.total]
   )
 
   const currentMeta = useMemo(() => {
     if (tab === TAB_VERIFICACION_EMPRESAS) return metaVerificacionEmpresas
     if (tab === TAB_REACTIVACION_EMPRESAS) return metaReactivaciones
-    return metaCandidatos
-  }, [tab, metaVerificacionEmpresas, metaReactivaciones, metaCandidatos])
+    if (tab === TAB_SOLICITUDES_CANDIDATOS) return metaCandidatos
+    return metaDocumentosCandidatos
+  }, [tab, metaVerificacionEmpresas, metaReactivaciones, metaCandidatos, metaDocumentosCandidatos])
 
   const currentRange = useMemo(() => getVisibleRange(currentMeta), [currentMeta])
+  const currentItemLabel = tab === TAB_DOCUMENTOS_CANDIDATOS ? 'documentos' : 'solicitudes'
 
   const isCurrentTabLoading =
     (tab === TAB_VERIFICACION_EMPRESAS && loadingVerificacionEmpresas) ||
     (tab === TAB_REACTIVACION_EMPRESAS && loadingReactivaciones) ||
-    (tab === TAB_SOLICITUDES_CANDIDATOS && loadingCandidatos)
+    (tab === TAB_SOLICITUDES_CANDIDATOS && loadingCandidatos) ||
+    (tab === TAB_DOCUMENTOS_CANDIDATOS && loadingDocumentosCandidatos)
 
   function setCurrentPage(nextPage) {
     const page = Math.max(Number(nextPage) || 1, 1)
@@ -209,7 +253,11 @@ export default function AdminSolicitudes() {
       setMetaReactivaciones((prev) => ({ ...prev, page }))
       return
     }
-    setMetaCandidatos((prev) => ({ ...prev, page }))
+    if (tab === TAB_SOLICITUDES_CANDIDATOS) {
+      setMetaCandidatos((prev) => ({ ...prev, page }))
+      return
+    }
+    setMetaDocumentosCandidatos((prev) => ({ ...prev, page }))
   }
 
   function setCurrentPageSize(nextPageSize) {
@@ -222,7 +270,11 @@ export default function AdminSolicitudes() {
       setMetaReactivaciones((prev) => ({ ...prev, pageSize, page: 1 }))
       return
     }
-    setMetaCandidatos((prev) => ({ ...prev, pageSize, page: 1 }))
+    if (tab === TAB_SOLICITUDES_CANDIDATOS) {
+      setMetaCandidatos((prev) => ({ ...prev, pageSize, page: 1 }))
+      return
+    }
+    setMetaDocumentosCandidatos((prev) => ({ ...prev, pageSize, page: 1 }))
   }
 
   async function loadVerificacionEmpresas() {
@@ -288,6 +340,29 @@ export default function AdminSolicitudes() {
       })
     } finally {
       setLoadingCandidatos(false)
+    }
+  }
+
+  async function loadDocumentosCandidatos() {
+    try {
+      setLoadingDocumentosCandidatos(true)
+      const data = await listCandidateDocumentsForReview({
+        estado: estadoDocumentosCandidatos || undefined,
+        tipo_documento: tipoDocumentoCandidatos || undefined,
+        has_solicitud: soloSolicitudesDocumentales ? 1 : undefined,
+        q: searchQuery || undefined,
+        page: metaDocumentosCandidatos.page,
+        page_size: metaDocumentosCandidatos.pageSize
+      })
+      setDocumentosCandidatos(Array.isArray(data?.items) ? data.items : [])
+      setMetaDocumentosCandidatos((prev) => ({ ...prev, total: Number(data?.total || 0) }))
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getVerificationErrorMessage(error, 'No se pudieron cargar documentos de candidatos.')
+      })
+    } finally {
+      setLoadingDocumentosCandidatos(false)
     }
   }
 
@@ -373,6 +448,14 @@ export default function AdminSolicitudes() {
           comentario_admin: comment,
         })
         showToast({ type: 'success', message: 'Reactivacion actualizada a Rechazada.' })
+      } else if (rejectModal.mode === 'documento') {
+        if (updatingDocumentoId) return
+        setUpdatingDocumentoId(item.id)
+        await updateCandidateDocumentReviewStatus(item.id, {
+          estado: 'rechazado',
+          comentario: comment
+        })
+        showToast({ type: 'success', message: 'Documento actualizado a Rechazado.' })
       } else {
         if (updatingVerificacionId) return
         setUpdatingVerificacionId(item.id)
@@ -393,6 +476,7 @@ export default function AdminSolicitudes() {
       })
     } finally {
       if (rejectModal.mode === 'reactivacion') setUpdatingReactivacionId(null)
+      else if (rejectModal.mode === 'documento') setUpdatingDocumentoId(null)
       else setUpdatingVerificacionId(null)
     }
   }
@@ -406,7 +490,11 @@ export default function AdminSolicitudes() {
       await loadReactivaciones()
       return
     }
-    await loadSolicitudesCandidatos()
+    if (tab === TAB_SOLICITUDES_CANDIDATOS) {
+      await loadSolicitudesCandidatos()
+      return
+    }
+    await loadDocumentosCandidatos()
   }
 
   useEffect(() => {
@@ -444,6 +532,20 @@ export default function AdminSolicitudes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, estadoCandidatos, searchQuery, metaCandidatos.page, metaCandidatos.pageSize])
 
+  useEffect(() => {
+    if (tab !== TAB_DOCUMENTOS_CANDIDATOS) return
+    loadDocumentosCandidatos()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    tab,
+    estadoDocumentosCandidatos,
+    tipoDocumentoCandidatos,
+    soloSolicitudesDocumentales,
+    searchQuery,
+    metaDocumentosCandidatos.page,
+    metaDocumentosCandidatos.pageSize
+  ])
+
   const handleSearchSubmit = async (event) => {
     event.preventDefault()
     const nextQuery = searchInput.trim()
@@ -462,9 +564,13 @@ export default function AdminSolicitudes() {
     setEstadoVerificacionEmpresas('')
     setEstadoReactivaciones('')
     setEstadoCandidatos('')
+    setEstadoDocumentosCandidatos('')
+    setTipoDocumentoCandidatos('')
+    setSoloSolicitudesDocumentales(false)
     setMetaVerificacionEmpresas((prev) => ({ ...prev, page: 1, pageSize: 20 }))
     setMetaReactivaciones((prev) => ({ ...prev, page: 1, pageSize: 20 }))
     setMetaCandidatos((prev) => ({ ...prev, page: 1, pageSize: 20 }))
+    setMetaDocumentosCandidatos((prev) => ({ ...prev, page: 1, pageSize: 20 }))
   }
 
   const handleUpdateVerificationStatus = async (item, estado) => {
@@ -527,6 +633,52 @@ export default function AdminSolicitudes() {
       })
     } finally {
       setUpdatingReactivacionId(null)
+    }
+  }
+
+  const handleUpdateDocumentoStatus = async (item, estado) => {
+    if (!item?.id || updatingDocumentoId) return
+
+    if (estado === 'rechazado') {
+      openRejectModal('documento', item)
+      return
+    }
+
+    const payload = { estado, comentario: 'Actualizacion de estado documental desde bandeja admin.' }
+
+    try {
+      setUpdatingDocumentoId(item.id)
+      await updateCandidateDocumentReviewStatus(item.id, payload)
+      showToast({ type: 'success', message: `Documento actualizado a ${formatDocumentStatus(estado)}.` })
+      await refreshCurrentTab()
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getVerificationErrorMessage(error, 'No se pudo actualizar el documento.')
+      })
+    } finally {
+      setUpdatingDocumentoId(null)
+    }
+  }
+
+  const handleRunDocumentAutoPrecheck = async () => {
+    if (runningDocumentAutoPrecheck) return
+    try {
+      setRunningDocumentAutoPrecheck(true)
+      const response = await runCandidateDocumentsAutoPrecheck({ limit: 200 })
+      const resumen = response?.resumen || {}
+      showToast({
+        type: 'success',
+        message: `Autoevaluacion finalizada. Procesados: ${resumen.processed || 0}, cambios: ${resumen.changed || 0}.`
+      })
+      await refreshCurrentTab()
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getVerificationErrorMessage(error, 'No se pudo ejecutar la autoevaluacion documental.')
+      })
+    } finally {
+      setRunningDocumentAutoPrecheck(false)
     }
   }
 
@@ -652,6 +804,48 @@ export default function AdminSolicitudes() {
                   <option value="vencida">Vencida</option>
                 </select>
               ) : null}
+              {tab === TAB_DOCUMENTOS_CANDIDATOS ? (
+                <>
+                  <select
+                    className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70 bg-white"
+                    value={estadoDocumentosCandidatos}
+                    onChange={(event) => {
+                      setEstadoDocumentosCandidatos(event.target.value)
+                      setMetaDocumentosCandidatos((prev) => ({ ...prev, page: 1 }))
+                    }}
+                  >
+                    <option value="">Estado doc: todos</option>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="aprobado">Aprobado</option>
+                    <option value="rechazado">Rechazado</option>
+                    <option value="vencido">Vencido</option>
+                  </select>
+                  <select
+                    className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70 bg-white"
+                    value={tipoDocumentoCandidatos}
+                    onChange={(event) => {
+                      setTipoDocumentoCandidatos(event.target.value)
+                      setMetaDocumentosCandidatos((prev) => ({ ...prev, page: 1 }))
+                    }}
+                  >
+                    <option value="">Tipo doc: todos</option>
+                    {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                  <label className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-foreground/70 border border-border rounded-lg bg-white">
+                    <input
+                      type="checkbox"
+                      checked={soloSolicitudesDocumentales}
+                      onChange={(event) => {
+                        setSoloSolicitudesDocumentales(event.target.checked)
+                        setMetaDocumentosCandidatos((prev) => ({ ...prev, page: 1 }))
+                      }}
+                    />
+                    Solo con solicitud
+                  </label>
+                </>
+              ) : null}
               <select
                 className="px-3 py-2 border border-border rounded-lg text-xs text-foreground/70 bg-white"
                 value={String(currentMeta.pageSize)}
@@ -673,7 +867,7 @@ export default function AdminSolicitudes() {
             <div className="text-sm text-foreground/70">
               Mostrando <span className="font-semibold text-foreground">{currentRange.from}</span> a{' '}
               <span className="font-semibold text-foreground">{currentRange.to}</span> de{' '}
-              <span className="font-semibold text-foreground">{currentMeta.total}</span> solicitudes
+              <span className="font-semibold text-foreground">{currentMeta.total}</span> {currentItemLabel}
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -909,6 +1103,113 @@ export default function AdminSolicitudes() {
               </div>
             </>
           ) : null}
+
+          {tab === TAB_DOCUMENTOS_CANDIDATOS ? (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-heading text-lg font-semibold">Verificacion documental (candidatos)</h2>
+                <button
+                  type="button"
+                  className="px-3 py-2 border border-border rounded-lg text-xs font-semibold disabled:opacity-60"
+                  onClick={handleRunDocumentAutoPrecheck}
+                  disabled={runningDocumentAutoPrecheck}
+                >
+                  {runningDocumentAutoPrecheck ? 'Autoevaluando...' : 'Autoevaluar pendientes'}
+                </button>
+              </div>
+
+              {loadingDocumentosCandidatos ? <p className="text-sm text-foreground/70">Cargando documentos...</p> : null}
+              {!loadingDocumentosCandidatos && !documentosCandidatos.length ? (
+                <p className="text-sm text-foreground/70">No hay documentos para mostrar con los filtros actuales.</p>
+              ) : null}
+
+              <div className="space-y-3">
+                {documentosCandidatos.map((doc) => {
+                  const fileUrl = resolveAssetUrl(doc?.ruta_archivo)
+                  const docLabel = DOCUMENT_TYPE_LABELS[doc?.tipo_documento] || doc?.tipo_documento || 'Documento'
+                  return (
+                    <article key={doc.id} className="border border-border rounded-xl p-3 bg-white space-y-2.5">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-sm">
+                            {doc.candidato_nombre || 'Candidato sin nombre'}
+                          </p>
+                          <p className="text-xs text-foreground/60 mt-1">
+                            {doc.candidato_documento || 'Sin documento'} - {doc.candidato_email || 'Sin email'}
+                          </p>
+                        </div>
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${DOCUMENT_STATUS_STYLES[doc.estado] || DOCUMENT_STATUS_STYLES.pendiente}`}>
+                          {formatDocumentStatus(doc.estado)}
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-foreground/70 grid gap-1 sm:grid-cols-2">
+                        <p>
+                          Tipo: {docLabel}{doc.lado_documento ? ` - ${doc.lado_documento}` : ''}
+                        </p>
+                        <p>Subido: {formatDateShort(doc.created_at)}</p>
+                        <p>Numero: {doc.numero_documento || 'N/D'}</p>
+                        <p>Vence: {formatDateShort(doc.fecha_vencimiento)}</p>
+                      </div>
+
+                      {doc.observaciones ? (
+                        <p className="text-xs text-foreground/70 bg-secondary/40 border border-border rounded-lg px-2 py-1.5">
+                          Observacion: {doc.observaciones}
+                        </p>
+                      ) : null}
+
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        {fileUrl ? (
+                          <button
+                            type="button"
+                            className="px-2.5 py-1 border border-border rounded-lg inline-flex items-center gap-1"
+                            onClick={() => openDocumentPreviewModal(doc)}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            Ver archivo
+                          </button>
+                        ) : (
+                          <span className="text-foreground/60">Sin ruta de archivo</span>
+                        )}
+                        <button
+                          type="button"
+                          className="px-2.5 py-1 border border-emerald-300 text-emerald-700 rounded-lg disabled:opacity-60"
+                          onClick={() => handleUpdateDocumentoStatus(doc, 'aprobado')}
+                          disabled={updatingDocumentoId === doc.id}
+                        >
+                          Aprobar
+                        </button>
+                        <button
+                          type="button"
+                          className="px-2.5 py-1 border border-rose-300 text-rose-700 rounded-lg disabled:opacity-60"
+                          onClick={() => handleUpdateDocumentoStatus(doc, 'rechazado')}
+                          disabled={updatingDocumentoId === doc.id}
+                        >
+                          Rechazar
+                        </button>
+                        <button
+                          type="button"
+                          className="px-2.5 py-1 border border-slate-300 text-slate-700 rounded-lg disabled:opacity-60"
+                          onClick={() => handleUpdateDocumentoStatus(doc, 'vencido')}
+                          disabled={updatingDocumentoId === doc.id}
+                        >
+                          Marcar vencido
+                        </button>
+                        <button
+                          type="button"
+                          className="px-2.5 py-1 border border-border rounded-lg disabled:opacity-60"
+                          onClick={() => handleUpdateDocumentoStatus(doc, 'pendiente')}
+                          disabled={updatingDocumentoId === doc.id}
+                        >
+                          Reabrir
+                        </button>
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            </>
+          ) : null}
         </section>
       </main>
 
@@ -1060,6 +1361,8 @@ export default function AdminSolicitudes() {
               <h3 className="font-heading text-lg font-semibold">
                 {rejectModal.mode === 'reactivacion'
                   ? 'Rechazar solicitud de reactivacion'
+                  : rejectModal.mode === 'documento'
+                  ? 'Rechazar documento de candidato'
                   : 'Rechazar solicitud de verificacion'}
               </h3>
               <p className="text-sm text-foreground/70">
@@ -1082,7 +1385,11 @@ export default function AdminSolicitudes() {
                 type="button"
                 className="px-3 py-2 border border-border rounded-lg text-sm font-semibold"
                 onClick={closeRejectModal}
-                disabled={updatingVerificacionId === rejectModal.item?.id || updatingReactivacionId === rejectModal.item?.id}
+                disabled={
+                  updatingVerificacionId === rejectModal.item?.id
+                  || updatingReactivacionId === rejectModal.item?.id
+                  || updatingDocumentoId === rejectModal.item?.id
+                }
               >
                 Cancelar
               </button>
@@ -1090,9 +1397,15 @@ export default function AdminSolicitudes() {
                 type="button"
                 className="px-3 py-2 border border-rose-300 text-rose-700 rounded-lg text-sm font-semibold disabled:opacity-60"
                 onClick={submitRejectModal}
-                disabled={updatingVerificacionId === rejectModal.item?.id || updatingReactivacionId === rejectModal.item?.id}
+                disabled={
+                  updatingVerificacionId === rejectModal.item?.id
+                  || updatingReactivacionId === rejectModal.item?.id
+                  || updatingDocumentoId === rejectModal.item?.id
+                }
               >
-                {updatingVerificacionId === rejectModal.item?.id || updatingReactivacionId === rejectModal.item?.id
+                {updatingVerificacionId === rejectModal.item?.id
+                  || updatingReactivacionId === rejectModal.item?.id
+                  || updatingDocumentoId === rejectModal.item?.id
                   ? 'Guardando...'
                   : 'Confirmar rechazo'}
               </button>

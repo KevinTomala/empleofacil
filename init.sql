@@ -368,7 +368,30 @@ CREATE TABLE candidatos_documentos (
   CONSTRAINT fk_candidatos_documentos_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
   INDEX idx_candidatos_documentos_tipo (tipo_documento),
   INDEX idx_candidatos_documentos_estado (estado),
-  INDEX idx_candidatos_documentos_lado (lado_documento)
+  INDEX idx_candidatos_documentos_lado (lado_documento),
+  INDEX idx_candidatos_documentos_candidato_estado (candidato_id, estado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE candidatos_documentos_verificaciones (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  documento_id BIGINT NOT NULL,
+  candidato_id BIGINT NOT NULL,
+  accion ENUM('subido','auto_precheck','aprobado','rechazado','vencido','reabierto') NOT NULL,
+  estado_anterior ENUM('pendiente','aprobado','rechazado','vencido') NULL,
+  estado_nuevo ENUM('pendiente','aprobado','rechazado','vencido') NULL,
+  actor_usuario_id BIGINT NULL,
+  actor_rol ENUM('candidato','administrador','superadmin','system') NOT NULL DEFAULT 'system',
+  comentario TEXT NULL,
+  origen ENUM('manual','automatico','mixto') NOT NULL DEFAULT 'manual',
+  metadata JSON NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_candidatos_docs_verif_documento FOREIGN KEY (documento_id) REFERENCES candidatos_documentos(id) ON DELETE CASCADE,
+  CONSTRAINT fk_candidatos_docs_verif_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
+  CONSTRAINT fk_candidatos_docs_verif_actor FOREIGN KEY (actor_usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+  INDEX idx_candidatos_docs_verif_documento (documento_id),
+  INDEX idx_candidatos_docs_verif_candidato (candidato_id),
+  INDEX idx_candidatos_docs_verif_accion (accion),
+  INDEX idx_candidatos_docs_verif_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE candidatos_educacion_general (
