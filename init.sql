@@ -347,6 +347,7 @@ CREATE TABLE candidatos_documentos (
     'certificado_consejo_judicatura','examen_toxicologico','examen_psicologico','registro_biometrico',
     'licencia_conducir','certificado_estudios','foto','carta_compromiso','otro'
   ) NOT NULL,
+  lado_documento ENUM('anverso','reverso') NULL,
   nombre_archivo VARCHAR(255) NOT NULL,
   nombre_original VARCHAR(255) NOT NULL,
   ruta_archivo VARCHAR(500) NOT NULL,
@@ -367,7 +368,7 @@ CREATE TABLE candidatos_documentos (
   CONSTRAINT fk_candidatos_documentos_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
   INDEX idx_candidatos_documentos_tipo (tipo_documento),
   INDEX idx_candidatos_documentos_estado (estado),
-  UNIQUE KEY uk_candidato_tipo_doc (candidato_id, tipo_documento)
+  INDEX idx_candidatos_documentos_lado (lado_documento)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE candidatos_educacion_general (

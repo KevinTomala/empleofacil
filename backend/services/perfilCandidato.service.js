@@ -1,4 +1,48 @@
 const db = require('../db');
+let candidateDocumentsSchemaReadyPromise = null;
+
+async function ensureCandidateDocumentsSchema() {
+  if (candidateDocumentsSchemaReadyPromise) return candidateDocumentsSchemaReadyPromise;
+
+  candidateDocumentsSchemaReadyPromise = (async () => {
+    try {
+      await db.query(
+        `ALTER TABLE candidatos_documentos
+         ADD COLUMN lado_documento ENUM('anverso','reverso') NULL AFTER tipo_documento`
+      );
+    } catch (error) {
+      if (String(error?.code || '') !== 'ER_DUP_FIELDNAME') throw error;
+    }
+
+    try {
+      await db.query(
+        `ALTER TABLE candidatos_documentos
+         DROP INDEX uk_candidato_tipo_doc`
+      );
+    } catch (error) {
+      const code = String(error?.code || '');
+      if (code !== 'ER_CANT_DROP_FIELD_OR_KEY' && code !== 'ER_DROP_INDEX_FK') throw error;
+    }
+
+    try {
+      await db.query(
+        `ALTER TABLE candidatos_documentos
+         ADD INDEX idx_candidatos_documentos_lado (lado_documento)`
+      );
+    } catch (error) {
+      if (String(error?.code || '') !== 'ER_DUP_KEYNAME') throw error;
+    }
+  })();
+
+  try {
+    await candidateDocumentsSchemaReadyPromise;
+  } catch (error) {
+    candidateDocumentsSchemaReadyPromise = null;
+    throw error;
+  }
+
+  return candidateDocumentsSchemaReadyPromise;
+}
 
 function isSchemaDriftError(error) {
   if (!error) return false;
@@ -1241,11 +1285,14 @@ async function existsFormacion(candidatoId, formacionId) {
 }
 
 async function listDocumentos(candidatoId) {
+  await ensureCandidateDocumentsSchema();
+
   const [rows] = await db.query(
     `SELECT
       id,
       candidato_id,
       tipo_documento,
+      lado_documento,
       nombre_archivo,
       nombre_original,
       ruta_archivo,
@@ -1271,11 +1318,84 @@ async function listDocumentos(candidatoId) {
   return rows;
 }
 
+async function hasCandidateVerificationSupportDocuments(candidatoId) {
+  await ensureCandidateDocumentsSchema();
+
+  const [rows] = await db.query(
+    `SELECT
+      MAX(
+        CASE
+          WHEN tipo_documento = 'documento_identidad'
+            AND lado_documento = 'anverso'
+            AND COALESCE(TRIM(ruta_archivo), '') <> ''
+            AND (estado IS NULL OR estado NOT IN ('rechazado', 'vencido'))
+          THEN 1
+          ELSE 0
+        END
+      ) AS identidad_anverso,
+      MAX(
+        CASE
+          WHEN tipo_documento = 'documento_identidad'
+            AND lado_documento = 'reverso'
+            AND COALESCE(TRIM(ruta_archivo), '') <> ''
+            AND (estado IS NULL OR estado NOT IN ('rechazado', 'vencido'))
+          THEN 1
+          ELSE 0
+        END
+      ) AS identidad_reverso,
+      SUM(
+        CASE
+          WHEN tipo_documento = 'documento_identidad'
+            AND COALESCE(TRIM(ruta_archivo), '') <> ''
+            AND (estado IS NULL OR estado NOT IN ('rechazado', 'vencido'))
+          THEN 1
+          ELSE 0
+        END
+      ) AS identidad_docs,
+      SUM(
+        CASE
+          WHEN tipo_documento = 'licencia_conducir'
+            AND COALESCE(TRIM(ruta_archivo), '') <> ''
+            AND (estado IS NULL OR estado NOT IN ('rechazado', 'vencido'))
+          THEN 1
+          ELSE 0
+        END
+      ) AS licencia_docs
+     FROM candidatos_documentos
+     WHERE candidato_id = ?
+       AND deleted_at IS NULL`,
+    [candidatoId]
+  );
+
+  const row = rows[0] || {};
+  const identidadAnverso = Number(row.identidad_anverso || 0);
+  const identidadReverso = Number(row.identidad_reverso || 0);
+  const identidadDocs = Number(row.identidad_docs || 0);
+  const licenciaDocs = Number(row.licencia_docs || 0);
+  const hasCedulaAmbosLados = identidadAnverso > 0 && identidadReverso > 0;
+  const hasCedulaLegacy = identidadDocs >= 2;
+  const hasLicencia = licenciaDocs >= 1;
+
+  return {
+    identidad_anverso: identidadAnverso,
+    identidad_reverso: identidadReverso,
+    identidad_docs: identidadDocs,
+    licencia_docs: licenciaDocs,
+    has_cedula_ambos_lados: hasCedulaAmbosLados,
+    has_cedula_legacy: hasCedulaLegacy,
+    has_licencia: hasLicencia,
+    is_eligible: hasCedulaAmbosLados || hasCedulaLegacy || hasLicencia
+  };
+}
+
 async function createDocumento(candidatoId, payload) {
+  await ensureCandidateDocumentsSchema();
+
   const [result] = await db.query(
     `INSERT INTO candidatos_documentos (
       candidato_id,
       tipo_documento,
+      lado_documento,
       nombre_archivo,
       nombre_original,
       ruta_archivo,
@@ -1288,10 +1408,11 @@ async function createDocumento(candidatoId, payload) {
       estado,
       observaciones,
       subido_por
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       candidatoId,
       payload.tipo_documento,
+      payload.lado_documento ?? null,
       payload.nombre_archivo,
       payload.nombre_original,
       payload.ruta_archivo,
@@ -1309,7 +1430,35 @@ async function createDocumento(candidatoId, payload) {
   return { id: result.insertId };
 }
 
+async function existsDocumentoByTipoLado(candidatoId, { tipoDocumento, ladoDocumento, excludeId = null } = {}) {
+  await ensureCandidateDocumentsSchema();
+
+  const safeTipo = String(tipoDocumento || '').trim();
+  const safeLado = ladoDocumento ? String(ladoDocumento).trim() : null;
+  if (!safeTipo) return false;
+
+  const params = [candidatoId, safeTipo, safeLado];
+  let sql = `SELECT id
+             FROM candidatos_documentos
+             WHERE candidato_id = ?
+               AND tipo_documento = ?
+               AND lado_documento <=> ?
+               AND deleted_at IS NULL`;
+
+  if (excludeId && Number.isInteger(Number(excludeId))) {
+    sql += ' AND id <> ?';
+    params.push(Number(excludeId));
+  }
+
+  sql += ' LIMIT 1';
+
+  const [rows] = await db.query(sql, params);
+  return Boolean(rows.length);
+}
+
 async function updateDocumento(candidatoId, documentoId, patch) {
+  await ensureCandidateDocumentsSchema();
+
   const keys = Object.keys(patch);
   if (!keys.length) return 0;
 
@@ -1326,6 +1475,8 @@ async function updateDocumento(candidatoId, documentoId, patch) {
 }
 
 async function deleteDocumento(candidatoId, documentoId) {
+  await ensureCandidateDocumentsSchema();
+
   const [result] = await db.query(
     `UPDATE candidatos_documentos
      SET deleted_at = NOW()
@@ -1368,7 +1519,9 @@ module.exports = {
   deleteFormacion,
   existsFormacion,
   listDocumentos,
+  hasCandidateVerificationSupportDocuments,
   createDocumento,
+  existsDocumentoByTipoLado,
   updateDocumento,
   deleteDocumento
 };

@@ -19,6 +19,9 @@ function parseVerificationError(error, fallbackMessage) {
   }
   if (code === 'INVALID_ESTADO') return 'El estado indicado no es valido.'
   if (code === 'INVALID_NIVEL') return 'El nivel indicado no es valido.'
+  if (code === 'CANDIDATE_VERIFICATION_DOCUMENTS_REQUIRED') {
+    return 'Para verificar candidato debes subir cedula por ambos lados o licencia de conducir vigente.'
+  }
   if (code === 'MOTIVO_RECHAZO_REQUIRED') return 'Debes indicar un motivo de rechazo.'
   if (code === 'INVALID_EXPIRES_AT') return 'La fecha de vencimiento no es valida.'
   if (code === 'VERIFICATION_FETCH_FAILED') return 'No se pudo cargar verificaciones.'

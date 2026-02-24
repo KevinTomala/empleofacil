@@ -107,6 +107,20 @@ Rutas registradas actualmente:
   - `GET /api/verificaciones/cuentas`
   - `GET /api/verificaciones/cuentas/:verificacionId`
   - `PUT /api/verificaciones/cuentas/:verificacionId/estado`
+  - `GET /api/verificaciones/reactivaciones/empresas`
+  - `PUT /api/verificaciones/reactivaciones/empresas/:reactivacionId/estado`
+
+### Reactivacion empresa
+- Empresa inactiva puede consultar y solicitar reactivacion:
+  - `GET /api/company/reactivacion/me`
+  - `POST /api/company/reactivacion/me/solicitar`
+- Desactivacion de empresa (`DELETE /api/company/perfil/me`) ahora requiere encuesta valida.
+- Restricciones de envio unico:
+  - `DEACTIVATION_SURVEY_ALREADY_SUBMITTED`
+  - `REACTIVATION_SURVEY_ALREADY_SUBMITTED`
+- Regla de reactivacion aprobada:
+  - la empresa se activa,
+  - se reactivan solo usuarios previamente activos (snapshot `usuarios_activos_json`).
 
 ### Integraciones (Ademy)
 - Catalogos y sync de acreditados.

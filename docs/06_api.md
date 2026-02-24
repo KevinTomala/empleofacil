@@ -240,6 +240,7 @@ Errores esperados:
 ```
 - Errores:
   - `404 CANDIDATO_NOT_FOUND`
+  - `422 CANDIDATE_VERIFICATION_DOCUMENTS_REQUIRED` (requiere cedula anverso+reverso o licencia)
   - `500 VERIFICATION_UPDATE_FAILED`
 
 ### PUT `/api/perfil/me/datos-basicos`
@@ -755,18 +756,73 @@ Nota:
 ### DELETE `/api/company/perfil/me`
 - Auth: requerido.
 - Acceso: `rol_empresa` en `admin`.
+- Body requerido:
+```json
+{
+  "motivos_codigos": ["sin_vacantes", "otro"],
+  "motivo_detalle": "Pausa operativa temporal",
+  "requiere_soporte": true
+}
+```
 - Efecto:
   - soft delete en `empresas` (`activo=0`, `deleted_at=NOW()`),
-  - desactiva (`estado=inactivo`) los registros de `empresas_usuarios`.
+  - desactiva (`estado=inactivo`) los registros de `empresas_usuarios`,
+  - registra encuesta en `empresas_desactivaciones` (incluye snapshot de usuarios activos previos).
 - Respuesta `200`:
 ```json
 { "ok": true }
 ```
 - Errores:
+  - `400 INVALID_PAYLOAD`
+  - `400 INVALID_DEACTIVATION_REASON`
+  - `400 MOTIVO_OTRO_REQUIRED`
+  - `409 DEACTIVATION_SURVEY_ALREADY_SUBMITTED`
   - `403 COMPANY_ACCESS_REQUIRED`
   - `403 COMPANY_ROLE_FORBIDDEN`
   - `404 EMPRESA_NOT_FOUND`
   - `500 PROFILE_DELETE_FAILED`
+
+### GET `/api/company/reactivacion/me`
+- Auth: requerido.
+- Roles: `empresa`.
+- Respuesta `200`:
+```json
+{
+  "solicitud": {},
+  "desactivacion": {}
+}
+```
+- Errores:
+  - `404 EMPRESA_NOT_FOUND`
+  - `500 PROFILE_FETCH_FAILED`
+
+### POST `/api/company/reactivacion/me/solicitar`
+- Auth: requerido.
+- Roles: `empresa`.
+- Body:
+```json
+{
+  "motivos_codigos": ["continuar_procesos", "otro"],
+  "motivo_detalle": "Retomamos operaciones",
+  "acciones_realizadas": null,
+  "requiere_soporte": true
+}
+```
+- Respuesta `201`:
+```json
+{
+  "ok": true,
+  "solicitud": {}
+}
+```
+- Errores:
+  - `400 INVALID_PAYLOAD`
+  - `400 INVALID_REACTIVATION_REASON`
+  - `400 MOTIVO_OTRO_REQUIRED`
+  - `404 EMPRESA_NOT_FOUND`
+  - `409 REACTIVATION_SURVEY_ALREADY_SUBMITTED`
+  - `409 COMPANY_ALREADY_ACTIVE`
+  - `500 PROFILE_UPDATE_FAILED`
 
 ### GET `/api/company/perfil/me/verificacion`
 - Auth: requerido.
@@ -865,6 +921,55 @@ Base: `/api/verificaciones`
   - `400 INVALID_EXPIRES_AT`
   - `403 SUPERADMIN_REQUIRED`
   - `404 VERIFICACION_NOT_FOUND`
+  - `500 VERIFICATION_UPDATE_FAILED`
+
+### GET `/api/verificaciones/reactivaciones/empresas`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Query opcional:
+  - `estado` (`pendiente|en_revision|aprobada|rechazada`)
+  - `q`, `page`, `page_size`
+- Respuesta `200`:
+```json
+{
+  "items": [],
+  "meta": {
+    "page": 1,
+    "page_size": 20,
+    "total": 0,
+    "total_pages": 1
+  }
+}
+```
+- Errores:
+  - `400 INVALID_REACTIVATION_STATUS`
+  - `500 VERIFICATION_FETCH_FAILED`
+
+### PUT `/api/verificaciones/reactivaciones/empresas/:reactivacionId/estado`
+- Auth: requerido.
+- Roles: `administrador`, `superadmin`.
+- Body:
+```json
+{
+  "estado": "aprobada",
+  "comentario_admin": "Reactivacion aprobada."
+}
+```
+- Estados permitidos: `en_revision`, `aprobada`, `rechazada`.
+- Efecto cuando `estado=aprobada`:
+  - reactiva empresa (`activo=1`, `deleted_at=NULL`),
+  - reactiva solo los usuarios que estaban activos antes de la desactivacion (snapshot).
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "solicitud": {}
+}
+```
+- Errores:
+  - `400 INVALID_REACTIVATION_ID`
+  - `400 INVALID_REACTIVATION_STATUS`
+  - `404 REACTIVATION_NOT_FOUND`
   - `500 VERIFICATION_UPDATE_FAILED`
 
 ## Hoja de vida

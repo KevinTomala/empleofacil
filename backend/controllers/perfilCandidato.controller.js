@@ -29,6 +29,7 @@ const {
   deleteFormacion,
   listDocumentos,
   createDocumento,
+  existsDocumentoByTipoLado,
   updateDocumento,
   deleteDocumento
 } = require('../services/perfilCandidato.service');
@@ -60,6 +61,7 @@ const DOCUMENTO_TIPOS = [
   'otro'
 ];
 const DOCUMENTO_ESTADOS = ['pendiente', 'aprobado', 'rechazado', 'vencido'];
+const DOCUMENTO_LADOS = ['anverso', 'reverso'];
 const CERTIFICADO_ESTADOS = ['pendiente', 'aprobado', 'rechazado', 'vencido'];
 
 function isPlainObject(value) {
@@ -435,7 +437,7 @@ function validateFormacionPayload(payload, { partial = false } = {}) {
 }
 
 function validateDocumentoMetaPayload(payload, { allowEstado = false } = {}) {
-  const allowed = ['tipo_documento', 'fecha_emision', 'fecha_vencimiento', 'numero_documento', 'descripcion', 'observaciones'];
+  const allowed = ['tipo_documento', 'lado_documento', 'fecha_emision', 'fecha_vencimiento', 'numero_documento', 'descripcion', 'observaciones'];
   if (allowEstado) allowed.push('estado');
   if (!validatePayloadShape(payload, allowed)) return null;
 
@@ -445,6 +447,9 @@ function validateDocumentoMetaPayload(payload, { allowEstado = false } = {}) {
     if (key === 'tipo_documento') {
       if (!isEnum(value, DOCUMENTO_TIPOS)) return null;
       normalized.tipo_documento = value;
+    } else if (key === 'lado_documento') {
+      if (!isEnum(value, DOCUMENTO_LADOS)) return null;
+      normalized.lado_documento = value;
     } else if (key === 'estado') {
       if (!isEnum(value, DOCUMENTO_ESTADOS)) return null;
       normalized.estado = value;
@@ -455,6 +460,10 @@ function validateDocumentoMetaPayload(payload, { allowEstado = false } = {}) {
       if (!isNullableString(value)) return null;
       normalized[key] = normalizeString(value);
     }
+  }
+
+  if (normalized.tipo_documento && normalized.tipo_documento !== 'documento_identidad') {
+    normalized.lado_documento = null;
   }
 
   return normalized;
@@ -486,6 +495,16 @@ function parsePositiveInt(value) {
   const n = Number(value);
   if (!Number.isInteger(n) || n <= 0) return null;
   return n;
+}
+
+function normalizeDocumentoMetadataByTypeAndSide({ tipoDocumento, ladoDocumento, payload = {} } = {}) {
+  const normalized = { ...payload };
+  if (tipoDocumento === 'documento_identidad' && ladoDocumento === 'reverso') {
+    normalized.fecha_emision = null;
+    normalized.fecha_vencimiento = null;
+    normalized.numero_documento = null;
+  }
+  return normalized;
 }
 
 function handleFormacionServiceError(res, error) {
@@ -845,6 +864,15 @@ async function createDocumentoHandler(req, res) {
   if (!DOCUMENTO_TIPOS.includes(tipoDocumento)) {
     return res.status(400).json({ error: 'INVALID_TIPO_DOCUMENTO' });
   }
+
+  const rawLadoDocumento = req.body?.lado_documento;
+  const ladoDocumento = rawLadoDocumento ? String(rawLadoDocumento).trim() : null;
+  if (tipoDocumento === 'documento_identidad') {
+    if (!DOCUMENTO_LADOS.includes(ladoDocumento)) {
+      return res.status(400).json({ error: 'DOCUMENTO_IDENTIDAD_SIDE_REQUIRED' });
+    }
+  }
+
   if (req.body?.fecha_emision && !DATE_RE.test(String(req.body.fecha_emision))) {
     return res.status(400).json({ error: 'INVALID_PAYLOAD' });
   }
@@ -858,8 +886,19 @@ async function createDocumentoHandler(req, res) {
 
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
 
+  if (tipoDocumento === 'documento_identidad') {
+    const existsSameSide = await existsDocumentoByTipoLado(req.candidatoId, {
+      tipoDocumento,
+      ladoDocumento
+    });
+    if (existsSameSide) {
+      return res.status(409).json({ error: 'DOCUMENTO_IDENTIDAD_SIDE_ALREADY_EXISTS' });
+    }
+  }
+
   const payload = {
     tipo_documento: tipoDocumento,
+    lado_documento: tipoDocumento === 'documento_identidad' ? ladoDocumento : null,
     nombre_archivo: req.file.filename,
     nombre_original: req.file.originalname,
     ruta_archivo: `/uploads/candidatos/${req.file.filename}`,
@@ -874,7 +913,13 @@ async function createDocumentoHandler(req, res) {
     estado: 'pendiente'
   };
 
-  const created = await createDocumento(req.candidatoId, payload);
+  const normalizedPayload = normalizeDocumentoMetadataByTypeAndSide({
+    tipoDocumento: payload.tipo_documento,
+    ladoDocumento: payload.lado_documento,
+    payload
+  });
+
+  const created = await createDocumento(req.candidatoId, normalizedPayload);
   return res.status(201).json({ ok: true, id: created.id });
 }
 
@@ -885,13 +930,35 @@ async function updateDocumentoHandler(req, res, { allowEstado }) {
   const patch = validateDocumentoMetaPayload(req.body || {}, { allowEstado });
   if (!patch) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
 
+  if (patch.tipo_documento === 'documento_identidad' && !patch.lado_documento) {
+    return res.status(400).json({ error: 'DOCUMENTO_IDENTIDAD_SIDE_REQUIRED' });
+  }
+
   if (allowEstado && patch.estado) {
     patch.verificado_por = req.user?.id || null;
     patch.fecha_verificacion = new Date();
   }
 
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
-  const affected = await updateDocumento(req.candidatoId, documentoId, patch);
+
+  if (patch.tipo_documento === 'documento_identidad' && patch.lado_documento) {
+    const existsSameSide = await existsDocumentoByTipoLado(req.candidatoId, {
+      tipoDocumento: patch.tipo_documento,
+      ladoDocumento: patch.lado_documento,
+      excludeId: documentoId
+    });
+    if (existsSameSide) {
+      return res.status(409).json({ error: 'DOCUMENTO_IDENTIDAD_SIDE_ALREADY_EXISTS' });
+    }
+  }
+
+  const normalizedPatch = normalizeDocumentoMetadataByTypeAndSide({
+    tipoDocumento: patch.tipo_documento,
+    ladoDocumento: patch.lado_documento,
+    payload: patch
+  });
+
+  const affected = await updateDocumento(req.candidatoId, documentoId, normalizedPatch);
   if (!affected) return res.status(404).json({ error: 'DOCUMENTO_NOT_FOUND' });
   return res.json({ ok: true });
 }

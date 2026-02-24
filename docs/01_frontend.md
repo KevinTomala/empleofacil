@@ -113,3 +113,26 @@
 - El header es fijo y se compensa con `padding-top` en `body` usando `--header-height`.
 - Estilos del modulo empresa estan aislados en `frontend/src/modules/company/company.css` y se aplican con la clase `company-scope` en cada pagina de empresa.
 - Estilos del modulo admin estan aislados en `frontend/src/modules/admin/admin.css` y se aplican con la clase `admin-scope`.
+
+## Actualizaciones recientes (2026-02-24)
+- Flujo empresa inactiva:
+  - nueva ruta protegida `/app/company/inactiva` para cuentas empresa sin acceso activo.
+  - al desactivar empresa se solicita encuesta obligatoria (multi-seleccion).
+  - `Otro motivo` aparece solo cuando se marca `otro`.
+  - confirmacion modal antes de ejecutar desactivacion.
+- Reactivacion empresa (en cuenta inactiva):
+  - encuesta de reactivacion con multi-seleccion y `Otro motivo` condicional.
+  - envio unico de encuesta; despues de enviar se reemplaza por card `Revision solicitada`.
+  - el usuario ya no ve el formulario si la solicitud existe.
+- Admin:
+  - `Solicitudes` ahora agrupa tabs para:
+    - verificacion empresas
+    - reactivacion empresas
+    - solicitudes candidatos
+  - admin/superadmin puede activar cuenta empresa desde frontend al aprobar reactivacion.
+- Candidato, seccion documentos:
+  - mini tutorial visual solo en movil con camara.
+  - carrusel de 3 slides con swipe horizontal.
+  - slide 1 muestra imagen de referencia en el mismo bloque (sin botones internos anverso/reverso).
+  - en escritorio no se muestra bloque explicativo adicional del tutorial.
+  - nuevo card de `Verificacion de cuenta` con estado y accion `Solicitar revision`.

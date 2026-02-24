@@ -4,7 +4,10 @@ const {
   listEmpresaReactivaciones,
   reviewEmpresaReactivacionById
 } = require('../services/companyPerfil.service');
-const { findCandidatoIdByUserId } = require('../services/perfilCandidato.service');
+const {
+  findCandidatoIdByUserId,
+  hasCandidateVerificationSupportDocuments
+} = require('../services/perfilCandidato.service');
 const {
   VALID_VERIFICACION_ESTADOS,
   VALID_VERIFICACION_NIVELES,
@@ -107,6 +110,15 @@ async function requestMyCandidateVerification(req, res) {
     const candidatoId = await findCandidatoIdByUserId(userId);
     if (!candidatoId) return res.status(404).json({ error: 'CANDIDATO_NOT_FOUND' });
 
+    const docs = await hasCandidateVerificationSupportDocuments(candidatoId);
+    if (!docs?.is_eligible) {
+      return res.status(422).json({
+        error: 'CANDIDATE_VERIFICATION_DOCUMENTS_REQUIRED',
+        details: 'Debes subir cedula por ambos lados o licencia de conducir para solicitar verificacion.',
+        evidencia: docs
+      });
+    }
+
     const verificacion = await requestVerificacionByScope({
       tipo: 'candidato',
       candidatoId,
@@ -199,6 +211,20 @@ async function reviewVerificacionAdmin(req, res) {
   }
 
   try {
+    const existing = await getVerificacionById(verificacionId);
+    if (!existing) return res.status(404).json({ error: 'VERIFICACION_NOT_FOUND' });
+
+    if (estado === 'aprobada' && existing.cuenta_tipo === 'candidato') {
+      const docs = await hasCandidateVerificationSupportDocuments(existing.candidato_id);
+      if (!docs?.is_eligible) {
+        return res.status(422).json({
+          error: 'CANDIDATE_VERIFICATION_DOCUMENTS_REQUIRED',
+          details: 'No se puede validar candidato sin cedula por ambos lados o licencia de conducir.',
+          evidencia: docs
+        });
+      }
+    }
+
     const verificacion = await reviewVerificacionById({
       verificacionId,
       estado,
@@ -210,8 +236,6 @@ async function reviewVerificacionAdmin(req, res) {
       actorRol: req.user?.rol || 'administrador',
       comentario
     });
-
-    if (!verificacion) return res.status(404).json({ error: 'VERIFICACION_NOT_FOUND' });
 
     return res.json({ ok: true, verificacion });
   } catch (error) {

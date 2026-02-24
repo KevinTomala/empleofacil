@@ -29,6 +29,15 @@ function parsePerfilError(error, fallbackMessage) {
   if (code === 'INVALID_DOCUMENTO_ID') return 'El documento seleccionado no es valido.'
   if (code === 'DOCUMENTO_NOT_FOUND') return 'No se encontro el documento seleccionado.'
   if (code === 'INVALID_TIPO_DOCUMENTO') return 'Tipo de documento invalido.'
+  if (code === 'DOCUMENTO_IDENTIDAD_SIDE_REQUIRED') return 'Para cedula debes indicar si es anverso o reverso.'
+  if (code === 'DOCUMENTO_IDENTIDAD_SIDE_ALREADY_EXISTS') {
+    return 'Ya existe una cedula cargada para ese lado. Edita el registro actual o sube el lado faltante.'
+  }
+  if (code === 'VERIFICATION_FETCH_FAILED') return 'No se pudo cargar el estado de verificacion.'
+  if (code === 'VERIFICATION_UPDATE_FAILED') return 'No se pudo enviar la solicitud de verificacion.'
+  if (code === 'CANDIDATE_VERIFICATION_DOCUMENTS_REQUIRED') {
+    return 'Debes subir cedula por ambos lados o licencia de conducir para solicitar verificacion.'
+  }
   if (code === 'INVALID_FILE_TYPE') return 'Tipo de archivo no permitido. Usa PDF o imagen.'
   if (code === 'FILE_TOO_LARGE') return 'El archivo supera el limite permitido.'
   if (code === 'FILE_REQUIRED') return 'Debes seleccionar un archivo.'
@@ -268,6 +277,17 @@ export async function getFormacionByCandidatoId(candidatoId) {
 
 export async function getMyDocumentos() {
   return apiRequest('/api/perfil/me/documentos')
+}
+
+export async function getMyCandidateVerification() {
+  return apiRequest('/api/perfil/me/verificacion')
+}
+
+export async function requestMyCandidateVerification(payload = {}) {
+  return apiRequest('/api/perfil/me/verificacion/solicitar', {
+    method: 'POST',
+    body: JSON.stringify(payload || {})
+  })
 }
 
 export async function createMyDocumento(formData) {

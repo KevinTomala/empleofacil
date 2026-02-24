@@ -50,6 +50,7 @@ docker compose up -d --build
 - Base de datos: `docs/07_bd.md`
 - Runbook: `docs/08_despliegue_runbook.md`
 - Pruebas: `docs/09_pruebas.md`
+- Cambios recientes (cuentas/verificacion/reactivacion): `docs/10_cambios_recientes.md`
 
 ## Notas
 - No commitear `.env`.
