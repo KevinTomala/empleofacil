@@ -67,6 +67,63 @@ function normalizeDocStatus(value) {
   return 'no_cargada'
 }
 
+function normalizeDateOnly(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  const iso = raw.slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null
+  return iso
+}
+
+function isDocumentoExpired(item) {
+  const dateOnly = normalizeDateOnly(item?.fecha_vencimiento)
+  if (!dateOnly) return false
+  const expiry = new Date(`${dateOnly}T00:00:00`)
+  if (Number.isNaN(expiry.getTime())) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return expiry < today
+}
+
+function isSupportDocumentEligible(item) {
+  const tipo = String(item?.tipo_documento || '').trim().toLowerCase()
+  if (tipo !== 'documento_identidad' && tipo !== 'licencia_conducir') return false
+  if (!String(item?.ruta_archivo || '').trim()) return false
+
+  const estado = String(item?.estado || '').trim().toLowerCase()
+  if (estado === 'rechazado' || estado === 'vencido') return false
+  if (isDocumentoExpired(item)) return false
+
+  return true
+}
+
+function getSupportDocEligibility(documentos = []) {
+  const supports = Array.isArray(documentos)
+    ? documentos.filter((item) => {
+      const tipo = String(item?.tipo_documento || '').trim().toLowerCase()
+      return tipo === 'documento_identidad' || tipo === 'licencia_conducir'
+    })
+    : []
+
+  const eligible = supports.filter(isSupportDocumentEligible)
+  const identidadAnverso = eligible.some(
+    (item) => item?.tipo_documento === 'documento_identidad' && item?.lado_documento === 'anverso'
+  )
+  const identidadReverso = eligible.some(
+    (item) => item?.tipo_documento === 'documento_identidad' && item?.lado_documento === 'reverso'
+  )
+  const identidadDocs = eligible.filter((item) => item?.tipo_documento === 'documento_identidad').length
+  const licenciaDocs = eligible.filter((item) => item?.tipo_documento === 'licencia_conducir').length
+
+  return {
+    has_support_uploaded: supports.length > 0,
+    is_eligible:
+      (identidadAnverso && identidadReverso)
+      || identidadDocs >= 2
+      || licenciaDocs >= 1
+  }
+}
+
 function getCedulaStatus(documentos = []) {
   const anverso = pickLatestDocument(
     documentos.filter((item) => item?.tipo_documento === 'documento_identidad' && item?.lado_documento === 'anverso')
@@ -133,14 +190,19 @@ export default function ProfileSidebarStatus({
   const documentos = Array.isArray(perfil?.documentos) ? perfil.documentos : []
   const cedulaStatus = getCedulaStatus(documentos)
   const licenciaStatus = getLicenciaStatus(documentos)
-  const accountStateRaw = String(verificationState?.estado || 'pendiente').trim().toLowerCase()
+  const supportDocEligibility = getSupportDocEligibility(documentos)
+  const accountStateFromApi = String(verificationState?.estado || 'pendiente').trim().toLowerCase()
+  const accountStateRaw =
+    accountStateFromApi === 'aprobada' && !supportDocEligibility.is_eligible
+      ? 'en_revision'
+      : accountStateFromApi
   const accountStatus = ACCOUNT_VERIFICATION_STATUS[accountStateRaw] || ACCOUNT_VERIFICATION_STATUS.pendiente
   const shouldForceRejectedDocs = accountStateRaw === 'rechazada'
   const hasCedulaDoc = documentos.some((item) => item?.tipo_documento === 'documento_identidad')
   const hasLicenciaDoc = documentos.some((item) => item?.tipo_documento === 'licencia_conducir')
   const cedulaStatusUi = shouldForceRejectedDocs && hasCedulaDoc ? DOCUMENT_STATUS_UI.rechazado : cedulaStatus
   const licenciaStatusUi = shouldForceRejectedDocs && hasLicenciaDoc ? DOCUMENT_STATUS_UI.rechazado : licenciaStatus
-  const hasSupportDoc = hasCedulaDoc || hasLicenciaDoc
+  const hasSupportDoc = supportDocEligibility.has_support_uploaded
   const isPendingRequested = accountStateRaw === 'pendiente' && Boolean(verificationState?.has_solicitud)
   const canRequestVerificationByStatus =
     accountStateRaw === 'rechazada'
