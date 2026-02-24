@@ -9,6 +9,8 @@ function parseAuthError(error, fallbackMessage) {
   }
 
   if (code === 'MISSING_FIELDS') return 'Debes completar todos los campos requeridos.'
+  if (code === 'INVALID_ACCOUNT_TYPE') return 'El tipo de cuenta seleccionado no es valido.'
+  if (code === 'EMAIL_ALREADY_EXISTS') return 'Ya existe una cuenta registrada con ese correo.'
   if (code === 'WEAK_PASSWORD') return 'La nueva contrasena debe tener al menos 8 caracteres.'
   if (code === 'PASSWORD_REUSE_NOT_ALLOWED') return 'La nueva contrasena no puede ser igual a la actual.'
   if (code === 'INVALID_CURRENT_PASSWORD') return 'La contrasena actual no es correcta.'
@@ -21,6 +23,17 @@ function parseAuthError(error, fallbackMessage) {
 
 export function getAuthErrorMessage(error, fallbackMessage = 'No se pudo actualizar la contrasena.') {
   return parseAuthError(error, fallbackMessage)
+}
+
+export async function registerAccount({ nombre_completo, email, password, account_type }) {
+  return apiRequest(
+    '/auth/register',
+    {
+      method: 'POST',
+      body: JSON.stringify({ nombre_completo, email, password, account_type })
+    },
+    false
+  )
 }
 
 export async function changeMyPassword({ current_password, new_password }) {

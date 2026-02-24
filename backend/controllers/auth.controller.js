@@ -12,6 +12,119 @@ function normalizeDocumento(value) {
   return normalizeIdentifier(value).replace(/[^0-9A-Za-z]/g, '');
 }
 
+function normalizeEmail(value) {
+  return normalizeIdentifier(value).toLowerCase();
+}
+
+function splitFullName(value) {
+  const tokens = String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!tokens.length) {
+    return { nombres: 'Usuario', apellidos: 'Registrado' };
+  }
+
+  if (tokens.length === 1) {
+    return { nombres: tokens[0], apellidos: tokens[0] };
+  }
+
+  if (tokens.length === 2) {
+    return { nombres: tokens[0], apellidos: tokens[1] };
+  }
+
+  return {
+    nombres: tokens.slice(0, -2).join(' '),
+    apellidos: tokens.slice(-2).join(' ')
+  };
+}
+
+async function register(req, res) {
+  const email = normalizeEmail(req.body?.email);
+  const password = String(req.body?.password || '');
+  const nombreCompleto = normalizeIdentifier(req.body?.nombre_completo);
+  const accountType = String(req.body?.account_type || '').trim().toLowerCase();
+
+  if (!email || !password || !nombreCompleto || !accountType) {
+    return res.status(400).json({ error: 'MISSING_FIELDS' });
+  }
+
+  if (!['candidate', 'company'].includes(accountType)) {
+    return res.status(400).json({ error: 'INVALID_ACCOUNT_TYPE' });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'WEAK_PASSWORD' });
+  }
+
+  const [existingRows] = await db.query(
+    `SELECT id
+     FROM usuarios
+     WHERE LOWER(email) = LOWER(?)
+     LIMIT 1`,
+    [email]
+  );
+  if (existingRows.length) {
+    return res.status(409).json({ error: 'EMAIL_ALREADY_EXISTS' });
+  }
+
+  const hash = await bcrypt.hash(password, 10);
+  const rol = accountType === 'company' ? 'empresa' : 'candidato';
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [insertUser] = await connection.query(
+      `INSERT INTO usuarios (email, password_hash, nombre_completo, rol, must_change_password, estado, activo)
+       VALUES (?, ?, ?, ?, 0, 'activo', 1)`,
+      [email, hash, nombreCompleto, rol]
+    );
+
+    const userId = insertUser.insertId;
+
+    if (rol === 'candidato') {
+      const { nombres, apellidos } = splitFullName(nombreCompleto);
+      await connection.query(
+        `INSERT INTO candidatos (usuario_id, nombres, apellidos, activo)
+         VALUES (?, ?, ?, 1)`,
+        [userId, nombres, apellidos]
+      );
+    } else {
+      const [insertEmpresa] = await connection.query(
+        `INSERT INTO empresas (nombre, email, tipo, activo)
+         VALUES (?, ?, 'externa', 1)`,
+        [nombreCompleto, email]
+      );
+      await connection.query(
+        `INSERT INTO empresas_usuarios (empresa_id, usuario_id, rol_empresa, principal, estado)
+         VALUES (?, ?, 'admin', 1, 'activo')`,
+        [insertEmpresa.insertId, userId]
+      );
+    }
+
+    await connection.commit();
+    return res.status(201).json({
+      ok: true,
+      user: {
+        id: userId,
+        email,
+        rol,
+        nombre_completo: nombreCompleto
+      }
+    });
+  } catch (error) {
+    await connection.rollback();
+    if (String(error.code || '') === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'EMAIL_ALREADY_EXISTS' });
+    }
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 async function bootstrap(req, res) {
   const { email, password, nombre_completo } = req.body || {};
   if (!email || !password || !nombre_completo) {
@@ -138,5 +251,6 @@ async function changePassword(req, res) {
 module.exports = {
   bootstrap,
   login,
+  register,
   changePassword
 };
