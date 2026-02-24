@@ -20,6 +20,7 @@ function parsePerfilError(error, fallbackMessage) {
   if (code === 'EXPERIENCIA_NOT_FOUND') return 'No se encontro la experiencia seleccionada.'
   if (code === 'INVALID_FORMACION_ID') return 'La formacion seleccionada no es valida.'
   if (code === 'FORMACION_NOT_FOUND') return 'No se encontro la formacion seleccionada.'
+  if (code === 'FORMACION_CERTIFICADO_NOT_ALLOWED') return 'Solo las formaciones externas permiten certificado de curso.'
   if (code === 'FORMACION_INSTITUCION_REQUIRED') return 'Para formacion externa debes indicar institucion o seleccionar un centro.'
   if (code === 'CENTRO_CAPACITACION_NOT_FOUND') return 'El centro de capacitacion seleccionado no existe.'
   if (code === 'INVALID_EDUCACION_GENERAL_ID') return 'El registro de educacion general no es valido.'
@@ -273,6 +274,30 @@ export async function getFormacionByCandidatoId(candidatoId) {
     ...response,
     items: normalizeFormacionList(response?.items)
   }
+}
+
+export async function getMyFormacionCertificado(formacionId) {
+  return apiRequest(`/api/perfil/me/formacion/${formacionId}/certificado`)
+}
+
+export async function createMyFormacionCertificado(formacionId, formData) {
+  return apiRequest(`/api/perfil/me/formacion/${formacionId}/certificado`, {
+    method: 'POST',
+    body: formData
+  })
+}
+
+export async function updateMyFormacionCertificado(formacionId, formData) {
+  return apiRequest(`/api/perfil/me/formacion/${formacionId}/certificado`, {
+    method: 'PUT',
+    body: formData
+  })
+}
+
+export async function deleteMyFormacionCertificado(formacionId) {
+  return apiRequest(`/api/perfil/me/formacion/${formacionId}/certificado`, {
+    method: 'DELETE'
+  })
 }
 
 export async function getMyDocumentos() {

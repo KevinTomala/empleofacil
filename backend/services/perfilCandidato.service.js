@@ -133,9 +133,6 @@ async function getPerfilByCandidatoId(candidatoId) {
     `SELECT
       c.id AS c_id,
       c.usuario_id AS c_usuario_id,
-      c.centro_id AS c_centro_id,
-      c.interesado_id AS c_interesado_id,
-      c.referente_id AS c_referente_id,
       c.nombres AS c_nombres,
       c.apellidos AS c_apellidos,
       c.documento_identidad AS c_documento_identidad,
@@ -143,7 +140,6 @@ async function getPerfilByCandidatoId(candidatoId) {
       c.fecha_nacimiento AS c_fecha_nacimiento,
       c.sexo AS c_sexo,
       c.estado_civil AS c_estado_civil,
-      c.estado_academico AS c_estado_academico,
       c.activo AS c_activo,
       cc.email AS cc_email,
       cc.telefono_fijo AS cc_telefono_fijo,
@@ -217,9 +213,6 @@ async function getPerfilByCandidatoId(candidatoId) {
     datos_basicos: {
       id: row.c_id,
       usuario_id: row.c_usuario_id,
-      centro_id: row.c_centro_id,
-      interesado_id: row.c_interesado_id,
-      referente_id: row.c_referente_id,
       nombres: row.c_nombres,
       apellidos: row.c_apellidos,
       documento_identidad: row.c_documento_identidad,
@@ -227,7 +220,6 @@ async function getPerfilByCandidatoId(candidatoId) {
       fecha_nacimiento: row.c_fecha_nacimiento,
       sexo: row.c_sexo,
       estado_civil: row.c_estado_civil,
-      estado_academico: row.c_estado_academico,
       activo: row.c_activo
     },
     contacto: {
@@ -1909,6 +1901,204 @@ async function runAutomaticReviewForPendingDocuments({ limit = 100, actorUsuario
   };
 }
 
+async function getFormacionCertificadoAccessState(candidatoId, formacionId) {
+  const [rows] = await db.query(
+    `SELECT
+      id,
+      categoria_formacion
+     FROM candidatos_formaciones
+     WHERE id = ?
+       AND candidato_id = ?
+       AND deleted_at IS NULL
+     LIMIT 1`,
+    [formacionId, candidatoId]
+  );
+
+  const row = rows[0];
+  if (!row) return { exists: false, allowed: false };
+  return { exists: true, allowed: row.categoria_formacion === 'externa' };
+}
+
+async function getFormacionCertificado(candidatoId, formacionId) {
+  let rows = [];
+  try {
+    const [rowsFull] = await db.query(
+      `SELECT
+        f.id AS formacion_id,
+        f.categoria_formacion,
+        fc.id,
+        fc.candidato_formacion_id,
+        fc.nombre_archivo,
+        fc.nombre_original,
+        fc.ruta_archivo,
+        fc.tipo_mime,
+        fc.tamanio_kb,
+        fc.fecha_emision,
+        fc.descripcion,
+        fc.estado,
+        fc.estado_extraccion,
+        fc.datos_extraidos_json,
+        fc.created_at,
+        fc.updated_at
+       FROM candidatos_formaciones f
+       LEFT JOIN candidatos_formacion_certificados fc
+         ON fc.candidato_formacion_id = f.id
+        AND fc.deleted_at IS NULL
+       WHERE f.id = ?
+         AND f.candidato_id = ?
+         AND f.deleted_at IS NULL
+       LIMIT 1`,
+      [formacionId, candidatoId]
+    );
+    rows = rowsFull;
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+    const [rowsFallback] = await db.query(
+      `SELECT
+        f.id AS formacion_id,
+        f.categoria_formacion,
+        NULL AS id,
+        NULL AS candidato_formacion_id,
+        NULL AS nombre_archivo,
+        NULL AS nombre_original,
+        NULL AS ruta_archivo,
+        NULL AS tipo_mime,
+        NULL AS tamanio_kb,
+        NULL AS fecha_emision,
+        NULL AS descripcion,
+        NULL AS estado,
+        NULL AS estado_extraccion,
+        NULL AS datos_extraidos_json,
+        NULL AS created_at,
+        NULL AS updated_at
+       FROM candidatos_formaciones f
+       WHERE f.id = ?
+         AND f.candidato_id = ?
+         AND f.deleted_at IS NULL
+       LIMIT 1`,
+      [formacionId, candidatoId]
+    );
+    rows = rowsFallback;
+  }
+
+  const row = rows[0];
+  if (!row) return { exists: false, allowed: false, certificado: null };
+  if (row.categoria_formacion !== 'externa') return { exists: true, allowed: false, certificado: null };
+  if (!row.id) return { exists: true, allowed: true, certificado: null };
+
+  return {
+    exists: true,
+    allowed: true,
+    certificado: {
+      id: row.id,
+      candidato_formacion_id: row.candidato_formacion_id,
+      nombre_archivo: row.nombre_archivo,
+      nombre_original: row.nombre_original,
+      ruta_archivo: row.ruta_archivo,
+      tipo_mime: row.tipo_mime,
+      tamanio_kb: row.tamanio_kb,
+      fecha_emision: row.fecha_emision,
+      descripcion: row.descripcion,
+      estado: row.estado,
+      estado_extraccion: row.estado_extraccion,
+      datos_extraidos_json: row.datos_extraidos_json,
+      created_at: row.created_at,
+      updated_at: row.updated_at
+    }
+  };
+}
+
+async function createFormacionCertificado(candidatoId, formacionId, payload) {
+  const state = await getFormacionCertificadoAccessState(candidatoId, formacionId);
+  if (!state.exists) return 0;
+  if (!state.allowed) return -1;
+
+  await db.query(
+    `INSERT INTO candidatos_formacion_certificados (
+      candidato_id,
+      candidato_formacion_id,
+      nombre_archivo,
+      nombre_original,
+      ruta_archivo,
+      tipo_mime,
+      tamanio_kb,
+      fecha_emision,
+      descripcion,
+      estado,
+      estado_extraccion
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      nombre_archivo = VALUES(nombre_archivo),
+      nombre_original = VALUES(nombre_original),
+      ruta_archivo = VALUES(ruta_archivo),
+      tipo_mime = VALUES(tipo_mime),
+      tamanio_kb = VALUES(tamanio_kb),
+      fecha_emision = VALUES(fecha_emision),
+      descripcion = VALUES(descripcion),
+      estado = VALUES(estado),
+      estado_extraccion = 'pendiente',
+      datos_extraidos_json = NULL,
+      deleted_at = NULL`,
+    [
+      candidatoId,
+      formacionId,
+      payload.nombre_archivo,
+      payload.nombre_original,
+      payload.ruta_archivo,
+      payload.tipo_mime,
+      payload.tamanio_kb,
+      payload.fecha_emision ?? null,
+      payload.descripcion ?? null,
+      payload.estado ?? 'pendiente',
+      'pendiente'
+    ]
+  );
+
+  const cert = await getFormacionCertificado(candidatoId, formacionId);
+  return cert.certificado;
+}
+
+async function updateFormacionCertificado(candidatoId, formacionId, patch) {
+  const state = await getFormacionCertificadoAccessState(candidatoId, formacionId);
+  if (!state.exists) return -1;
+  if (!state.allowed) return -2;
+
+  const keys = Object.keys(patch);
+  if (!keys.length) return 0;
+
+  if (keys.some((key) => ['nombre_archivo', 'nombre_original', 'ruta_archivo', 'tipo_mime', 'tamanio_kb'].includes(key))) {
+    patch.estado_extraccion = 'pendiente';
+    patch.datos_extraidos_json = null;
+  }
+
+  const setSql = Object.keys(patch).map((key) => `${key} = ?`).join(', ');
+  const [result] = await db.query(
+    `UPDATE candidatos_formacion_certificados
+     SET ${setSql}
+     WHERE candidato_formacion_id = ?
+       AND candidato_id = ?
+       AND deleted_at IS NULL`,
+    [...Object.keys(patch).map((key) => patch[key]), formacionId, candidatoId]
+  );
+  return result.affectedRows;
+}
+
+async function deleteFormacionCertificado(candidatoId, formacionId) {
+  const state = await getFormacionCertificadoAccessState(candidatoId, formacionId);
+  if (!state.exists) return -1;
+  if (!state.allowed) return -2;
+
+  const [result] = await db.query(
+    `UPDATE candidatos_formacion_certificados
+     SET deleted_at = NOW()
+     WHERE candidato_formacion_id = ?
+       AND candidato_id = ?
+       AND deleted_at IS NULL`,
+    [formacionId, candidatoId]
+  );
+  return result.affectedRows;
+}
+
 async function listDocumentos(candidatoId) {
   await ensureCandidateDocumentsSchema();
 
@@ -2160,6 +2350,10 @@ module.exports = {
   updateFormacion,
   deleteFormacion,
   existsFormacion,
+  getFormacionCertificado,
+  createFormacionCertificado,
+  updateFormacionCertificado,
+  deleteFormacionCertificado,
   listDocumentos,
   listDocumentosForAdminReview,
   getDocumentoByIdForAdminReview,
@@ -2174,5 +2368,3 @@ module.exports = {
   deleteDocumento,
   VALID_DOCUMENTO_ESTADOS
 };
-
-

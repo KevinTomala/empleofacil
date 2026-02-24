@@ -1,169 +1,110 @@
-import { useMemo, useState } from 'react'
-import { CheckCircle, Clock, FileText } from 'lucide-react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import Header from '../../components/Header'
-
-const POSTULACIONES = [
-  {
-    title: 'Auxiliar Administrativo',
-    company: 'Logistica Pro',
-    status: 'En revision',
-    appliedAt: '2026-01-12',
-    nextStep: 'Esperar respuesta del reclutador',
-    cta: null,
-  },
-  {
-    title: 'Supervisor de Operaciones',
-    company: 'Centro Comercial',
-    status: 'Entrevista',
-    appliedAt: '2026-01-28',
-    nextStep: 'Confirmar horario',
-    cta: { label: 'Confirmar entrevista' },
-  },
-  {
-    title: 'Analista de Inventario',
-    company: 'Bodega Central',
-    status: 'Finalizado',
-    appliedAt: '2025-12-20',
-    nextStep: 'Proceso finalizado',
-    cta: { label: 'Ver detalles' },
-  },
-]
+import { apiRequest } from '../../services/api'
 
 export default function CandidatePostulaciones() {
-  const [statusFilter, setStatusFilter] = useState('Todos')
-  const [dateFilter, setDateFilter] = useState('Ultimos 30 dias')
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [total, setTotal] = useState(0)
 
-  const filteredPostulaciones = useMemo(() => {
-    const now = new Date()
-    const daysAgo = (days) => {
-      const cutoff = new Date(now)
-      cutoff.setDate(now.getDate() - days)
-      return cutoff
+  const totalPages = useMemo(() => {
+    const pages = Math.ceil(total / pageSize)
+    return pages > 0 ? pages : 1
+  }, [total, pageSize])
+
+  async function fetchPostulaciones() {
+    try {
+      setLoading(true)
+      const params = new URLSearchParams()
+      params.set('page', String(page))
+      params.set('page_size', String(pageSize))
+      const data = await apiRequest(`/api/postulaciones/mias?${params.toString()}`)
+      setItems(Array.isArray(data?.items) ? data.items : [])
+      setTotal(Number(data?.total || 0))
+      setError('')
+    } catch (err) {
+      setItems([])
+      setTotal(0)
+      setError(err?.payload?.error || err.message || 'No se pudieron cargar tus postulaciones.')
+    } finally {
+      setLoading(false)
     }
-
-    return POSTULACIONES.filter((item) => {
-      const appliedDate = new Date(item.appliedAt)
-      const statusOk = statusFilter === 'Todos' || item.status === statusFilter
-      let dateOk = true
-
-      if (dateFilter === 'Ultimos 7 dias') {
-        dateOk = appliedDate >= daysAgo(7)
-      } else if (dateFilter === 'Ultimos 30 dias') {
-        dateOk = appliedDate >= daysAgo(30)
-      } else if (dateFilter === 'Mas antiguos') {
-        dateOk = appliedDate < daysAgo(30)
-      }
-
-      return statusOk && dateOk
-    })
-  }, [statusFilter, dateFilter])
-
-  const formatDate = (value) =>
-    new Intl.DateTimeFormat('es-ES', {
-      day: 'numeric',
-      month: 'long',
-    }).format(new Date(value))
-
-  const statusStyles = {
-    'En revision': 'bg-amber-500/10 text-amber-600',
-    Entrevista: 'bg-primary/10 text-primary',
-    Finalizado: 'bg-emerald-500/10 text-emerald-600',
-    Rechazado: 'bg-rose-500/10 text-rose-600',
   }
+
+  useEffect(() => {
+    fetchPostulaciones()
+  }, [page, pageSize])
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="page-container pt-12 pb-20 space-y-10">
-        <section className="space-y-3">
-          <span className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary text-sm font-medium rounded-full">
-            <FileText className="w-4 h-4" /> Panel de seguimiento
-          </span>
+      <main className="page-container pt-12 pb-20 space-y-8">
+        <section className="space-y-2">
           <h1 className="font-heading text-3xl sm:text-4xl font-bold">Tus postulaciones</h1>
-          <p className="text-foreground/70 max-w-2xl">
-            Aqui puedes ver en que etapa esta cada proceso y que hacer a continuacion.
-          </p>
+          <p className="text-foreground/70 max-w-2xl">Consulta el estado de las vacantes a las que ya aplicaste.</p>
         </section>
 
-        <section className="grid gap-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="text-xs font-semibold text-foreground/70">
-              Estado
-              <select
-                className="ml-2 rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground"
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
-              >
-                <option value="Todos">Todos</option>
-                <option value="En revision">En revision</option>
-                <option value="Entrevista">Entrevista</option>
-                <option value="Finalizado">Finalizado</option>
-                <option value="Rechazado">Rechazado</option>
-              </select>
-            </label>
-            <label className="text-xs font-semibold text-foreground/70">
-              Fecha
-              <select
-                className="ml-2 rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground"
-                value={dateFilter}
-                onChange={(event) => setDateFilter(event.target.value)}
-              >
-                <option value="Ultimos 7 dias">Ultimos 7 dias</option>
-                <option value="Ultimos 30 dias">Ultimos 30 dias</option>
-                <option value="Mas antiguos">Mas antiguos</option>
-              </select>
-            </label>
-          </div>
-
-          {POSTULACIONES.length === 0 ? (
+        <section className="space-y-3">
+          {loading && (
+            <div className="rounded-xl border border-border bg-white p-6 text-sm text-foreground/70">
+              Cargando postulaciones...
+            </div>
+          )}
+          {!loading && error && (
+            <div className="rounded-xl border border-border bg-white p-6 text-sm text-rose-700">
+              {error}
+            </div>
+          )}
+          {!loading && !error && items.length === 0 && (
             <div className="rounded-xl border border-dashed border-border bg-white p-6 text-center text-sm text-foreground/70">
               Aun no tienes postulaciones activas.
             </div>
-          ) : filteredPostulaciones.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border bg-white p-6 text-center text-sm text-foreground/70">
-              No hay procesos con ese estado.
-            </div>
-          ) : (
-            filteredPostulaciones.map((item) => (
-              <article key={item.title} className="bg-white border border-border rounded-xl p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <h2 className="font-semibold text-lg text-foreground">{item.title}</h2>
-                    <p className="text-sm text-foreground/70">{item.company}</p>
-                    <p className="text-xs text-foreground/50">
-                      Postulado el {formatDate(item.appliedAt)}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-xs font-semibold px-2 py-1 rounded-full ${statusStyles[item.status]}`}
-                  >
-                    {item.status}
-                  </span>
-                </div>
-                <div className="mt-3 space-y-1 text-sm text-foreground/70">
-                  <p className="font-medium text-foreground/80">Estado actual: {item.status}</p>
-                  <p className="flex items-center gap-2 text-foreground/60">
-                    {item.status === 'Entrevista' ? (
-                      <CheckCircle className="w-4 h-4" />
-                    ) : (
-                      <Clock className="w-4 h-4" />
-                    )}
-                    Siguiente paso: {item.nextStep}
-                  </p>
-                </div>
-                {item.cta ? (
-                  <button
-                    type="button"
-                    className="mt-4 px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-                  >
-                    {item.cta.label}
-                  </button>
-                ) : null}
-              </article>
-            ))
           )}
+          {!loading && !error && items.map((item) => (
+            <article key={item.id} className="bg-white border border-border rounded-xl p-5 space-y-2">
+              <h2 className="font-semibold text-lg text-foreground">{item.vacante_titulo || 'Vacante'}</h2>
+              <p className="text-sm text-foreground/70">{item.empresa_nombre || 'Empresa'}</p>
+              <p className="text-xs text-foreground/60">
+                Ubicacion: {item.provincia || 'N/D'} - {item.ciudad || 'N/D'}
+              </p>
+              <p className="text-xs text-foreground/60">
+                Postulado: {String(item.fecha_postulacion || '').slice(0, 10) || 'N/D'}
+              </p>
+              <span className="inline-flex text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                {item.estado_proceso || 'nuevo'}
+              </span>
+            </article>
+          ))}
+        </section>
+
+        <section className="rounded-xl border border-border bg-white p-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+          <div className="text-foreground/70">Pagina {page} de {totalPages} - Total {total}</div>
+          <div className="flex items-center gap-2">
+            <select
+              className="border border-border rounded-lg px-2 py-1.5 text-sm"
+              value={pageSize}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value))
+                setPage(1)
+              }}
+            >
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <button className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-50" type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+              Anterior
+            </button>
+            <button className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-50" type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
+              Siguiente
+            </button>
+          </div>
         </section>
       </main>
     </div>
   )
 }
+

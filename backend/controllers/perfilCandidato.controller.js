@@ -27,6 +27,10 @@ const {
   createFormacion,
   updateFormacion,
   deleteFormacion,
+  getFormacionCertificado,
+  createFormacionCertificado,
+  updateFormacionCertificado,
+  deleteFormacionCertificado,
   listDocumentos,
   createDocumento,
   existsDocumentoByTipoLado,
@@ -41,7 +45,7 @@ const IDIOMA_NIVELES = ['Basico', 'Intermedio', 'Avanzado', 'Nativo'];
 const CONTRATO_TIPOS = ['temporal', 'indefinido', 'practicante', 'otro'];
 const FORMACION_CATEGORIAS = ['externa'];
 const FORMACION_SUBTIPOS = {
-  externa: ['curso', 'ministerio', 'chofer_profesional']
+  externa: ['curso', 'ministerio', 'ministerio_i', 'chofer_profesional']
 };
 const FORMACION_SUBTIPOS_ALL = [
   ...FORMACION_SUBTIPOS.externa
@@ -140,9 +144,6 @@ function validateAndNormalize(section, payload) {
 
   if (section === 'datos_basicos') {
     const allowed = [
-      'centro_id',
-      'interesado_id',
-      'referente_id',
       'nombres',
       'apellidos',
       'documento_identidad',
@@ -150,17 +151,13 @@ function validateAndNormalize(section, payload) {
       'fecha_nacimiento',
       'sexo',
       'estado_civil',
-      'estado_academico',
       'activo'
     ];
     if (!validatePayloadShape(payload, allowed)) return null;
 
     for (const [key, raw] of Object.entries(payload)) {
       const value = toNullIfEmptyString(raw);
-      if (['centro_id', 'interesado_id', 'referente_id'].includes(key)) {
-        if (!(value === null || Number.isInteger(value))) return null;
-        normalized[key] = value;
-      } else if (['nombres', 'apellidos'].includes(key)) {
+      if (['nombres', 'apellidos'].includes(key)) {
         if (typeof value !== 'string' || !value.trim()) return null;
         normalized[key] = value.trim();
       } else if (['documento_identidad', 'nacionalidad'].includes(key)) {
@@ -174,9 +171,6 @@ function validateAndNormalize(section, payload) {
         normalized[key] = value;
       } else if (key === 'estado_civil') {
         if (!isEnum(value, ['soltero', 'casado', 'viudo', 'divorciado', 'union_libre'])) return null;
-        normalized[key] = value;
-      } else if (key === 'estado_academico') {
-        if (!isEnum(value, ['preinscrito', 'inscrito', 'matriculado', 'rechazado'])) return null;
         normalized[key] = value;
       } else if (key === 'activo') {
         if (!isTinyIntLike(value)) return null;
@@ -854,6 +848,84 @@ async function deleteFormacionHandler(req, res) {
   return res.json({ ok: true });
 }
 
+async function getFormacionCertificadoHandler(req, res) {
+  const formacionId = parsePositiveInt(req.params.formacionId);
+  if (!formacionId) return res.status(400).json({ error: 'INVALID_FORMACION_ID' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const result = await getFormacionCertificado(req.candidatoId, formacionId);
+  if (!result.exists) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
+  if (!result.allowed) return res.status(400).json({ error: 'FORMACION_CERTIFICADO_NOT_ALLOWED' });
+  return res.json({ item: result.certificado });
+}
+
+async function createFormacionCertificadoHandler(req, res) {
+  const formacionId = parsePositiveInt(req.params.formacionId);
+  if (!formacionId) return res.status(400).json({ error: 'INVALID_FORMACION_ID' });
+  if (!req.file) return res.status(400).json({ error: 'FILE_REQUIRED' });
+
+  const meta = validateCertificadoMetaPayload(req.body || {});
+  if (req.body && Object.keys(req.body).length && !meta) {
+    return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+  }
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const cert = await createFormacionCertificado(req.candidatoId, formacionId, {
+    nombre_archivo: req.file.filename,
+    nombre_original: req.file.originalname,
+    ruta_archivo: `/uploads/candidatos/${req.file.filename}`,
+    tipo_mime: req.file.mimetype,
+    tamanio_kb: Math.max(1, Math.round(req.file.size / 1024)),
+    fecha_emision: meta?.fecha_emision ?? null,
+    descripcion: meta?.descripcion ?? null,
+    estado: meta?.estado ?? 'pendiente'
+  });
+
+  if (cert === 0) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
+  if (cert === -1) return res.status(400).json({ error: 'FORMACION_CERTIFICADO_NOT_ALLOWED' });
+  return res.status(201).json({ ok: true, id: cert.id });
+}
+
+async function updateFormacionCertificadoHandler(req, res) {
+  const formacionId = parsePositiveInt(req.params.formacionId);
+  if (!formacionId) return res.status(400).json({ error: 'INVALID_FORMACION_ID' });
+
+  const meta = validateCertificadoMetaPayload(req.body || {});
+  if (req.body && Object.keys(req.body).length && !meta) {
+    return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+  }
+
+  const patch = { ...(meta || {}) };
+  if (req.file) {
+    patch.nombre_archivo = req.file.filename;
+    patch.nombre_original = req.file.originalname;
+    patch.ruta_archivo = `/uploads/candidatos/${req.file.filename}`;
+    patch.tipo_mime = req.file.mimetype;
+    patch.tamanio_kb = Math.max(1, Math.round(req.file.size / 1024));
+  }
+
+  if (!Object.keys(patch).length) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const affected = await updateFormacionCertificado(req.candidatoId, formacionId, patch);
+  if (affected === -1) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
+  if (affected === -2) return res.status(400).json({ error: 'FORMACION_CERTIFICADO_NOT_ALLOWED' });
+  if (!affected) return res.status(404).json({ error: 'CERTIFICADO_NOT_FOUND' });
+  return res.json({ ok: true });
+}
+
+async function deleteFormacionCertificadoHandler(req, res) {
+  const formacionId = parsePositiveInt(req.params.formacionId);
+  if (!formacionId) return res.status(400).json({ error: 'INVALID_FORMACION_ID' });
+
+  if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  const affected = await deleteFormacionCertificado(req.candidatoId, formacionId);
+  if (affected === -1) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
+  if (affected === -2) return res.status(400).json({ error: 'FORMACION_CERTIFICADO_NOT_ALLOWED' });
+  if (!affected) return res.status(404).json({ error: 'CERTIFICADO_NOT_FOUND' });
+  return res.json({ ok: true });
+}
+
 async function listDocumentosHandler(req, res) {
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
   const items = await listDocumentos(req.candidatoId);
@@ -1080,6 +1152,15 @@ module.exports = {
   createFormacionById: makeCandidateScopeHandler('id', createFormacionHandler, 'update'),
   updateFormacionById: makeCandidateScopeHandler('id', updateFormacionHandler, 'update'),
   deleteFormacionById: makeCandidateScopeHandler('id', deleteFormacionHandler, 'update'),
+
+  getMyFormacionCertificado: makeCandidateScopeHandler('me', getFormacionCertificadoHandler, 'fetch'),
+  createMyFormacionCertificado: makeCandidateScopeHandler('me', createFormacionCertificadoHandler, 'update'),
+  updateMyFormacionCertificado: makeCandidateScopeHandler('me', updateFormacionCertificadoHandler, 'update'),
+  deleteMyFormacionCertificado: makeCandidateScopeHandler('me', deleteFormacionCertificadoHandler, 'update'),
+  getFormacionCertificadoById: makeCandidateScopeHandler('id', getFormacionCertificadoHandler, 'fetch'),
+  createFormacionCertificadoById: makeCandidateScopeHandler('id', createFormacionCertificadoHandler, 'update'),
+  updateFormacionCertificadoById: makeCandidateScopeHandler('id', updateFormacionCertificadoHandler, 'update'),
+  deleteFormacionCertificadoById: makeCandidateScopeHandler('id', deleteFormacionCertificadoHandler, 'update'),
 
   listMyDocumentos: makeCandidateScopeHandler('me', listDocumentosHandler, 'fetch'),
   createMyDocumento: makeCandidateScopeHandler('me', createDocumentoHandler, 'update'),

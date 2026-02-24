@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FormDropdown from '../../components/FormDropdown'
+import idiomasData from '../../assets/idiomas.json'
 import { showToast } from '../../utils/showToast'
 import {
   createMyIdioma,
@@ -30,8 +31,25 @@ export default function ProfileIdiomas() {
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(initialForm)
+  const [idiomaDropdownOpen, setIdiomaDropdownOpen] = useState(false)
 
   const isSectionComplete = useMemo(() => items.length > 0, [items])
+  const idiomaSuggestions = useMemo(() => {
+    const map = new Map()
+    const source = Array.isArray(idiomasData) ? idiomasData : []
+    source.forEach((item) => {
+      const value = String(item?.nameES || '').trim()
+      if (!value) return
+      const key = value.toLowerCase()
+      if (!map.has(key)) map.set(key, value)
+    })
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, 'es'))
+  }, [])
+  const filteredIdiomaSuggestions = useMemo(() => {
+    const term = form.idioma.trim().toLowerCase()
+    if (!term) return idiomaSuggestions
+    return idiomaSuggestions.filter((value) => value.toLowerCase().includes(term))
+  }, [idiomaSuggestions, form.idioma])
 
   async function loadIdiomas() {
     const response = await getMyIdiomas()
@@ -130,13 +148,50 @@ export default function ProfileIdiomas() {
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-1 text-sm font-medium text-foreground/80">
               Idioma
-              <input
-                className="ef-control"
-                placeholder="Ej: Ingles"
-                type="text"
-                value={form.idioma}
-                onChange={(event) => setForm((prev) => ({ ...prev, idioma: event.target.value }))}
-              />
+              <div
+                className="ef-dropdown"
+                tabIndex={0}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) {
+                    setIdiomaDropdownOpen(false)
+                  }
+                }}
+              >
+                <input
+                  className="ef-control"
+                  placeholder="Escribe o selecciona"
+                  type="text"
+                  value={form.idioma}
+                  onFocus={() => setIdiomaDropdownOpen(true)}
+                  onChange={(event) => {
+                    setForm((prev) => ({ ...prev, idioma: event.target.value }))
+                    setIdiomaDropdownOpen(true)
+                  }}
+                />
+                {idiomaDropdownOpen && (
+                  <div className="ef-dropdown-menu">
+                    {filteredIdiomaSuggestions.map((idioma) => (
+                      <button
+                        key={idioma}
+                        type="button"
+                        className="ef-dropdown-option"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setForm((prev) => ({ ...prev, idioma }))
+                          setIdiomaDropdownOpen(false)
+                        }}
+                      >
+                        {idioma}
+                      </button>
+                    ))}
+                    {!filteredIdiomaSuggestions.length && (
+                      <p className="px-3 py-2 text-xs text-foreground/60">
+                        Sin coincidencias. Puedes guardar lo que escribiste.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </label>
             <label className="space-y-1 text-sm font-medium text-foreground/80">
               Nivel

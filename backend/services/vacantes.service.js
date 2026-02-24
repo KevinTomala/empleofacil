@@ -1,0 +1,228 @@
+const db = require('../db');
+
+function toTextOrNull(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text || null;
+}
+
+function toPositiveIntOrNull(value) {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num <= 0) return null;
+  return num;
+}
+
+function toPage(value, fallback = 1) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return Math.floor(parsed);
+}
+
+function toPageSize(value, fallback = 20, max = 100) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return Math.min(Math.floor(parsed), max);
+}
+
+function normalizeEstado(value) {
+  const estado = toTextOrNull(value);
+  if (!estado) return null;
+  if (!['borrador', 'activa', 'pausada', 'cerrada'].includes(estado)) return null;
+  return estado;
+}
+
+function normalizeModalidad(value) {
+  const modalidad = toTextOrNull(value);
+  if (!modalidad) return null;
+  if (!['presencial', 'remoto', 'hibrido'].includes(modalidad)) return null;
+  return modalidad;
+}
+
+function normalizeTipoContrato(value) {
+  const tipo = toTextOrNull(value);
+  if (!tipo) return null;
+  if (!['tiempo_completo', 'medio_tiempo', 'por_horas', 'temporal', 'indefinido', 'otro'].includes(tipo)) return null;
+  return tipo;
+}
+
+function buildVacantesWhereClause(filters, { ownEmpresaId = null, onlyActive = false } = {}) {
+  const where = ['v.deleted_at IS NULL', 'v.activo = 1'];
+  const params = [];
+
+  if (ownEmpresaId) {
+    where.push('v.empresa_id = ?');
+    params.push(ownEmpresaId);
+  } else if (onlyActive) {
+    where.push("v.estado = 'activa'");
+  }
+
+  if (filters.q) {
+    where.push('(v.titulo LIKE ? OR v.area LIKE ? OR v.provincia LIKE ? OR v.ciudad LIKE ? OR e.nombre LIKE ?)');
+    const like = `%${filters.q}%`;
+    params.push(like, like, like, like, like);
+  }
+
+  if (filters.provincia) {
+    where.push('v.provincia = ?');
+    params.push(filters.provincia);
+  }
+  if (filters.modalidad) {
+    where.push('v.modalidad = ?');
+    params.push(filters.modalidad);
+  }
+  if (filters.tipoContrato) {
+    where.push('v.tipo_contrato = ?');
+    params.push(filters.tipoContrato);
+  }
+  if (filters.estado) {
+    where.push('v.estado = ?');
+    params.push(filters.estado);
+  }
+
+  return {
+    whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '',
+    params
+  };
+}
+
+async function listVacantes({
+  page = 1,
+  pageSize = 20,
+  q = null,
+  provincia = null,
+  modalidad = null,
+  tipoContrato = null,
+  estado = null
+} = {}, { ownEmpresaId = null, onlyActive = false } = {}) {
+  const safePage = toPage(page);
+  const safePageSize = toPageSize(pageSize);
+  const offset = (safePage - 1) * safePageSize;
+
+  const filters = {
+    q: toTextOrNull(q),
+    provincia: toTextOrNull(provincia),
+    modalidad: normalizeModalidad(modalidad),
+    tipoContrato: normalizeTipoContrato(tipoContrato),
+    estado: normalizeEstado(estado)
+  };
+
+  const { whereSql, params } = buildVacantesWhereClause(filters, { ownEmpresaId, onlyActive });
+
+  const [countRows] = await db.query(
+    `SELECT COUNT(*) AS total
+     FROM vacantes_publicadas v
+     INNER JOIN empresas e
+       ON e.id = v.empresa_id
+      AND e.deleted_at IS NULL
+     ${whereSql}`,
+    params
+  );
+
+  const [rows] = await db.query(
+    `SELECT
+      v.id,
+      v.empresa_id,
+      v.publicado_por,
+      e.nombre AS empresa_nombre,
+      v.titulo,
+      v.area,
+      v.provincia,
+      v.ciudad,
+      v.modalidad,
+      v.tipo_contrato,
+      v.descripcion,
+      v.requisitos,
+      v.estado,
+      v.fecha_publicacion,
+      v.fecha_cierre,
+      v.created_at,
+      v.updated_at
+     FROM vacantes_publicadas v
+     INNER JOIN empresas e
+       ON e.id = v.empresa_id
+      AND e.deleted_at IS NULL
+     ${whereSql}
+     ORDER BY v.created_at DESC
+     LIMIT ? OFFSET ?`,
+    [...params, safePageSize, offset]
+  );
+
+  return {
+    items: rows,
+    page: safePage,
+    page_size: safePageSize,
+    total: Number(countRows[0]?.total || 0)
+  };
+}
+
+async function createVacante(empresaId, publicadoPor, payload) {
+  const [result] = await db.query(
+    `INSERT INTO vacantes_publicadas (
+      empresa_id,
+      publicado_por,
+      titulo,
+      area,
+      provincia,
+      ciudad,
+      modalidad,
+      tipo_contrato,
+      descripcion,
+      requisitos,
+      estado,
+      fecha_publicacion,
+      fecha_cierre,
+      activo
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, 1)`,
+    [
+      empresaId,
+      publicadoPor,
+      payload.titulo,
+      payload.area ?? null,
+      payload.provincia ?? null,
+      payload.ciudad ?? null,
+      payload.modalidad ?? 'presencial',
+      payload.tipo_contrato ?? 'tiempo_completo',
+      payload.descripcion ?? null,
+      payload.requisitos ?? null,
+      payload.estado ?? 'borrador',
+      payload.fecha_cierre ?? null
+    ]
+  );
+  return { id: result.insertId };
+}
+
+async function findVacanteById(vacanteId) {
+  const [rows] = await db.query(
+    `SELECT id, empresa_id, estado, deleted_at
+     FROM vacantes_publicadas
+     WHERE id = ?
+     LIMIT 1`,
+    [vacanteId]
+  );
+  return rows[0] || null;
+}
+
+async function updateVacante(vacanteId, patch) {
+  const keys = Object.keys(patch);
+  if (!keys.length) return 0;
+  const setSql = keys.map((key) => `${key} = ?`).join(', ');
+  const [result] = await db.query(
+    `UPDATE vacantes_publicadas
+     SET ${setSql}, updated_at = NOW()
+     WHERE id = ?
+       AND deleted_at IS NULL`,
+    [...keys.map((key) => patch[key]), vacanteId]
+  );
+  return result.affectedRows;
+}
+
+module.exports = {
+  toPositiveIntOrNull,
+  normalizeEstado,
+  normalizeModalidad,
+  normalizeTipoContrato,
+  listVacantes,
+  createVacante,
+  findVacanteById,
+  updateVacante
+};

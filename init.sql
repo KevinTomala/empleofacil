@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- EmpleoFacil (dev) - Esquema base candidatos
 -- ============================================================
 CREATE DATABASE IF NOT EXISTS empleof_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -176,9 +176,6 @@ LIMIT 1;
 CREATE TABLE candidatos (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   usuario_id BIGINT NULL,
-  centro_id BIGINT NULL,
-  interesado_id BIGINT NULL,
-  referente_id BIGINT NULL,
   nombres VARCHAR(100) NOT NULL,
   apellidos VARCHAR(100) NOT NULL,
   documento_identidad VARCHAR(50),
@@ -186,14 +183,12 @@ CREATE TABLE candidatos (
   fecha_nacimiento DATE,
   sexo ENUM('M','F','O') DEFAULT 'O',
   estado_civil ENUM('soltero','casado','viudo','divorciado','union_libre') DEFAULT 'soltero',
-  estado_academico ENUM('preinscrito','inscrito','matriculado','rechazado') DEFAULT 'preinscrito',
   activo TINYINT UNSIGNED DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at DATETIME NULL,
   INDEX idx_candidato_usuario_id (usuario_id),
   INDEX idx_documento (documento_identidad),
-  INDEX idx_estado_academico (estado_academico),
   UNIQUE KEY uk_documento_identidad (documento_identidad),
   CONSTRAINT fk_candidatos_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -456,7 +451,7 @@ CREATE TABLE candidatos_formaciones (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   candidato_id BIGINT NOT NULL,
   categoria_formacion ENUM('externa') NULL,
-  subtipo_formacion ENUM('curso','ministerio','chofer_profesional') NULL,
+  subtipo_formacion ENUM('curso','ministerio','ministerio_i','chofer_profesional') NULL,
   centro_cliente_id BIGINT NULL,
   institucion VARCHAR(200) NULL,
   nombre_programa VARCHAR(200) NULL,
@@ -473,6 +468,28 @@ CREATE TABLE candidatos_formaciones (
   INDEX idx_candidatos_formaciones_centro_cliente_id (centro_cliente_id),
   CONSTRAINT fk_candidatos_formaciones_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
   CONSTRAINT fk_candidatos_formaciones_centro FOREIGN KEY (centro_cliente_id) REFERENCES centros_capacitacion(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE candidatos_formacion_certificados (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  candidato_id BIGINT NOT NULL,
+  candidato_formacion_id BIGINT NOT NULL,
+  nombre_archivo VARCHAR(255) NOT NULL,
+  nombre_original VARCHAR(255) NOT NULL,
+  ruta_archivo VARCHAR(500) NOT NULL,
+  tipo_mime VARCHAR(100) NOT NULL,
+  tamanio_kb INT NOT NULL,
+  fecha_emision DATE NULL,
+  descripcion TEXT NULL,
+  estado ENUM('pendiente','aprobado','rechazado','vencido') DEFAULT 'pendiente',
+  estado_extraccion ENUM('pendiente','procesado','error') DEFAULT 'pendiente',
+  datos_extraidos_json JSON NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME NULL,
+  CONSTRAINT uq_formacion_certificado UNIQUE (candidato_formacion_id),
+  CONSTRAINT fk_formacion_certificados_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
+  CONSTRAINT fk_formacion_certificados_formacion FOREIGN KEY (candidato_formacion_id) REFERENCES candidatos_formaciones(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE candidatos_experiencia_certificados (
@@ -548,6 +565,57 @@ CREATE TABLE integracion_ademy_empresas_empleofacil (
   UNIQUE KEY uq_integracion_ademy_empresa_origen (origen, origen_empresa_id),
   INDEX idx_integracion_ademy_empresa_local (empresa_id, activo),
   CONSTRAINT fk_integracion_ademy_empresa_local FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -------------------------------------------------------------
+-- VACANTES Y POSTULACIONES (MVP)
+-- -------------------------------------------------------------
+CREATE TABLE vacantes_publicadas (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  empresa_id BIGINT NOT NULL,
+  publicado_por BIGINT NULL,
+  titulo VARCHAR(180) NOT NULL,
+  area VARCHAR(120) NULL,
+  provincia VARCHAR(100) NULL,
+  ciudad VARCHAR(100) NULL,
+  modalidad ENUM('presencial','remoto','hibrido') DEFAULT 'presencial',
+  tipo_contrato ENUM('tiempo_completo','medio_tiempo','por_horas','temporal','indefinido','otro') DEFAULT 'tiempo_completo',
+  descripcion TEXT NULL,
+  requisitos TEXT NULL,
+  estado ENUM('borrador','activa','pausada','cerrada') DEFAULT 'borrador',
+  fecha_publicacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+  fecha_cierre DATE NULL,
+  activo TINYINT(1) DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME NULL,
+  CONSTRAINT fk_vacantes_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+  CONSTRAINT fk_vacantes_publicado_por FOREIGN KEY (publicado_por) REFERENCES usuarios(id) ON DELETE SET NULL,
+  INDEX idx_vacantes_empresa_estado (empresa_id, estado),
+  INDEX idx_vacantes_estado_publicacion (estado, fecha_publicacion),
+  INDEX idx_vacantes_busqueda (titulo, area, provincia, ciudad)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE postulaciones (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  vacante_id BIGINT NOT NULL,
+  candidato_id BIGINT NOT NULL,
+  empresa_id BIGINT NOT NULL,
+  estado_proceso ENUM('nuevo','en_revision','contactado','entrevista','seleccionado','descartado','finalizado','rechazado') DEFAULT 'nuevo',
+  fecha_postulacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+  ultima_actividad DATETIME NULL,
+  origen ENUM('portal_empleo','importado') DEFAULT 'portal_empleo',
+  activo TINYINT(1) DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME NULL,
+  CONSTRAINT fk_postulaciones_vacante FOREIGN KEY (vacante_id) REFERENCES vacantes_publicadas(id) ON DELETE CASCADE,
+  CONSTRAINT fk_postulaciones_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
+  CONSTRAINT fk_postulaciones_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_postulacion_vacante_candidato (vacante_id, candidato_id),
+  INDEX idx_postulaciones_empresa_estado (empresa_id, estado_proceso),
+  INDEX idx_postulaciones_candidato_fecha (candidato_id, fecha_postulacion),
+  INDEX idx_postulaciones_vacante_fecha (vacante_id, fecha_postulacion)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -------------------------------------------------------------

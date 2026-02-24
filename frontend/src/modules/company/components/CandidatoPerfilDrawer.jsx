@@ -2,7 +2,6 @@ function renderValue(value) {
   if (value === null || value === undefined || value === '') return 'N/D'
   if (value === 1 || value === true) return 'Si'
   if (value === 0 || value === false) return 'No'
-  if (typeof value === 'object') return JSON.stringify(value)
   return String(value)
 }
 
@@ -42,42 +41,66 @@ function resolveEmpresaNombre(item) {
   return 'Empresa no especificada'
 }
 
-function Section({ title, data }) {
-  if (Array.isArray(data)) {
-    return (
-      <section className="border border-border rounded-xl p-3 bg-white">
-        <h3 className="text-sm font-semibold mb-2">{title}</h3>
-        {!data.length && <p className="text-xs text-foreground/60">Sin registros</p>}
-        {data.length > 0 && (
-          <div className="space-y-2">
-            {data.map((item) => (
-              <div key={item.id || JSON.stringify(item)} className="border border-border/70 rounded-lg px-2 py-1.5">
-                {Object.entries(item).map(([key, value]) => (
-                  <p key={key} className="text-xs text-foreground/80">
-                    <span className="text-foreground/50">{key}: </span>
-                    {renderValue(value)}
-                  </p>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-    )
-  }
-
-  const entries = Object.entries(data || {})
+function FieldsGrid({ title, fields }) {
   return (
     <section className="border border-border rounded-xl p-3 bg-white">
       <h3 className="text-sm font-semibold mb-2">{title}</h3>
       <div className="grid sm:grid-cols-2 gap-2 text-xs">
-        {entries.map(([key, value]) => (
-          <div key={key} className="border border-border/70 rounded-lg px-2 py-1.5">
-            <p className="text-foreground/50">{key}</p>
-            <p className="text-foreground/80">{renderValue(value)}</p>
+        {fields.map((field) => (
+          <div key={field.label} className="border border-border/70 rounded-lg px-2 py-1.5">
+            <p className="text-foreground/50">{field.label}</p>
+            <p className="text-foreground/80">{renderValue(field.value)}</p>
           </div>
         ))}
       </div>
+    </section>
+  )
+}
+
+function EducacionGeneralSection({ items }) {
+  const data = Array.isArray(items) ? items : []
+  return (
+    <section className="border border-border rounded-xl p-3 bg-white">
+      <h3 className="text-sm font-semibold mb-2">Educacion general</h3>
+      {!data.length && <p className="text-xs text-foreground/60">Sin registros</p>}
+      {data.length > 0 && (
+        <div className="space-y-2">
+          {data.map((item) => (
+            <article key={item.id || `${item.nivel_estudio}-${item.institucion || 's'}`} className="border border-border/70 rounded-lg px-3 py-2">
+              <p className="text-xs text-foreground/70">Nivel: {renderValue(item.nivel_estudio)}</p>
+              <p className="text-xs text-foreground/70">Institucion: {renderValue(item.institucion)}</p>
+              <p className="text-xs text-foreground/70">Titulo: {renderValue(item.titulo_obtenido)}</p>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function FormacionSection({ items }) {
+  const data = Array.isArray(items) ? items : []
+  return (
+    <section className="border border-border rounded-xl p-3 bg-white">
+      <h3 className="text-sm font-semibold mb-2">Formacion</h3>
+      {!data.length && <p className="text-xs text-foreground/60">Sin registros</p>}
+      {data.length > 0 && (
+        <div className="space-y-2">
+          {data.map((item) => (
+            <article key={item.id || `${item.categoria_formacion}-${item.subtipo_formacion}`} className="border border-border/70 rounded-lg px-3 py-2">
+              <p className="text-xs text-foreground/70">
+                Categoria/Subtipo: {renderValue(item.categoria_formacion)} / {renderValue(item.subtipo_formacion)}
+              </p>
+              <p className="text-xs text-foreground/70">Institucion: {renderValue(item.institucion || item.centro_cliente_nombre)}</p>
+              <p className="text-xs text-foreground/70">Programa: {renderValue(item.nombre_programa)}</p>
+              <p className="text-xs text-foreground/70">Titulo: {renderValue(item.titulo_obtenido)}</p>
+              <p className="text-xs text-foreground/70">
+                Fechas: Aprobacion {formatDateShort(item.fecha_aprobacion)} / Emision {formatDateShort(item.fecha_emision)} / Vencimiento {formatDateShort(item.fecha_vencimiento)}
+              </p>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   )
 }
@@ -91,16 +114,39 @@ function ExperienceSection({ items }) {
       {data.length > 0 && (
         <div className="space-y-2">
           {data.map((item) => (
-            <article key={item.id || JSON.stringify(item)} className="border border-border/70 rounded-lg px-3 py-2">
+            <article key={item.id || `${item.cargo}-${item.fecha_inicio}`} className="border border-border/70 rounded-lg px-3 py-2">
               <p className="text-sm font-semibold text-foreground/90">{resolveEmpresaNombre(item)}</p>
-              <p className="text-xs text-foreground/70">Cargo: {item?.cargo || 'N/D'}</p>
+              <p className="text-xs text-foreground/70">Cargo: {renderValue(item?.cargo)}</p>
               <p className="text-xs text-foreground/70">
                 Periodo: {formatDateShort(item?.fecha_inicio)} - {item?.actualmente_trabaja ? 'Actual' : formatDateShort(item?.fecha_fin)}
               </p>
               <p className="text-xs text-foreground/70">Tiempo trabajado: {formatDurationLabel(item)}</p>
-              <p className="text-xs text-foreground/70">Actualmente trabaja ahi: {item?.actualmente_trabaja ? 'Si' : 'No'}</p>
-              <p className="text-xs text-foreground/70">Descripcion del puesto: {item?.descripcion || 'N/D'}</p>
+              <p className="text-xs text-foreground/70">Disponible para referencias: {item?.actualmente_trabaja ? 'Si' : 'No'}</p>
+              <p className="text-xs text-foreground/70">Resumen: {renderValue(item?.descripcion)}</p>
               <p className="text-xs text-foreground/70">Certificado laboral: {item?.certificado_laboral ? 'Adjuntado' : 'Pendiente'}</p>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function DocumentosSection({ items }) {
+  const data = Array.isArray(items) ? items : []
+  return (
+    <section className="border border-border rounded-xl p-3 bg-white">
+      <h3 className="text-sm font-semibold mb-2">Documentos</h3>
+      {!data.length && <p className="text-xs text-foreground/60">Sin registros</p>}
+      {data.length > 0 && (
+        <div className="space-y-2">
+          {data.map((item) => (
+            <article key={item.id || `${item.tipo_documento}-${item.nombre_archivo}`} className="border border-border/70 rounded-lg px-3 py-2">
+              <p className="text-xs text-foreground/70">Tipo: {renderValue(item.tipo_documento)}</p>
+              <p className="text-xs text-foreground/70">Estado: {renderValue(item.estado)}</p>
+              <p className="text-xs text-foreground/70">Emision: {formatDateShort(item.fecha_emision)}</p>
+              <p className="text-xs text-foreground/70">Vencimiento: {formatDateShort(item.fecha_vencimiento)}</p>
+              <p className="text-xs text-foreground/70">Descripcion: {renderValue(item.descripcion)}</p>
             </article>
           ))}
         </div>
@@ -146,16 +192,67 @@ export default function CandidatoPerfilDrawer({
           )}
           {!loading && !error && perfil && (
             <>
-              <Section title="Datos basicos" data={perfil.datos_basicos} />
-              <Section title="Contacto" data={perfil.contacto} />
-              <Section title="Domicilio" data={perfil.domicilio} />
-              <Section title="Salud" data={perfil.salud} />
-              <Section title="Logistica" data={perfil.logistica} />
-              <Section title="Educacion" data={perfil.educacion} />
-              <Section title="Educacion general" data={perfil.educacion_general_items} />
-              <Section title="Formacion" data={perfil.formacion_detalle} />
+              <FieldsGrid
+                title="Datos basicos"
+                fields={[
+                  { label: 'Nombres', value: perfil?.datos_basicos?.nombres },
+                  { label: 'Apellidos', value: perfil?.datos_basicos?.apellidos },
+                  { label: 'Documento', value: perfil?.datos_basicos?.documento_identidad },
+                  { label: 'Nacionalidad', value: perfil?.datos_basicos?.nacionalidad },
+                  { label: 'Fecha nacimiento', value: formatDateShort(perfil?.datos_basicos?.fecha_nacimiento) },
+                  { label: 'Sexo', value: perfil?.datos_basicos?.sexo },
+                  { label: 'Estado civil', value: perfil?.datos_basicos?.estado_civil },
+                  { label: 'Activo', value: perfil?.datos_basicos?.activo }
+                ]}
+              />
+              <FieldsGrid
+                title="Contacto"
+                fields={[
+                  { label: 'Email', value: perfil?.contacto?.email },
+                  { label: 'Telefono celular', value: perfil?.contacto?.telefono_celular },
+                  { label: 'Telefono fijo', value: perfil?.contacto?.telefono_fijo },
+                  { label: 'Contacto emergencia', value: perfil?.contacto?.contacto_emergencia_nombre },
+                  { label: 'Telefono emergencia', value: perfil?.contacto?.contacto_emergencia_telefono }
+                ]}
+              />
+              <FieldsGrid
+                title="Domicilio"
+                fields={[
+                  { label: 'Pais', value: perfil?.domicilio?.pais },
+                  { label: 'Provincia', value: perfil?.domicilio?.provincia },
+                  { label: 'Canton', value: perfil?.domicilio?.canton },
+                  { label: 'Parroquia', value: perfil?.domicilio?.parroquia },
+                  { label: 'Direccion', value: perfil?.domicilio?.direccion },
+                  { label: 'Codigo postal', value: perfil?.domicilio?.codigo_postal }
+                ]}
+              />
+              <FieldsGrid
+                title="Salud y Logistica"
+                fields={[
+                  { label: 'Tipo sangre', value: perfil?.salud?.tipo_sangre },
+                  { label: 'Estatura', value: perfil?.salud?.estatura },
+                  { label: 'Peso', value: perfil?.salud?.peso },
+                  { label: 'Tatuaje', value: perfil?.salud?.tatuaje },
+                  { label: 'Movilizacion', value: perfil?.logistica?.movilizacion },
+                  { label: 'Tipo vehiculo', value: perfil?.logistica?.tipo_vehiculo },
+                  { label: 'Licencia', value: perfil?.logistica?.licencia },
+                  { label: 'Disponible viajar', value: perfil?.logistica?.disp_viajar },
+                  { label: 'Disponible turnos', value: perfil?.logistica?.disp_turnos },
+                  { label: 'Disponible fines semana', value: perfil?.logistica?.disp_fines_semana }
+                ]}
+              />
+              <FieldsGrid
+                title="Educacion"
+                fields={[
+                  { label: 'Nivel estudio', value: perfil?.educacion?.nivel_estudio },
+                  { label: 'Institucion', value: perfil?.educacion?.institucion },
+                  { label: 'Titulo', value: perfil?.educacion?.titulo_obtenido }
+                ]}
+              />
+              <EducacionGeneralSection items={perfil?.educacion_general_items} />
+              <FormacionSection items={perfil?.formacion_detalle} />
               <ExperienceSection items={perfil.experiencia} />
-              <Section title="Documentos" data={perfil.documentos} />
+              <DocumentosSection items={perfil.documentos} />
             </>
           )}
         </div>

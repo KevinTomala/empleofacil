@@ -32,6 +32,10 @@ curl http://localhost:3000/healthz
 ## Migraciones BD (alineacion con `init.sql`)
 1. Validar estructura minima:
 ```sql
+SHOW COLUMNS FROM candidatos LIKE 'centro_id';
+SHOW COLUMNS FROM candidatos LIKE 'interesado_id';
+SHOW COLUMNS FROM candidatos LIKE 'referente_id';
+SHOW COLUMNS FROM candidatos LIKE 'estado_academico';
 SHOW COLUMNS FROM candidatos_formaciones LIKE 'centro_cliente_id';
 SHOW TABLES LIKE 'centros_capacitacion';
 SHOW TABLES LIKE 'integracion_ademy_promociones_institucion';
@@ -39,7 +43,21 @@ SHOW COLUMNS FROM candidatos_experiencia LIKE 'empresa_origen_id';
 SHOW TABLES LIKE 'integracion_ademy_empresas_empleofacil';
 SHOW TABLES LIKE 'candidatos_experiencia_certificados';
 ```
-2. Si falta `candidatos_experiencia_certificados`, crearla:
+2. Si en un entorno viejo aun existen columnas legacy en `candidatos`, retirarlas:
+```sql
+ALTER TABLE candidatos
+  DROP INDEX idx_estado_academico,
+  DROP COLUMN centro_id,
+  DROP COLUMN interesado_id,
+  DROP COLUMN referente_id,
+  DROP COLUMN estado_academico;
+```
+3. Verificar contrato final de la tabla `candidatos`:
+```sql
+SHOW COLUMNS FROM candidatos;
+```
+Debe quedar sin `centro_id`, `interesado_id`, `referente_id` y `estado_academico`.
+4. Si falta `candidatos_experiencia_certificados`, crearla:
 ```sql
 CREATE TABLE candidatos_experiencia_certificados (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -61,7 +79,7 @@ CREATE TABLE candidatos_experiencia_certificados (
   CONSTRAINT fk_experiencia_certificados_experiencia FOREIGN KEY (experiencia_id) REFERENCES candidatos_experiencia(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
-3. Si necesitas backfill de vinculo por nombre (experiencias manuales -> empresa local):
+5. Si necesitas backfill de vinculo por nombre (experiencias manuales -> empresa local):
 ```sql
 UPDATE candidatos_experiencia ce
 JOIN empresas e
@@ -74,9 +92,51 @@ WHERE ce.deleted_at IS NULL
   AND ce.empresa_nombre IS NOT NULL
   AND e.deleted_at IS NULL;
 ```
-4. Reiniciar backend despues de cambios de esquema:
+6. Reiniciar backend despues de cambios de esquema:
 ```bash
 docker compose restart backend
+```
+
+## Despliegue incremental MVP Vacantes + Postulaciones
+Orden recomendado:
+1. Desplegar backend con rutas nuevas (`/api/vacantes`, `/api/postulaciones`).
+2. Ejecutar migracion SQL de MVP:
+```bash
+docker compose exec -T mysql mysql -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < docs/sql/migrations/2026-02-23_add_vacantes_postulaciones_mvp.sql
+```
+3. Verificar tablas e indices:
+```sql
+SHOW TABLES LIKE 'vacantes_publicadas';
+SHOW TABLES LIKE 'postulaciones';
+SHOW INDEX FROM vacantes_publicadas;
+SHOW INDEX FROM postulaciones;
+```
+4. Desplegar frontend con vistas reales de vacantes/postulaciones.
+
+Smoke checks post despliegue:
+1. Empresa crea vacante:
+```bash
+curl -X POST http://localhost:3000/api/vacantes \
+  -H "Authorization: Bearer <token_empresa>" \
+  -H "Content-Type: application/json" \
+  -d '{"titulo":"Operador CCTV","estado":"activa"}'
+```
+2. Candidato lista vacantes:
+```bash
+curl "http://localhost:3000/api/vacantes?page=1&page_size=20" \
+  -H "Authorization: Bearer <token_candidato>"
+```
+3. Candidato postula:
+```bash
+curl -X POST http://localhost:3000/api/postulaciones \
+  -H "Authorization: Bearer <token_candidato>" \
+  -H "Content-Type: application/json" \
+  -d '{"vacante_id":1}'
+```
+4. Empresa lista postulaciones recibidas:
+```bash
+curl "http://localhost:3000/api/postulaciones/empresa?page=1&page_size=20" \
+  -H "Authorization: Bearer <token_empresa>"
 ```
 
 ## Logs utiles

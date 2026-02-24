@@ -12,6 +12,8 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `POST /auth/login` con credenciales validas devuelve `token`.
 - `POST /auth/login` con password invalido devuelve `401 INVALID_CREDENTIALS`.
 - `POST /auth/change-password` sin token devuelve `401 AUTH_REQUIRED`.
+- `POST /auth/login` de usuario con clave temporal devuelve `user.must_change_password = true`.
+- `POST /auth/change-password` exitoso debe permitir login posterior con nueva clave y devolver `must_change_password = false`.
 
 ### 3) Autorizacion por rol
 - `GET /api/integraciones/ademy/convocatorias` con rol no admin debe devolver `403 FORBIDDEN`.
@@ -20,12 +22,17 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 ### 4) Hoja de vida
 - `GET /api/hoja-vida/:id` con id invalido debe devolver `400 INVALID_ESTUDIANTE_ID`.
 - `GET /api/hoja-vida/:id/pdf` con candidato existente debe devolver `application/pdf`.
+- `GET /api/hoja-vida/:id` no debe incluir `perfil.estado_academico`.
+- `GET /api/hoja-vida/:id/pdf` no debe renderizar la linea `Estado academico`.
 
 ### 5) Integraciones Ademy
 - `POST /api/integraciones/ademy/acreditados/import` con token admin debe devolver resumen `{ ok, total, created, updated, skipped, errors }`.
 - Lanzar dos imports simultaneos debe provocar `409 SYNC_ALREADY_RUNNING` en uno de ellos.
 
 ### 6) Perfil candidato Fase 2 (backend)
+- `GET /api/perfil/me` no debe incluir en `datos_basicos`: `centro_id`, `interesado_id`, `referente_id`, `estado_academico`.
+- `PUT /api/perfil/me/datos-basicos` con payload valido sin campos legacy responde `200`.
+- `PUT /api/perfil/me/datos-basicos` enviando `centro_id|interesado_id|referente_id|estado_academico` debe responder `400 INVALID_PAYLOAD`.
 - `GET /api/perfil/me/idiomas` responde `200` con `{ items: [] }`.
 - `POST /api/perfil/me/idiomas` crea idioma y devuelve `201`.
 - `PUT/DELETE /api/perfil/me/idiomas/:idiomaId` validan ownership y responden `404` si no existe.
@@ -51,6 +58,8 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `POST /api/perfil/me/formacion` con `centro_cliente_id` inexistente devuelve `400 CENTRO_CAPACITACION_NOT_FOUND`.
 - `POST|PUT /api/perfil/me/formacion*` rechazan payload legacy (`estado`, `fecha_inicio`, `fecha_fin`, `matricula_id`, `nivel_id`, `curso_id`, `formacion_origen_id`) con `400 INVALID_PAYLOAD`.
 - `GET|POST|PUT|DELETE /api/perfil/me/educacion-general*` permiten multiples registros academicos.
+- `GET|POST|PUT|DELETE /api/perfil/me/formacion/:formacionId/certificado` permite upload/reemplazo/borrado de certificado de curso.
+- `POST /api/perfil/me/formacion/:formacionId/certificado` en item no externa devuelve `FORMACION_CERTIFICADO_NOT_ALLOWED`.
 - `GET|POST|PUT|DELETE /api/perfil/me/experiencia/:experienciaId/certificado` respetan ownership.
 - `POST certificado` sin archivo devuelve `400 FILE_REQUIRED`.
 - Empresa solo lectura en `/:candidatoId/formacion*` y `/:candidatoId/experiencia/:experienciaId/certificado`.
@@ -72,11 +81,35 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
   - crear o renombrar empresa con nombre igual a `candidatos_experiencia.empresa_nombre` debe llenar `empresa_id` en esas experiencias.
   - experiencias con `empresa_origen='ademy'` no deben autovincularse por este mecanismo.
 
+### 8) Vacantes + postulaciones MVP (backend)
+- `POST /api/vacantes` con empresa valida debe responder `201` y `id`.
+- `GET /api/vacantes` debe responder `200` con `items`, `page`, `page_size`, `total` y solo vacantes activas.
+- `GET /api/vacantes/mias` debe responder `200` para empresa y `403 COMPANY_ACCESS_REQUIRED` si no hay scope de empresa.
+- `PUT /api/vacantes/:vacanteId` de vacante ajena debe devolver `403 FORBIDDEN`.
+- `PUT /api/vacantes/:vacanteId/estado` debe aceptar `borrador|activa|pausada|cerrada`.
+- `POST /api/postulaciones` sobre vacante activa debe responder `201`.
+- Repetir `POST /api/postulaciones` con mismo `vacante_id` debe devolver `409 POSTULACION_DUPLICADA`.
+- `POST /api/postulaciones` sobre vacante `pausada|cerrada` debe devolver `400 VACANTE_NOT_ACTIVE`.
+- `GET /api/postulaciones/mias` debe devolver historial del candidato autenticado.
+- `GET /api/postulaciones/empresa` debe devolver solo postulaciones de vacantes de su empresa.
+
 ## Checklist de regresion rapida
 - Login funciona por email.
 - Login funciona por documento de candidato.
 - Cambio de password limpia `must_change_password`.
+- Usuario creado por import Ademy inicia `activo` y con `must_change_password=1`.
 - Cron no corre cuando `ADEMY_SYNC_ENABLED=false`.
+
+## Pruebas manuales frontend (auth y seguridad)
+- Usuario autenticado visualiza `Cambiar contrasena` arriba de `Salir` en dropdown desktop.
+- Usuario autenticado visualiza `Cambiar contrasena` arriba de `Salir` en menu mobile.
+- Navegar a `/app/change-password` con sesion activa renderiza formulario.
+- Navegar a `/app/change-password` sin sesion redirige a `/login`.
+- Formulario bloquea submit cuando faltan campos.
+- Formulario muestra error cuando nueva contrasena tiene menos de 8 caracteres.
+- Formulario muestra error cuando nueva contrasena es igual a la actual.
+- Formulario muestra error cuando confirmacion no coincide.
+- Cambio exitoso muestra toast de exito y limpia los campos.
 
 ## Pruebas manuales frontend (perfil candidato wizard)
 
@@ -105,6 +138,7 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `Guardar` mantiene comportamiento de persistencia actual.
 - `Guardar y continuar` mantiene navegacion esperada entre tabs.
 - Ejecutar build frontend sin errores.
+- `ProfilePerfil` y `ProfileDatosBasicos` no deben mostrar ni enviar `estado_academico`.
 
 ### 6) Perfil candidato Fase 2 (frontend)
 - `ProfileIdiomas` permite crear, editar y eliminar items.
@@ -117,6 +151,7 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `ProfileFormacion` usa tabs:
   - `Academica` permite CRUD multiple en `candidatos_educacion_general`.
   - `Externa` usa CRUD de `/api/perfil/me/formacion`.
+  - `Externa` permite subir/reemplazar/eliminar certificado de curso (pdf/imagen) por cada formacion.
   - `Certificacion` redirige operacion a `ProfileExperiencia` (certificado laboral por experiencia).
 - En `Externa`, solo se muestran campos del contrato limpio (`categoria_formacion`, `subtipo_formacion`, `institucion`, `nombre_programa`, `titulo_obtenido`, `fecha_aprobacion`, `fecha_emision`, `fecha_vencimiento`).
 - En `Externa`, el campo `Institucion` muestra sugerencias del catalogo (`/api/perfil/centros-capacitacion`) y permite texto libre.
@@ -131,6 +166,49 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - Bloque de preferencias permite guardar modalidades, niveles y observaciones.
 - Boton `Desactivar empresa` ejecuta baja logica y redirige a login cuando responde `200`.
 - Usuario sin membresia activa no accede a `/app/company/*` y es redirigido.
+
+### 8) CompanyCandidatos Fase 1 (frontend)
+- La vista `/app/company/candidatos` debe consultar `/api/candidatos` con `page`, `page_size` y `q`.
+- Escribir en buscador debe reiniciar a pagina 1 y refrescar resultados.
+- Boton `Limpiar` debe vaciar `q` y volver a pagina 1.
+- Paginacion:
+  - `Anterior` deshabilitado en pagina 1.
+  - `Siguiente` habilitado solo cuando la respuesta trae `items.length === page_size`.
+- Debe existir estado de carga, estado de error y estado vacio (general y por busqueda).
+- Cards:
+  - no deben mostrar separadores `?`.
+  - deben mostrar datos legibles (documento, contacto, nacionalidad, nacimiento).
+- Acciones por card:
+  - solo visible `Ver perfil`.
+  - no deben mostrarse `Cambiar estado`, `Enviar mensaje`, `Destacar`.
+- Drawer de candidato:
+  - debe mostrarse por secciones legibles.
+  - no debe usar dump generico por `Object.entries` + `JSON.stringify`.
+
+### 9) Vacantes + postulaciones MVP (frontend)
+- `/app/company/vacantes`:
+  - carga vacantes reales de `/api/vacantes/mias`,
+  - crea vacante y la muestra en listado,
+  - edita vacante existente,
+  - cambia estado (activar/pausar/cerrar),
+  - maneja estado vacio, error y paginacion,
+  - boton `Ver postulados` abre subvista por vacante en la misma ruta,
+  - subvista de postulados permite filtrar por `q` y paginar,
+  - boton `Volver a vacantes` retorna al listado sin romper flujo,
+  - en postulados, `Ver perfil` abre drawer real y botones `Copiar email` / `Copiar telefono` muestran feedback.
+- `/app/candidate/vacantes`:
+  - carga vacantes reales de `/api/vacantes`,
+  - aplica filtros `q`, `provincia`, `modalidad`, `tipo_contrato`,
+  - boton `Postular ahora` crea postulacion real,
+  - maneja feedback para duplicado y vacante no activa.
+- `/app/candidate/postulaciones`:
+  - carga datos de `/api/postulaciones/mias`,
+  - muestra vacante, empresa, fecha y estado de proceso,
+  - maneja estado vacio, error y paginacion.
+- `/app/company/postulaciones`:
+  - se mantiene como vista legacy de transicion (no flujo principal).
+- Validacion final:
+  - `npm run build` en frontend termina sin errores.
 
 ## Recomendacion de automatizacion
 1. Backend: incorporar `jest` + `supertest` para rutas criticas (`auth`, `candidatos`, `hoja-vida`, `integraciones`).

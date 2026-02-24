@@ -401,7 +401,6 @@ async function upsertEstudiante(conn, item) {
     'fecha_nacimiento',
     'sexo',
     'estado_civil',
-    'estado_academico',
     'activo'
   ];
 

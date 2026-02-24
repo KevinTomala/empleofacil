@@ -66,7 +66,6 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId) {
       e.fecha_nacimiento,
       e.sexo,
       e.estado_civil,
-      e.estado_academico,
       e.activo,
       e.created_at,
       e.updated_at
@@ -196,7 +195,6 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId) {
       edad: calcularEdad(estudiante.fecha_nacimiento),
       sexo: estudiante.sexo,
       estado_civil: estudiante.estado_civil,
-      estado_academico: estudiante.estado_academico,
       activo: toBool(estudiante.activo)
     },
     contacto,
@@ -328,7 +326,6 @@ async function generarHojaVidaPdfPorEstudianteId(estudianteId) {
           <div>Edad: ${escapeHtml(textOrDash(perfil.edad))}</div>
           <div>Sexo: ${escapeHtml(textOrDash(perfil.sexo))}</div>
           <div>Estado civil: ${escapeHtml(textOrDash(perfil.estado_civil))}</div>
-          <div>Estado academico: ${escapeHtml(textOrDash(perfil.estado_academico))}</div>
         </div>
 
         <h2>Contacto y Domicilio</h2>

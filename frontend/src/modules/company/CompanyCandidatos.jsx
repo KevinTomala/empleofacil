@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './company.css'
-import { Briefcase, Crown, Eye, FileText, Mail, Users } from 'lucide-react'
+import { Briefcase, Crown, FileText, Mail, Users } from 'lucide-react'
 import Header from '../../components/Header'
 import { apiRequest } from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
@@ -12,7 +12,13 @@ export default function CompanyCandidatos() {
   const canImportAcreditados = user?.rol === 'administrador' || user?.rol === 'superadmin'
   const [candidatos, setCandidatos] = useState([])
   const [loading, setLoading] = useState(true)
+  const [isFetching, setIsFetching] = useState(false)
   const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [hasNext, setHasNext] = useState(false)
   const [convocatorias, setConvocatorias] = useState([])
   const [cursos, setCursos] = useState([])
   const [promociones, setPromociones] = useState([])
@@ -31,24 +37,45 @@ export default function CompanyCandidatos() {
   const [drawerCandidatoName, setDrawerCandidatoName] = useState('')
 
   useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedQuery(query.trim())
+    }, 350)
+    return () => clearTimeout(timeout)
+  }, [query])
+
+  useEffect(() => {
     let alive = true
 
     async function load() {
       if (!token) {
+        setCandidatos([])
+        setHasNext(false)
         setLoading(false)
+        setIsFetching(false)
         return
       }
       try {
-        setLoading(true)
-        const data = await apiRequest('/api/candidatos?page=1&page_size=50')
+        setLoading(candidatos.length === 0 || page === 1)
+        setIsFetching(true)
+        const params = new URLSearchParams()
+        params.set('page', String(page))
+        params.set('page_size', String(pageSize))
+        if (debouncedQuery) params.set('q', debouncedQuery)
+        const data = await apiRequest(`/api/candidatos?${params.toString()}`)
         if (!alive) return
-        setCandidatos(data.items || [])
+        const items = Array.isArray(data?.items) ? data.items : []
+        setCandidatos(items)
+        setHasNext(items.length === pageSize)
         setError('')
       } catch (err) {
         if (!alive) return
+        setHasNext(false)
         setError(err.message || 'No se pudieron cargar los candidatos.')
       } finally {
-        if (alive) setLoading(false)
+        if (alive) {
+          setLoading(false)
+          setIsFetching(false)
+        }
       }
     }
 
@@ -57,7 +84,7 @@ export default function CompanyCandidatos() {
     return () => {
       alive = false
     }
-  }, [token, refreshFlag])
+  }, [token, page, pageSize, debouncedQuery, refreshFlag])
 
   useEffect(() => {
     let alive = true
@@ -158,55 +185,15 @@ export default function CompanyCandidatos() {
       candidatos.map((item) => ({
         id: item.id,
         name: `${item.nombres || ''} ${item.apellidos || ''}`.trim() || 'Candidato',
-        role: 'Candidato acreditado',
         status: 'Acreditado',
-        appliedAt: item.documento_identidad
-          ? `Documento: ${item.documento_identidad}`
-          : 'Documento: N/D',
-        lastActivity: item.email ? `Email: ${item.email}` : 'Email: N/D',
-        city: item.nacionalidad ? `Nacionalidad: ${item.nacionalidad}` : 'Nacionalidad: N/D',
-        experience: item.fecha_nacimiento
-          ? `Nacimiento: ${item.fecha_nacimiento}`
-          : 'Nacimiento: N/D',
-        education: item.telefono_celular
-          ? `Telefono: ${item.telefono_celular}`
-          : 'Telefono: N/D',
-        availability: 'Acreditado',
-        match: 100,
-        featured: false,
+        documento: item.documento_identidad || 'N/D',
+        email: item.email || 'N/D',
+        telefono: item.telefono_celular || 'N/D',
+        nacionalidad: item.nacionalidad || 'N/D',
+        fechaNacimiento: item.fecha_nacimiento || 'N/D'
       })),
     [candidatos]
   )
-
-  const estados = [
-    { label: 'Nuevo', count: 4 },
-    { label: 'En revision', count: 3 },
-    { label: 'Contactado', count: 2 },
-    { label: 'Entrevista', count: 1 },
-    { label: 'Seleccionado', count: 1 },
-    { label: 'Descartado', count: 2 },
-  ]
-
-  const estadoClass = (status) => {
-    switch (status) {
-      case 'Acreditado':
-        return 'bg-emerald-100 text-emerald-700'
-      case 'Nuevo':
-        return 'bg-slate-100 text-slate-600'
-      case 'En revision':
-        return 'bg-amber-100 text-amber-700'
-      case 'Contactado':
-        return 'bg-blue-100 text-blue-700'
-      case 'Entrevista':
-        return 'bg-indigo-100 text-indigo-700'
-      case 'Seleccionado':
-        return 'bg-emerald-100 text-emerald-700'
-      case 'Descartado':
-        return 'bg-rose-100 text-rose-700'
-      default:
-        return 'bg-slate-100 text-slate-600'
-    }
-  }
 
   const handleImport = async () => {
     if (!token) return
@@ -249,6 +236,11 @@ export default function CompanyCandidatos() {
     }
   }
 
+  const clearSearch = () => {
+    setQuery('')
+    setPage(1)
+  }
+
   return (
     <div className="company-scope company-compact min-h-screen bg-secondary">
       <Header />
@@ -262,20 +254,8 @@ export default function CompanyCandidatos() {
               <p className="text-sm text-foreground/70">
                 {canImportAcreditados
                   ? 'Importacion interna de acreditados y monitoreo rapido de resultados.'
-                  : 'Operacion diaria del reclutador con filtros y estados del proceso.'}
+                  : 'Busqueda de candidatos acreditados con paginacion y acciones de reclutamiento.'}
               </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {estados.map((estado, index) => (
-                <button
-                  key={estado.label}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold border border-border ${
-                    index === 0 ? 'bg-primary text-white border-transparent' : 'bg-secondary text-foreground/70'
-                  }`}
-                >
-                  {estado.label} ({estado.count})
-                </button>
-              ))}
             </div>
           </div>
 
@@ -370,16 +350,64 @@ export default function CompanyCandidatos() {
           )}
         </section>
 
-        <section className="grid lg:grid-cols-[1.1fr_0.9fr] gap-6">
+        <section className="space-y-4">
+          <div className="company-card p-4">
+            <div className="flex flex-col md:flex-row gap-3 md:items-end md:justify-between">
+              <div className="flex-1">
+                <label className="block text-xs text-foreground/60 mb-1">Buscar candidato</label>
+                <input
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background"
+                  type="search"
+                  placeholder="Nombre, apellido, documento o email"
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.target.value)
+                    setPage(1)
+                  }}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <div>
+                  <label className="block text-xs text-foreground/60 mb-1">Tamano pagina</label>
+                  <select
+                    className="border border-border rounded-lg px-2 py-2 text-sm bg-background"
+                    value={pageSize}
+                    onChange={(event) => {
+                      setPageSize(Number(event.target.value))
+                      setPage(1)
+                    }}
+                  >
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  className="px-3 py-2 border border-border rounded-lg text-sm"
+                  onClick={clearSearch}
+                  disabled={!query && !debouncedQuery}
+                >
+                  Limpiar
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div className="company-list space-y-2">
             {!token && (
               <div className="company-card p-4 text-sm text-foreground/70">
                 Inicia sesion para ver candidatos acreditados.
               </div>
             )}
-            {token && loading && (
+            {token && loading && candidatosUi.length === 0 && (
               <div className="company-card p-4 text-sm text-foreground/70">
                 Cargando candidatos acreditados...
+              </div>
+            )}
+            {token && !loading && isFetching && (
+              <div className="company-card p-4 text-sm text-foreground/70">
+                Actualizando resultados...
               </div>
             )}
             {token && !loading && error && (
@@ -387,7 +415,12 @@ export default function CompanyCandidatos() {
                 {error}
               </div>
             )}
-            {token && !loading && !error && candidatosUi.length === 0 && (
+            {token && !loading && !error && candidatosUi.length === 0 && debouncedQuery && (
+              <div className="company-card p-4 text-sm text-foreground/70">
+                No se encontraron candidatos para "{debouncedQuery}".
+              </div>
+            )}
+            {token && !loading && !error && candidatosUi.length === 0 && !debouncedQuery && (
               <div className="company-card p-4 text-sm text-foreground/70">
                 No hay candidatos acreditados disponibles.
               </div>
@@ -400,102 +433,71 @@ export default function CompanyCandidatos() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-xs font-semibold ${estadoClass(
-                          candidato.status
-                        )}`}
-                      >
+                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
                         {candidato.status}
                       </span>
-                      <span className="text-xs text-foreground/50">{candidato.role}</span>
                     </div>
                     <h3 className="font-heading text-sm font-semibold">{candidato.name}</h3>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/60">
-                      <span>
-                        {candidato.city} ? {candidato.experience} ? {candidato.education}
-                      </span>
-                      <span>{candidato.appliedAt}</span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-foreground/50">
-                      <span>{candidato.lastActivity}</span>
-                      <span>{candidato.availability}</span>
+                    <div className="space-y-1 text-xs text-foreground/65">
+                      <p>Documento: {candidato.documento}</p>
+                      <p>Email: {candidato.email}</p>
+                      <p>Telefono: {candidato.telefono}</p>
+                      <p>Nacionalidad: {candidato.nacionalidad}</p>
+                      <p>Nacimiento: {candidato.fechaNacimiento}</p>
                     </div>
                   </div>
-                  {!canImportAcreditados ? (
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <button
-                        type="button"
-                        className="px-3 py-1.5 bg-primary text-white rounded-lg flex items-center gap-2"
-                        onClick={() => handleOpenPerfil(candidato.id, candidato.name)}
-                      >
-                        <Users className="w-4 h-4" /> Ver perfil
-                      </button>
-                      <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
-                        <Briefcase className="w-4 h-4" /> Cambiar estado
-                      </button>
-                      <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
-                        <Mail className="w-4 h-4" /> Enviar mensaje
-                      </button>
-                      <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
-                        <Crown className="w-4 h-4" /> Destacar
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-foreground/60">
-                  <span className="inline-flex items-center gap-2">
-                    <Eye className="w-4 h-4 text-primary" /> {candidato.match}% coincidencia
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <Briefcase className="w-4 h-4 text-primary" /> {candidato.role}
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <Users className="w-4 h-4 text-primary" /> {candidato.status}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 bg-primary text-white rounded-lg flex items-center gap-2"
+                      onClick={() => handleOpenPerfil(candidato.id, candidato.name)}
+                    >
+                      <Users className="w-4 h-4" /> Ver perfil
+                    </button>
+                    {!canImportAcreditados ? (
+                      <>
+                        <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
+                          <Briefcase className="w-4 h-4" /> Cambiar estado
+                        </button>
+                        <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
+                          <Mail className="w-4 h-4" /> Enviar mensaje
+                        </button>
+                        <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2">
+                          <Crown className="w-4 h-4" /> Destacar
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
                 </div>
               </article>
             ))}
           </div>
 
-          <aside className="space-y-4">
-            <div className="company-card p-4 bg-secondary/60 shadow-none">
-              <h3 className="font-heading text-sm font-semibold">Agrupaciones clave</h3>
-              <p className="text-sm text-foreground/70 mt-1">
-                Vista rapida por vacante y estado del proceso.
-              </p>
-              <div className="mt-4 space-y-3">
-                {[
-                  { label: 'Supervisor de Operaciones', value: '5 candidatos' },
-                  { label: 'Auxiliar Administrativo', value: '3 candidatos' },
-                  { label: 'Analista de Logistica', value: '4 candidatos' },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center justify-between text-sm">
-                    <span className="text-foreground/70">{item.label}</span>
-                    <span className="font-semibold">{item.value}</span>
-                  </div>
-                ))}
+          {token && !error && (
+            <div className="company-card p-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+              <div className="text-foreground/70">
+                Pagina {page} · Resultados actuales: {candidatosUi.length}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-50"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page <= 1 || loading || isFetching}
+                >
+                  Anterior
+                </button>
+                <button
+                  type="button"
+                  className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-50"
+                  onClick={() => setPage((current) => current + 1)}
+                  disabled={!hasNext || loading || isFetching}
+                >
+                  Siguiente
+                </button>
               </div>
             </div>
-
-            <div className="company-card p-4 bg-secondary/60 shadow-none">
-              <h3 className="font-heading text-sm font-semibold">Estado del proceso</h3>
-              <div className="mt-4 space-y-3 text-sm text-foreground/70">
-                {[
-                  'Nuevo (4)',
-                  'En revision (3)',
-                  'Contactado (2)',
-                  'Entrevista (1)',
-                  'Seleccionado (1)',
-                  'Descartado (2)',
-                ].map((estado) => (
-                  <div key={estado} className="flex items-center justify-between">
-                    <span>{estado}</span>
-                    <span className="w-2 h-2 bg-primary rounded-full" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </aside>
+          )}
         </section>
       </main>
       <CandidatoPerfilDrawer
