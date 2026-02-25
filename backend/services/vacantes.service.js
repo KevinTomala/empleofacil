@@ -1,4 +1,5 @@
 const db = require('../db');
+let ensuredVacantesSchema = false;
 
 function toTextOrNull(value) {
   if (value === null || value === undefined) return null;
@@ -45,6 +46,26 @@ function normalizeTipoContrato(value) {
   return tipo;
 }
 
+function normalizePagoPeriodo(value) {
+  const periodo = toTextOrNull(value);
+  if (!periodo) return null;
+  const normalized = periodo
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  if (['dia', 'diario'].includes(normalized)) return 'dia';
+  if (['mes', 'mensual'].includes(normalized)) return 'mes';
+  return null;
+}
+
+function normalizePagoMonto(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  return Number(amount.toFixed(2));
+}
+
 function normalizePosted(value) {
   const posted = toTextOrNull(value);
   if (!posted) return null;
@@ -57,6 +78,32 @@ function isSchemaDriftError(error) {
   const code = String(error.code || '');
   const errno = Number(error.errno || 0);
   return code === 'ER_BAD_FIELD_ERROR' || code === 'ER_NO_SUCH_TABLE' || errno === 1054 || errno === 1146;
+}
+
+async function hasColumn(tableName, columnName) {
+  const [rows] = await db.query(
+    `SELECT COUNT(*) AS total
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = ?
+       AND COLUMN_NAME = ?`,
+    [tableName, columnName]
+  );
+  return Number(rows[0]?.total || 0) > 0;
+}
+
+async function ensureVacantesSchema() {
+  if (ensuredVacantesSchema) return;
+
+  if (!(await hasColumn('vacantes_publicadas', 'pago_monto'))) {
+    await db.query('ALTER TABLE vacantes_publicadas ADD COLUMN pago_monto DECIMAL(10,2) NULL AFTER tipo_contrato');
+  }
+
+  if (!(await hasColumn('vacantes_publicadas', 'pago_periodo'))) {
+    await db.query("ALTER TABLE vacantes_publicadas ADD COLUMN pago_periodo ENUM('dia','mes') NULL AFTER pago_monto");
+  }
+
+  ensuredVacantesSchema = true;
 }
 
 async function fetchEmpresaExperienciaStats(empresaIds = []) {
@@ -170,6 +217,7 @@ async function listVacantes({
   estado = null,
   posted = null
 } = {}, { ownEmpresaId = null, onlyActive = false, candidatoId = null } = {}) {
+  await ensureVacantesSchema();
   const safePage = toPage(page);
   const safePageSize = toPageSize(pageSize);
   const offset = (safePage - 1) * safePageSize;
@@ -209,6 +257,8 @@ async function listVacantes({
       v.ciudad,
       v.modalidad,
       v.tipo_contrato,
+      v.pago_monto,
+      v.pago_periodo,
       v.descripcion,
       v.requisitos,
       v.estado,
@@ -246,7 +296,42 @@ async function listVacantes({
   };
 }
 
+async function listVacantesCountByProvincia({ onlyActive = true } = {}) {
+  await ensureVacantesSchema();
+  const where = [
+    'v.deleted_at IS NULL',
+    'v.activo = 1',
+    'e.deleted_at IS NULL',
+    'v.provincia IS NOT NULL',
+    "TRIM(v.provincia) <> ''"
+  ];
+  if (onlyActive) {
+    where.push("v.estado = 'activa'");
+  }
+
+  const [rows] = await db.query(
+    `SELECT
+      TRIM(v.provincia) AS provincia,
+      COUNT(*) AS total
+     FROM vacantes_publicadas v
+     INNER JOIN empresas e
+       ON e.id = v.empresa_id
+     WHERE ${where.join(' AND ')}
+     GROUP BY TRIM(v.provincia)
+     ORDER BY TRIM(v.provincia) ASC`
+  );
+
+  return rows.map((row) => ({
+    provincia: String(row?.provincia || '').trim(),
+    total: Number(row?.total || 0)
+  }));
+}
+
 async function createVacante(empresaId, publicadoPor, payload) {
+  await ensureVacantesSchema();
+  const pagoMonto = normalizePagoMonto(payload.pago_monto);
+  const pagoPeriodo = normalizePagoPeriodo(payload.pago_periodo);
+  const hasCompletePayment = pagoMonto !== null && pagoPeriodo !== null;
   const [result] = await db.query(
     `INSERT INTO vacantes_publicadas (
       empresa_id,
@@ -257,13 +342,15 @@ async function createVacante(empresaId, publicadoPor, payload) {
       ciudad,
       modalidad,
       tipo_contrato,
+      pago_monto,
+      pago_periodo,
       descripcion,
       requisitos,
       estado,
       fecha_publicacion,
       fecha_cierre,
       activo
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, 1)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, 1)`,
     [
       empresaId,
       publicadoPor,
@@ -273,6 +360,8 @@ async function createVacante(empresaId, publicadoPor, payload) {
       payload.ciudad ?? null,
       payload.modalidad ?? 'presencial',
       payload.tipo_contrato ?? 'tiempo_completo',
+      hasCompletePayment ? pagoMonto : null,
+      hasCompletePayment ? pagoPeriodo : null,
       payload.descripcion ?? null,
       payload.requisitos ?? null,
       payload.estado ?? 'borrador',
@@ -283,6 +372,7 @@ async function createVacante(empresaId, publicadoPor, payload) {
 }
 
 async function findVacanteById(vacanteId) {
+  await ensureVacantesSchema();
   const [rows] = await db.query(
     `SELECT id, empresa_id, estado, deleted_at
      FROM vacantes_publicadas
@@ -294,6 +384,7 @@ async function findVacanteById(vacanteId) {
 }
 
 async function updateVacante(vacanteId, patch) {
+  await ensureVacantesSchema();
   const keys = Object.keys(patch);
   if (!keys.length) return 0;
   const setSql = keys.map((key) => `${key} = ?`).join(', ');
@@ -312,8 +403,11 @@ module.exports = {
   normalizeEstado,
   normalizeModalidad,
   normalizeTipoContrato,
+  normalizePagoPeriodo,
+  normalizePagoMonto,
   normalizePosted,
   listVacantes,
+  listVacantesCountByProvincia,
   createVacante,
   findVacanteById,
   updateVacante

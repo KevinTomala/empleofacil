@@ -110,8 +110,8 @@ export default function Header() {
     }
 
     return [
-      { href: '/#beneficios-empresas', label: 'Para Empresas' },
       { href: '/#beneficios-candidatos', label: 'Para Candidatos' },
+      { href: '/#beneficios-empresas', label: 'Para Empresas' },
       { href: '/#como-funciona', label: 'Como Funciona' },
       { href: '/#contacto', label: 'Contacto' },
     ]

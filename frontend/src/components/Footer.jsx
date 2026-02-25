@@ -2,8 +2,8 @@ import { Briefcase } from 'lucide-react'
 
 const links = {
   plataforma: [
-    { label: 'Para Empresas', href: '#beneficios-empresas' },
     { label: 'Para Candidatos', href: '#beneficios-candidatos' },
+    { label: 'Para Empresas', href: '#beneficios-empresas' },
     { label: 'Como Funciona', href: '#como-funciona' },
     { label: 'Precios', href: '#' },
   ],

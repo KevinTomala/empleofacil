@@ -36,6 +36,7 @@ import './company.css'
 const ESTADOS = ['borrador', 'activa', 'pausada', 'cerrada']
 const MODALIDADES = ['presencial', 'remoto', 'hibrido']
 const TIPOS_CONTRATO = ['tiempo_completo', 'medio_tiempo', 'por_horas', 'temporal', 'indefinido', 'otro']
+const PAGO_PERIODOS = ['dia', 'mes']
 const EN_PROCESO = new Set(['nuevo', 'en_revision', 'contactado', 'entrevista'])
 const CONTRATADOS = new Set(['seleccionado', 'finalizado', 'contratado'])
 
@@ -54,6 +55,8 @@ function initialForm(defaultModalidad = 'presencial') {
     ciudad: '',
     modalidad: defaultModalidad,
     tipo_contrato: 'tiempo_completo',
+    pago_monto: '',
+    pago_periodo: 'mes',
     descripcion: '',
     requisitos: '',
     estado: 'borrador',
@@ -90,6 +93,21 @@ function formatTipoContratoLabel(value) {
     otro: 'Otro'
   }
   return map[value] || String(value || '')
+}
+
+function formatPagoPeriodoLabel(value) {
+  return value === 'dia' ? 'dia' : 'mes'
+}
+
+function formatPagoVacante(monto, periodo) {
+  const numeric = Number(monto)
+  if (!Number.isFinite(numeric) || numeric <= 0) return 'Pago a convenir'
+  const amount = new Intl.NumberFormat('es-EC', {
+    minimumFractionDigits: Number.isInteger(numeric) ? 0 : 2,
+    maximumFractionDigits: 2
+  }).format(numeric)
+  const period = periodo === 'dia' ? 'dia' : 'mes'
+  return `$${amount}/${period}`
 }
 
 function normalizeLocationText(value) {
@@ -376,6 +394,8 @@ export default function CompanyVacantes() {
     setForm({
       ...initialForm(resolveDefaultModalidad(preferenciasEmpresa.modalidades_permitidas)),
       ...item,
+      pago_monto: item.pago_monto ?? '',
+      pago_periodo: item.pago_periodo || 'mes',
       fecha_cierre: item.fecha_cierre ? String(item.fecha_cierre).slice(0, 10) : ''
     })
     setProvinciaSearch('')
@@ -479,6 +499,7 @@ export default function CompanyVacantes() {
                         <span className="inline-flex items-center gap-1"><Building2 className="w-4 h-4" /> {asText(item.area)}</span>
                         <span className="inline-flex items-center gap-1"><MapPin className="w-4 h-4" /> {asText(item.ciudad)}, {asText(item.provincia)}</span>
                         <span className="inline-flex items-center gap-1"><Monitor className="w-4 h-4" /> {asText(item.modalidad)}</span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">{formatPagoVacante(item.pago_monto, item.pago_periodo)}</span>
                         <span className="inline-flex items-center gap-1"><CalendarDays className="w-4 h-4" /> {formatDate(item.fecha_publicacion)}</span>
                       </div>
                     </div>
@@ -558,7 +579,7 @@ export default function CompanyVacantes() {
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusClass(selectedVacante?.estado)}`}>{selectedVacante?.estado || 'N/D'}</span>
                   </div>
                   <p className="text-sm text-foreground/70 mt-1">
-                    {asText(selectedVacante?.area)} · {asText(selectedVacante?.ciudad)}, {asText(selectedVacante?.provincia)} · {asText(selectedVacante?.modalidad)}
+                    {asText(selectedVacante?.area)} · {asText(selectedVacante?.ciudad)}, {asText(selectedVacante?.provincia)} · {asText(selectedVacante?.modalidad)} · {formatPagoVacante(selectedVacante?.pago_monto, selectedVacante?.pago_periodo)}
                   </p>
                 </div>
               </div>
@@ -639,6 +660,20 @@ export default function CompanyVacantes() {
             <form className="grid sm:grid-cols-2 gap-3" onSubmit={async (event) => {
               event.preventDefault()
               if (!form.titulo.trim()) return showToast({ type: 'error', message: 'El titulo es obligatorio.' })
+              const pagoMontoRaw = String(form.pago_monto || '').trim()
+              let pagoMonto = null
+              let pagoPeriodo = null
+              if (pagoMontoRaw) {
+                const parsedMonto = Number(pagoMontoRaw)
+                if (!Number.isFinite(parsedMonto) || parsedMonto <= 0) {
+                  return showToast({ type: 'error', message: 'El pago debe ser un valor numerico mayor a 0.' })
+                }
+                if (!PAGO_PERIODOS.includes(form.pago_periodo)) {
+                  return showToast({ type: 'error', message: 'Selecciona un periodo de pago valido.' })
+                }
+                pagoMonto = Number(parsedMonto.toFixed(2))
+                pagoPeriodo = form.pago_periodo
+              }
               const basePayload = {
                 titulo: form.titulo.trim(),
                 area: form.area.trim() || null,
@@ -646,6 +681,8 @@ export default function CompanyVacantes() {
                 ciudad: form.ciudad.trim() || null,
                 modalidad: form.modalidad,
                 tipo_contrato: form.tipo_contrato,
+                pago_monto: pagoMonto,
+                pago_periodo: pagoPeriodo,
                 descripcion: form.descripcion.trim() || null,
                 requisitos: form.requisitos.trim() || null,
                 fecha_cierre: form.fecha_cierre || null
@@ -777,6 +814,29 @@ export default function CompanyVacantes() {
                     value={form.tipo_contrato}
                     options={TIPOS_CONTRATO.map(item => ({ value: item, label: formatTipoContratoLabel(item) }))}
                     onChange={(val) => setForm(prev => ({ ...prev, tipo_contrato: val }))}
+                  />
+                </div>
+              </label>
+              <label className="text-xs text-foreground/65">Pago (USD)
+                <input
+                  className="w-full mt-1 border border-border rounded-lg px-3 py-2 text-sm"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  placeholder="Ej: 600"
+                  value={form.pago_monto}
+                  onChange={(e) => setForm((prev) => ({ ...prev, pago_monto: e.target.value }))}
+                />
+              </label>
+              <label className="text-xs text-foreground/65">Periodo de pago
+                <div className="mt-1" style={{ height: '40px' }}>
+                  <FormDropdown
+                    value={form.pago_periodo}
+                    options={PAGO_PERIODOS.map(item => ({ value: item, label: formatPagoPeriodoLabel(item) }))}
+                    onChange={(val) => setForm(prev => ({ ...prev, pago_periodo: val }))}
+                    placeholder="mes"
+                    disabled={!String(form.pago_monto || '').trim()}
                   />
                 </div>
               </label>

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { Search, Clock, FileCheck, ShieldCheck, Zap, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
@@ -35,8 +36,46 @@ const beneficios = [
 ]
 
 export default function BeneficiosEmpresas() {
+  const [isRevealVisible, setIsRevealVisible] = useState(false)
+  const sectionRef = useRef(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (media.matches) {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const node = sectionRef.current
+    if (!node || !('IntersectionObserver' in window)) {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const observer = new window.IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          setIsRevealVisible(true)
+          observer.disconnect()
+        }
+      })
+    }, { threshold: 0.2, rootMargin: '0px 0px -8% 0px' })
+
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
   return (
-    <section id="beneficios-empresas" className="py-20 bg-secondary">
+    <section
+      ref={sectionRef}
+      id="beneficios-empresas"
+      className={`py-20 bg-secondary company-vertical-reveal ${isRevealVisible ? 'is-visible' : ''}`}
+    >
       <div className="page-container">
         <div className="text-center mb-16">
           <span className="inline-block px-4 py-2 bg-primary/10 text-primary rounded-full text-sm font-medium mb-4">

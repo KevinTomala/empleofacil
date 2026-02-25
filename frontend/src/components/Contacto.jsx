@@ -1,12 +1,45 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Mail, Phone, MapPin, Send } from 'lucide-react'
 import FormDropdown from './FormDropdown'
 
 export default function Contacto() {
   const [tipo, setTipo] = useState('')
+  const [isRevealVisible, setIsRevealVisible] = useState(false)
+  const sectionRef = useRef(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (media.matches) {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const node = sectionRef.current
+    if (!node || !('IntersectionObserver' in window)) {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const observer = new window.IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          setIsRevealVisible(true)
+          observer.disconnect()
+        }
+      })
+    }, { threshold: 0.18, rootMargin: '0px 0px -8% 0px' })
+
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
 
   return (
-    <section id="contacto" className="py-20 bg-secondary">
+    <section ref={sectionRef} id="contacto" className={`py-20 bg-white company-vertical-reveal ${isRevealVisible ? 'is-visible' : ''}`}>
       <div className="page-container">
         <div className="grid lg:grid-cols-2 gap-12">
           {/* Left - Info */}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Briefcase, ShieldCheck, Sparkles } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Briefcase, ShieldCheck } from 'lucide-react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Header from '../../components/Header'
 import { useAuth } from '../../context/AuthContext'
 import { showToast } from '../../utils/showToast'
@@ -8,6 +8,7 @@ import './auth.css'
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { login, loading } = useAuth()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -37,13 +38,27 @@ export default function Login() {
       })
     }
     const role = result.user?.rol
-    const nextPath =
+    const fallbackPath =
       role === 'empresa'
         ? '/app/company'
         : role === 'administrador' || role === 'superadmin'
         ? '/app/admin'
         : '/app/candidate/vacantes'
-    navigate(nextPath)
+
+    const fromPath = typeof location.state?.from === 'string' ? location.state.from : ''
+    let nextPath = fallbackPath
+
+    if (fromPath.startsWith('/app/')) {
+      if (role === 'candidato' && fromPath.startsWith('/app/candidate/')) {
+        nextPath = fromPath
+      } else if (role === 'empresa' && fromPath.startsWith('/app/company/')) {
+        nextPath = fromPath
+      } else if ((role === 'administrador' || role === 'superadmin') && fromPath.startsWith('/app/admin/')) {
+        nextPath = fromPath
+      }
+    }
+
+    navigate(nextPath, { replace: true })
   }
 
   return (

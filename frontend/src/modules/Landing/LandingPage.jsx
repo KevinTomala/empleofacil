@@ -14,8 +14,8 @@ export default function LandingPage() {
       <Header />
       <main>
         <Hero />
-        <BeneficiosEmpresas />
         <BeneficiosAgentes />
+        <BeneficiosEmpresas />
         <ModalidadesContratacion />
         <ComoFunciona />
         <CTA />

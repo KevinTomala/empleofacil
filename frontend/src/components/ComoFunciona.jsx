@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { UserPlus, FileText, Search, Handshake } from 'lucide-react'
 
 const pasosAgentes = [
@@ -55,8 +56,42 @@ const pasosEmpresas = [
 ]
 
 export default function ComoFunciona() {
+  const [isRevealVisible, setIsRevealVisible] = useState(false)
+  const sectionRef = useRef(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (media.matches) {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const node = sectionRef.current
+    if (!node || !('IntersectionObserver' in window)) {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const observer = new window.IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          setIsRevealVisible(true)
+          observer.disconnect()
+        }
+      })
+    }, { threshold: 0.18, rootMargin: '0px 0px -8% 0px' })
+
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
   return (
-    <section id="como-funciona" className="py-20 bg-primary text-white">
+    <section ref={sectionRef} id="como-funciona" className={`py-20 bg-primary text-white como-diagonal-reveal ${isRevealVisible ? 'is-visible' : ''}`}>
       <div className="page-container">
         <div className="text-center mb-16">
           <span className="inline-block px-4 py-2 bg-white/10 rounded-full text-sm font-medium mb-4">

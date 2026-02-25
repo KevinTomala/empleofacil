@@ -580,6 +580,8 @@ CREATE TABLE vacantes_publicadas (
   ciudad VARCHAR(100) NULL,
   modalidad ENUM('presencial','remoto','hibrido') DEFAULT 'presencial',
   tipo_contrato ENUM('tiempo_completo','medio_tiempo','por_horas','temporal','indefinido','otro') DEFAULT 'tiempo_completo',
+  pago_monto DECIMAL(10,2) NULL,
+  pago_periodo ENUM('dia','mes') NULL,
   descripcion TEXT NULL,
   requisitos TEXT NULL,
   estado ENUM('borrador','activa','pausada','cerrada') DEFAULT 'borrador',

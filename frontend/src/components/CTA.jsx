@@ -1,9 +1,44 @@
 import { ArrowRight, Shield } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
 
 export default function CTA() {
+  const [isRevealVisible, setIsRevealVisible] = useState(false)
+  const sectionRef = useRef(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (media.matches) {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const node = sectionRef.current
+    if (!node || !('IntersectionObserver' in window)) {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const observer = new window.IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          setIsRevealVisible(true)
+          observer.disconnect()
+        }
+      })
+    }, { threshold: 0.18, rootMargin: '0px 0px -8% 0px' })
+
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
   return (
-    <section className="py-20 bg-background">
+    <section ref={sectionRef} className={`py-20 bg-background company-vertical-reveal ${isRevealVisible ? 'is-visible' : ''}`}>
       <div className="page-container">
         <div className="relative bg-linear-to-br from-primary to-primary/80 rounded-3xl p-8 sm:p-12 lg:p-16 overflow-hidden">
           {/* Background Pattern */}
@@ -22,7 +57,7 @@ export default function CTA() {
             </h2>
             <p className="text-white/80 text-lg max-w-2xl mx-auto mb-8">
               Unete a la plataforma de empleo que conecta talento y empresas en todo Ecuador. 
-              Es completamente gratis para candidatos.
+              Accede a oportunidades reales y seguimiento claro de tus postulaciones.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -43,7 +78,7 @@ export default function CTA() {
             </div>
 
             <p className="text-white/60 text-sm mt-6">
-              Sin cargos ocultos. Sin compromisos. Cancela cuando quieras.
+              Condiciones claras para candidatos y empresas.
             </p>
           </div>
         </div>

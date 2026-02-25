@@ -3,8 +3,11 @@ const {
   normalizeEstado,
   normalizeModalidad,
   normalizeTipoContrato,
+  normalizePagoPeriodo,
+  normalizePagoMonto,
   normalizePosted,
   listVacantes,
+  listVacantesCountByProvincia,
   createVacante,
   findVacanteById,
   updateVacante
@@ -46,6 +49,12 @@ function validateCreateVacantePayload(payload) {
 
   const fechaCierre = payload.fecha_cierre ? String(payload.fecha_cierre).trim() : null;
   if (fechaCierre && !/^\d{4}-\d{2}-\d{2}$/.test(fechaCierre)) return null;
+  const hasAnyPaymentField = payload.pago_monto !== undefined || payload.pago_periodo !== undefined;
+  const clearPagoMonto = payload.pago_monto === null || payload.pago_monto === undefined || payload.pago_monto === '';
+  const clearPagoPeriodo = payload.pago_periodo === null || payload.pago_periodo === undefined || payload.pago_periodo === '';
+  const pagoMonto = normalizePagoMonto(payload.pago_monto);
+  const pagoPeriodo = normalizePagoPeriodo(payload.pago_periodo);
+  if (hasAnyPaymentField && !(clearPagoMonto && clearPagoPeriodo) && (pagoMonto === null || pagoPeriodo === null)) return null;
 
   return {
     titulo,
@@ -56,6 +65,8 @@ function validateCreateVacantePayload(payload) {
     tipo_contrato: tipoContrato,
     descripcion: payload.descripcion ? String(payload.descripcion).trim() : null,
     requisitos: payload.requisitos ? String(payload.requisitos).trim() : null,
+    pago_monto: hasAnyPaymentField ? (clearPagoMonto ? null : pagoMonto) : null,
+    pago_periodo: hasAnyPaymentField ? (clearPagoPeriodo ? null : pagoPeriodo) : null,
     estado,
     fecha_cierre: fechaCierre
   };
@@ -63,7 +74,7 @@ function validateCreateVacantePayload(payload) {
 
 function validateUpdateVacantePayload(payload) {
   if (!isPlainObject(payload)) return null;
-  const allowed = ['titulo', 'area', 'provincia', 'ciudad', 'modalidad', 'tipo_contrato', 'descripcion', 'requisitos', 'fecha_cierre'];
+  const allowed = ['titulo', 'area', 'provincia', 'ciudad', 'modalidad', 'tipo_contrato', 'descripcion', 'requisitos', 'fecha_cierre', 'pago_monto', 'pago_periodo'];
   const keys = Object.keys(payload);
   if (!keys.length) return null;
   if (!keys.every((key) => allowed.includes(key))) return null;
@@ -88,6 +99,24 @@ function validateUpdateVacantePayload(payload) {
     const fechaCierre = payload.fecha_cierre ? String(payload.fecha_cierre).trim() : null;
     if (fechaCierre && !/^\d{4}-\d{2}-\d{2}$/.test(fechaCierre)) return null;
     patch.fecha_cierre = fechaCierre;
+  }
+  if ('pago_monto' in payload || 'pago_periodo' in payload) {
+    if (!('pago_monto' in payload) || !('pago_periodo' in payload)) return null;
+    const montoRaw = payload.pago_monto;
+    const periodoRaw = payload.pago_periodo;
+    const clearMonto = montoRaw === null || montoRaw === undefined || montoRaw === '';
+    const clearPeriodo = periodoRaw === null || periodoRaw === undefined || periodoRaw === '';
+
+    if (clearMonto && clearPeriodo) {
+      patch.pago_monto = null;
+      patch.pago_periodo = null;
+    } else {
+      const pagoMonto = normalizePagoMonto(montoRaw);
+      const pagoPeriodo = normalizePagoPeriodo(periodoRaw);
+      if (pagoMonto === null || pagoPeriodo === null) return null;
+      patch.pago_monto = pagoMonto;
+      patch.pago_periodo = pagoPeriodo;
+    }
   }
   ['area', 'provincia', 'ciudad', 'descripcion', 'requisitos'].forEach((key) => {
     if (key in payload) patch[key] = payload[key] ? String(payload[key]).trim() : null;
@@ -120,6 +149,33 @@ async function listVacantesPublic(req, res) {
     }, { onlyActive: true, candidatoId });
 
     return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: 'VACANTES_FETCH_FAILED', details: String(error.message || error) });
+  }
+}
+
+async function listVacantesLatestPublic(req, res) {
+  const limit = Math.min(10, toPositiveIntOrNull(req.query.limit) || 3);
+
+  try {
+    const result = await listVacantes({
+      page: 1,
+      pageSize: limit
+    }, { onlyActive: true });
+
+    return res.json({
+      items: Array.isArray(result?.items) ? result.items : [],
+      total: Number(result?.total || 0)
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'VACANTES_FETCH_FAILED', details: String(error.message || error) });
+  }
+}
+
+async function listVacantesProvinciaCountPublic(req, res) {
+  try {
+    const items = await listVacantesCountByProvincia({ onlyActive: true });
+    return res.json({ items });
   } catch (error) {
     return res.status(500).json({ error: 'VACANTES_FETCH_FAILED', details: String(error.message || error) });
   }
@@ -219,6 +275,8 @@ async function updateVacanteEstadoHandler(req, res) {
 }
 
 module.exports = {
+  listVacantesLatestPublic,
+  listVacantesProvinciaCountPublic,
   listVacantesPublic,
   listMyVacantes,
   createVacanteHandler,
