@@ -6,6 +6,7 @@ import { getMyCandidateSocialConfig, getSocialErrorMessage, updateMyCandidateSoc
 import { showToast } from '../../utils/showToast'
 import { getMyHojaVida, getMyHojaVidaPdf, getMyPerfil, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
 import { buildProfileSections, getNextPendingRoute, getProfileProgressMetrics } from './profileSections'
+import { PdfPreviewViewer } from './PdfPreviewViewer'
 
 export default function CandidateProfile() {
   const navigate = useNavigate()
@@ -247,6 +248,7 @@ export default function CandidateProfile() {
     if (useCache && curriculumPreviewData) return curriculumPreviewData
     const data = await getMyHojaVida({ candidatoId })
     setCurriculumPreviewData(data)
+    setPdfBlobCache(null)  // Invalidar cache de PDF cuando datos se actualizan
     return data
   }
 
@@ -260,12 +262,20 @@ export default function CandidateProfile() {
 
   function formatDateShort(value) {
     if (!value) return 'N/D'
+    // Si viene como string YYYY-MM-DD, parsear directamente sin conversión a UTC
+    const stringValue = String(value).trim()
+    const match = stringValue.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (match) {
+      const [, year, month, day] = match
+      return `${day}/${month}/${year}`
+    }
+    // Si es otro formato, intentar con Date
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return String(value)
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const year = date.getFullYear()
-    return `${day}/${month}/${year}`
+    const dayNum = String(date.getDate()).padStart(2, '0')
+    const monthNum = String(date.getMonth() + 1).padStart(2, '0')
+    const yearNum = date.getFullYear()
+    return `${dayNum}/${monthNum}/${yearNum}`
   }
 
   function renderValue(value) {
@@ -390,7 +400,7 @@ export default function CandidateProfile() {
               <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>
             )}
 
-            <div className="rounded-xl border border-border bg-slate-50/70 p-4 space-y-2">
+            {/* <div className="rounded-xl border border-border bg-slate-50/70 p-4 space-y-2">
               <h2 className="text-sm font-semibold text-foreground">Resumen estrategico</h2>
               <div className="space-y-1 text-xs text-foreground/75">
                 <p>Visibilidad del perfil: {visibilityLabel}</p>
@@ -399,7 +409,7 @@ export default function CandidateProfile() {
                 <p>Perfil fase 1: {progressFase1}% | Perfil total: {progressGeneral}%</p>
               </div>
               <p className="text-xs text-foreground/70 pt-1">{recommendationText}</p>
-            </div>
+            </div> */}
 
             <div className="rounded-xl border border-border bg-white p-4 space-y-3">
               <h2 className="text-sm font-semibold text-foreground">Estado de avance</h2>
@@ -453,139 +463,10 @@ export default function CandidateProfile() {
 
           <div className="flex-1 space-y-7">
             {pdfPreviewInlineOpen ? (
-              <section className="space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <h2 className="text-sm font-semibold text-foreground">Previsualizacion de curriculum</h2>
-                    <p className="text-xs text-foreground/65">Vista HTML/CSS del formato</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 border border-border rounded-lg text-xs"
-                    onClick={closePdfPreview}
-                  >
-                    Cerrar vista previa
-                  </button>
-                </div>
-                <div className="rounded-xl border border-border bg-white overflow-hidden">
-                  {curriculumPreviewData ? (
-                    <div className="max-h-[78vh] overflow-auto p-5 sm:p-6 space-y-4 text-[13px] text-slate-800">
-                      <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
-                        <div className="space-y-1 min-w-0">
-                          <h3 className="text-2xl font-bold text-slate-900">Hoja de Vida</h3>
-                          <p className="text-lg font-semibold">
-                            {renderValue(curriculumPreviewData?.perfil?.nombre_completo)}
-                          </p>
-                          <p>Documento: {renderValue(curriculumPreviewData?.perfil?.documento_identidad)}</p>
-                          <p>Email: {renderValue(curriculumPreviewData?.contacto?.email)}</p>
-                          <p>Celular: {renderValue(curriculumPreviewData?.contacto?.telefono_celular)}</p>
-                        </div>
-                        <div className="w-[106px] h-[132px] border border-slate-300 rounded bg-slate-50 overflow-hidden flex items-center justify-center text-[10px] text-slate-500 text-center shrink-0">
-                          {previewFotoUrl ? (
-                            <img src={previewFotoUrl} alt="Foto carnet" className="w-full h-full object-cover" />
-                          ) : (
-                            <span>FOTO TAMANO CARNET</span>
-                          )}
-                        </div>
-                      </header>
-
-                      <section className="space-y-2">
-                        <h4 className="font-semibold text-sm border-b border-slate-200 pb-1">Perfil</h4>
-                        <div className="grid sm:grid-cols-2 gap-2">
-                          <p>Nombres: {renderValue(curriculumPreviewData?.perfil?.nombres)}</p>
-                          <p>Apellidos: {renderValue(curriculumPreviewData?.perfil?.apellidos)}</p>
-                          <p>Nacionalidad: {renderValue(curriculumPreviewData?.perfil?.nacionalidad)}</p>
-                          <p>Nacimiento: {formatDateShort(curriculumPreviewData?.perfil?.fecha_nacimiento)}</p>
-                          <p>Edad: {renderValue(curriculumPreviewData?.perfil?.edad)}</p>
-                          <p>Sexo: {renderValue(curriculumPreviewData?.perfil?.sexo)}</p>
-                          <p>Estado civil: {renderValue(curriculumPreviewData?.perfil?.estado_civil)}</p>
-                        </div>
-                      </section>
-
-                      <section className="space-y-2">
-                        <h4 className="font-semibold text-sm border-b border-slate-200 pb-1">Contacto y Domicilio</h4>
-                        <div className="grid sm:grid-cols-2 gap-2">
-                          <p>Telefono fijo: {renderValue(curriculumPreviewData?.contacto?.telefono_fijo)}</p>
-                          <p>
-                            Emergencia: {renderValue(curriculumPreviewData?.contacto?.contacto_emergencia_nombre)} - {renderValue(curriculumPreviewData?.contacto?.contacto_emergencia_telefono)}
-                          </p>
-                          <p>Pais: {renderValue(curriculumPreviewData?.domicilio?.pais)}</p>
-                          <p>Provincia: {renderValue(curriculumPreviewData?.domicilio?.provincia)}</p>
-                          <p>Canton: {renderValue(curriculumPreviewData?.domicilio?.canton)}</p>
-                          <p>Parroquia: {renderValue(curriculumPreviewData?.domicilio?.parroquia)}</p>
-                          <p>Direccion: {renderValue(curriculumPreviewData?.domicilio?.direccion)}</p>
-                          <p>Codigo postal: {renderValue(curriculumPreviewData?.domicilio?.codigo_postal)}</p>
-                        </div>
-                      </section>
-
-                      <section className="space-y-2">
-                        <h4 className="font-semibold text-sm border-b border-slate-200 pb-1">Salud y Logistica</h4>
-                        <div className="grid sm:grid-cols-2 gap-2">
-                          <p>Tipo de sangre: {renderValue(curriculumPreviewData?.salud?.tipo_sangre)}</p>
-                          <p>Estatura: {renderValue(curriculumPreviewData?.salud?.estatura)}</p>
-                          <p>Peso: {renderValue(curriculumPreviewData?.salud?.peso)}</p>
-                          <p>Tatuaje: {renderValue(curriculumPreviewData?.salud?.tatuaje)}</p>
-                          <p>Movilizacion: {renderValue(curriculumPreviewData?.logistica?.movilizacion)}</p>
-                          <p>Tipo vehiculo: {renderValue(curriculumPreviewData?.logistica?.tipo_vehiculo)}</p>
-                          <p>Licencia: {renderValue(curriculumPreviewData?.logistica?.licencia)}</p>
-                          <p>Disponible viajar: {renderValue(curriculumPreviewData?.logistica?.disp_viajar)}</p>
-                          <p>Disponible turnos: {renderValue(curriculumPreviewData?.logistica?.disp_turnos)}</p>
-                          <p>Disponible fines semana: {renderValue(curriculumPreviewData?.logistica?.disp_fines_semana)}</p>
-                        </div>
-                      </section>
-
-                      <section className="space-y-2">
-                        <h4 className="font-semibold text-sm border-b border-slate-200 pb-1">Educacion</h4>
-                        <div className="grid sm:grid-cols-2 gap-2">
-                          <p>Nivel: {renderValue(curriculumPreviewData?.educacion_general?.nivel_estudio)}</p>
-                          <p>Institucion: {renderValue(curriculumPreviewData?.educacion_general?.institucion)}</p>
-                          <p>Titulo: {renderValue(curriculumPreviewData?.educacion_general?.titulo_obtenido)}</p>
-                        </div>
-                      </section>
-
-                      <section className="space-y-2">
-                        <h4 className="font-semibold text-sm border-b border-slate-200 pb-1">Experiencia Laboral</h4>
-                        {Array.isArray(curriculumPreviewData?.experiencia_laboral) && curriculumPreviewData.experiencia_laboral.length ? (
-                          <div className="space-y-2">
-                            {curriculumPreviewData.experiencia_laboral.map((item, idx) => (
-                              <article key={item.id || idx} className="border border-slate-200 rounded-lg p-2.5">
-                                <p className="font-semibold">{idx + 1}. {renderValue(item.cargo)}</p>
-                                <p>Empresa: {renderValue(item.empresa_nombre || item.empresa_id)}</p>
-                                <p>Periodo: {formatDateShort(item.fecha_inicio)} - {item.actualmente_trabaja ? 'Actual' : formatDateShort(item.fecha_fin)}</p>
-                                <p>Contrato: {renderValue(item.tipo_contrato)}</p>
-                                <p>Descripcion: {renderValue(item.descripcion)}</p>
-                              </article>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-slate-600">Sin experiencia registrada.</p>
-                        )}
-                      </section>
-
-                      <section className="space-y-2">
-                        <h4 className="font-semibold text-sm border-b border-slate-200 pb-1">Formaciones</h4>
-                        {Array.isArray(curriculumPreviewData?.formaciones) && curriculumPreviewData.formaciones.length ? (
-                          <div className="space-y-2">
-                            {curriculumPreviewData.formaciones.map((item, idx) => (
-                              <article key={item.id || idx} className="border border-slate-200 rounded-lg p-2.5">
-                                <p className="font-semibold">{idx + 1}. {renderValue(item.nombre_programa)}</p>
-                                <p>Categoria/Subtipo: {renderValue(item.categoria_formacion)} / {renderValue(item.subtipo_formacion)}</p>
-                                <p>Institucion: {renderValue(item.institucion)}</p>
-                                <p>Titulo: {renderValue(item.titulo_obtenido)}</p>
-                                <p>Aprobacion: {formatDateShort(item.fecha_aprobacion)}</p>
-                              </article>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-slate-600">Sin formaciones registradas.</p>
-                        )}
-                      </section>
-                    </div>
-                  ) : (
-                    <p className="p-4 text-sm text-foreground/70">No se pudo cargar la previsualizacion.</p>
-                  )}
-                </div>
-              </section>
+              <PdfPreviewViewer 
+                htmlData={curriculumPreviewData?.html}
+                onClose={closePdfPreview}
+              />
             ) : (
               <>
                 <section className="space-y-3">
