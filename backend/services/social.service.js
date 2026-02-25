@@ -1,6 +1,8 @@
 const db = require('../db');
 
 let ensuredCompanyFollowTable = false;
+let ensuredCandidateSocialConfigTable = false;
+let ensuredCandidateFollowTable = false;
 
 function toPositiveIntOrNull(value) {
   const num = Number(value);
@@ -57,6 +59,45 @@ async function ensureCompanyFollowTable() {
   ensuredCompanyFollowTable = true;
 }
 
+async function ensureCandidateSocialConfigTable() {
+  if (ensuredCandidateSocialConfigTable) return;
+
+  await db.query(
+    `CREATE TABLE IF NOT EXISTS candidatos_social_config (
+      candidato_id BIGINT PRIMARY KEY,
+      perfil_publico TINYINT(1) NOT NULL DEFAULT 0,
+      alias_publico VARCHAR(120) NULL,
+      titular_publico VARCHAR(160) NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT fk_candidatos_social_config_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
+      INDEX idx_candidatos_social_config_publico (perfil_publico)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  );
+
+  ensuredCandidateSocialConfigTable = true;
+}
+
+async function ensureCandidateFollowTable() {
+  if (ensuredCandidateFollowTable) return;
+
+  await db.query(
+    `CREATE TABLE IF NOT EXISTS candidatos_seguidos (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      seguidor_candidato_id BIGINT NOT NULL,
+      seguido_candidato_id BIGINT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT fk_candidatos_seguidos_seguidor FOREIGN KEY (seguidor_candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
+      CONSTRAINT fk_candidatos_seguidos_seguido FOREIGN KEY (seguido_candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
+      UNIQUE KEY uq_candidatos_seguidos (seguidor_candidato_id, seguido_candidato_id),
+      INDEX idx_candidatos_seguidos_seguidor (seguidor_candidato_id),
+      INDEX idx_candidatos_seguidos_seguido (seguido_candidato_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  );
+
+  ensuredCandidateFollowTable = true;
+}
+
 function mapCompanyRow(row) {
   return {
     id: row.id,
@@ -79,6 +120,41 @@ function mapCompanyRow(row) {
       personas_total: Number(row.personas_total || 0),
       personas_actuales: Number(row.personas_actuales || 0),
       siguiendo: Number(row.siguiendo || 0) === 1
+    }
+  };
+}
+
+function mapCandidateConfigRow(row) {
+  return {
+    perfil_publico: Number(row?.perfil_publico || 0) === 1,
+    alias_publico: row?.alias_publico ? String(row.alias_publico).trim() : null,
+    titular_publico: row?.titular_publico ? String(row.titular_publico).trim() : null
+  };
+}
+
+function mapCandidatePublicRow(row) {
+  const nombres = String(row?.nombres || '').trim();
+  const apellidos = String(row?.apellidos || '').trim();
+  const alias = String(row?.alias_publico || '').trim();
+  const nombreMostrar = alias || [nombres, apellidos].filter(Boolean).join(' ') || 'Candidato';
+  const titular = String(row?.titular_publico || '').trim() || String(row?.cargo_resumen || '').trim() || 'Perfil profesional en desarrollo';
+  const provincia = String(row?.provincia || '').trim();
+  const canton = String(row?.canton || '').trim();
+  const ubicacion = [provincia, canton].filter(Boolean).join(' - ') || null;
+
+  return {
+    id: Number(row?.id || 0),
+    nombre: nombreMostrar,
+    iniciales: buildInitials(nombres, apellidos),
+    foto_url: row?.foto_url ? String(row.foto_url).trim() : null,
+    titular,
+    ubicacion,
+    stats: {
+      empresas_actuales: Number(row?.empresas_actuales || 0),
+      empresas_totales: Number(row?.empresas_totales || 0),
+      idiomas_total: Number(row?.idiomas_total || 0),
+      seguidores_total: Number(row?.seguidores_total || 0),
+      siguiendo: Number(row?.siguiendo || 0) === 1
     }
   };
 }
@@ -382,6 +458,225 @@ async function getEmpresaPublicProfile(empresaId, candidatoId = null) {
   };
 }
 
+async function ensureCandidateSocialConfigRow(candidatoId) {
+  const safeCandidatoId = toPositiveIntOrNull(candidatoId);
+  if (!safeCandidatoId) return null;
+  await ensureCandidateSocialConfigTable();
+
+  await db.query(
+    `INSERT INTO candidatos_social_config (candidato_id)
+     VALUES (?)
+     ON DUPLICATE KEY UPDATE
+       candidato_id = candidato_id`,
+    [safeCandidatoId]
+  );
+  return safeCandidatoId;
+}
+
+async function getCandidateSocialConfig(candidatoId) {
+  const safeCandidatoId = await ensureCandidateSocialConfigRow(candidatoId);
+  if (!safeCandidatoId) return null;
+
+  const [rows] = await db.query(
+    `SELECT candidato_id, perfil_publico, alias_publico, titular_publico
+     FROM candidatos_social_config
+     WHERE candidato_id = ?
+     LIMIT 1`,
+    [safeCandidatoId]
+  );
+  if (!rows.length) return null;
+  return mapCandidateConfigRow(rows[0]);
+}
+
+async function updateCandidateSocialConfig(candidatoId, patch = {}) {
+  const safeCandidatoId = await ensureCandidateSocialConfigRow(candidatoId);
+  if (!safeCandidatoId) return null;
+
+  const updates = {};
+  if (Object.prototype.hasOwnProperty.call(patch, 'perfil_publico')) {
+    updates.perfil_publico = toTinyBool(patch.perfil_publico) ? 1 : 0;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'alias_publico')) {
+    updates.alias_publico = toTextOrNull(patch.alias_publico);
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'titular_publico')) {
+    updates.titular_publico = toTextOrNull(patch.titular_publico);
+  }
+
+  const keys = Object.keys(updates);
+  if (keys.length) {
+    const setSql = keys.map((key) => `${key} = ?`).join(', ');
+    await db.query(
+      `UPDATE candidatos_social_config
+       SET ${setSql}
+       WHERE candidato_id = ?`,
+      [...keys.map((key) => updates[key]), safeCandidatoId]
+    );
+  }
+
+  return getCandidateSocialConfig(safeCandidatoId);
+}
+
+async function listPublicCandidates({
+  q = null,
+  page = 1,
+  pageSize = 20,
+  excludeCandidatoId = null,
+  viewerCandidatoId = null
+} = {}) {
+  await ensureCandidateSocialConfigTable();
+  await ensureCandidateFollowTable();
+
+  const safePage = toPage(page, 1);
+  const safePageSize = toPageSize(pageSize, 20, 100);
+  const offset = (safePage - 1) * safePageSize;
+  const search = toTextOrNull(q);
+  const safeExcludeId = toPositiveIntOrNull(excludeCandidatoId);
+  const safeViewerId = toPositiveIntOrNull(viewerCandidatoId) || 0;
+
+  const where = [
+    'c.deleted_at IS NULL',
+    'c.activo = 1',
+    'cfg.perfil_publico = 1'
+  ];
+  const params = [];
+
+  if (safeExcludeId) {
+    where.push('c.id <> ?');
+    params.push(safeExcludeId);
+  }
+
+  if (search) {
+    const like = `%${search}%`;
+    where.push(`(
+      c.nombres LIKE ?
+      OR c.apellidos LIKE ?
+      OR cfg.alias_publico LIKE ?
+      OR cfg.titular_publico LIKE ?
+      OR d.provincia LIKE ?
+      OR d.canton LIKE ?
+      OR ex.cargo_resumen LIKE ?
+    )`);
+    params.push(like, like, like, like, like, like, like);
+  }
+
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+
+  const [countRows] = await db.query(
+    `SELECT COUNT(*) AS total
+     FROM candidatos c
+     INNER JOIN candidatos_social_config cfg
+       ON cfg.candidato_id = c.id
+     LEFT JOIN candidatos_seguidos myf
+       ON myf.seguido_candidato_id = c.id
+      AND myf.seguidor_candidato_id = ?
+     LEFT JOIN candidatos_domicilio d
+       ON d.candidato_id = c.id
+      AND d.deleted_at IS NULL
+     LEFT JOIN (
+       SELECT
+         ce.candidato_id,
+         COUNT(DISTINCT CASE WHEN ce.empresa_id IS NOT NULL THEN ce.empresa_id END) AS empresas_totales,
+         COUNT(DISTINCT CASE WHEN ce.actualmente_trabaja = 1 AND ce.empresa_id IS NOT NULL THEN ce.empresa_id END) AS empresas_actuales,
+         SUBSTRING_INDEX(
+           GROUP_CONCAT(COALESCE(ce.cargo, '') ORDER BY COALESCE(ce.updated_at, ce.created_at) DESC SEPARATOR '||'),
+           '||',
+           1
+         ) AS cargo_resumen
+       FROM candidatos_experiencia ce
+       WHERE ce.deleted_at IS NULL
+       GROUP BY ce.candidato_id
+     ) ex
+       ON ex.candidato_id = c.id
+     ${whereSql}`,
+    [safeViewerId, ...params]
+  );
+
+  const [rows] = await db.query(
+    `SELECT
+       c.id,
+       c.nombres,
+       c.apellidos,
+       cfg.alias_publico,
+       cfg.titular_publico,
+       d.provincia,
+       d.canton,
+       ex.empresas_totales,
+       ex.empresas_actuales,
+       ex.cargo_resumen,
+       COALESCE(idm.idiomas_total, 0) AS idiomas_total,
+       COALESCE(fs.seguidores_total, 0) AS seguidores_total,
+       f.foto_url,
+       CASE WHEN myf.seguidor_candidato_id IS NULL THEN 0 ELSE 1 END AS siguiendo
+     FROM candidatos c
+     INNER JOIN candidatos_social_config cfg
+       ON cfg.candidato_id = c.id
+     LEFT JOIN (
+       SELECT seguido_candidato_id, COUNT(*) AS seguidores_total
+       FROM candidatos_seguidos
+       GROUP BY seguido_candidato_id
+     ) fs
+       ON fs.seguido_candidato_id = c.id
+     LEFT JOIN candidatos_seguidos myf
+       ON myf.seguido_candidato_id = c.id
+      AND myf.seguidor_candidato_id = ?
+     LEFT JOIN candidatos_domicilio d
+       ON d.candidato_id = c.id
+      AND d.deleted_at IS NULL
+     LEFT JOIN (
+       SELECT
+         ce.candidato_id,
+         COUNT(DISTINCT CASE WHEN ce.empresa_id IS NOT NULL THEN ce.empresa_id END) AS empresas_totales,
+         COUNT(DISTINCT CASE WHEN ce.actualmente_trabaja = 1 AND ce.empresa_id IS NOT NULL THEN ce.empresa_id END) AS empresas_actuales,
+         SUBSTRING_INDEX(
+           GROUP_CONCAT(COALESCE(ce.cargo, '') ORDER BY COALESCE(ce.updated_at, ce.created_at) DESC SEPARATOR '||'),
+           '||',
+           1
+         ) AS cargo_resumen
+       FROM candidatos_experiencia ce
+       WHERE ce.deleted_at IS NULL
+       GROUP BY ce.candidato_id
+     ) ex
+       ON ex.candidato_id = c.id
+     LEFT JOIN (
+       SELECT candidato_id, COUNT(*) AS idiomas_total
+       FROM candidatos_idiomas
+       WHERE deleted_at IS NULL
+       GROUP BY candidato_id
+     ) idm
+       ON idm.candidato_id = c.id
+     LEFT JOIN (
+       SELECT d1.candidato_id, d1.ruta_archivo AS foto_url
+       FROM candidatos_documentos d1
+       INNER JOIN (
+         SELECT candidato_id, MAX(id) AS max_id
+         FROM candidatos_documentos
+         WHERE deleted_at IS NULL
+           AND tipo_documento = 'foto'
+           AND COALESCE(TRIM(ruta_archivo), '') <> ''
+         GROUP BY candidato_id
+       ) d2
+         ON d2.max_id = d1.id
+     ) f
+       ON f.candidato_id = c.id
+     ${whereSql}
+     ORDER BY
+       COALESCE(ex.empresas_actuales, 0) DESC,
+       COALESCE(ex.empresas_totales, 0) DESC,
+       c.nombres ASC,
+       c.apellidos ASC
+     LIMIT ? OFFSET ?`,
+    [safeViewerId, ...params, safePageSize, offset]
+  );
+
+  return {
+    items: rows.map(mapCandidatePublicRow),
+    page: safePage,
+    page_size: safePageSize,
+    total: Number(countRows[0]?.total || 0)
+  };
+}
+
 async function followEmpresa(candidatoId, empresaId) {
   await ensureCompanyFollowTable();
 
@@ -426,11 +721,67 @@ async function unfollowEmpresa(candidatoId, empresaId) {
   return Number(result?.affectedRows || 0);
 }
 
+async function followCandidate(candidatoId, targetCandidatoId) {
+  await ensureCandidateFollowTable();
+  await ensureCandidateSocialConfigTable();
+
+  const safeCandidatoId = toPositiveIntOrNull(candidatoId);
+  const safeTargetId = toPositiveIntOrNull(targetCandidatoId);
+  if (!safeCandidatoId || !safeTargetId) return false;
+  if (safeCandidatoId === safeTargetId) return -1;
+
+  await ensureCandidateSocialConfigRow(safeTargetId);
+
+  const [targetRows] = await db.query(
+    `SELECT c.id
+     FROM candidatos c
+     INNER JOIN candidatos_social_config cfg
+       ON cfg.candidato_id = c.id
+     WHERE c.id = ?
+       AND c.deleted_at IS NULL
+       AND c.activo = 1
+       AND cfg.perfil_publico = 1
+     LIMIT 1`,
+    [safeTargetId]
+  );
+  if (!targetRows.length) return 0;
+
+  await db.query(
+    `INSERT INTO candidatos_seguidos (seguidor_candidato_id, seguido_candidato_id)
+     VALUES (?, ?)
+     ON DUPLICATE KEY UPDATE
+       created_at = created_at`,
+    [safeCandidatoId, safeTargetId]
+  );
+  return 1;
+}
+
+async function unfollowCandidate(candidatoId, targetCandidatoId) {
+  await ensureCandidateFollowTable();
+
+  const safeCandidatoId = toPositiveIntOrNull(candidatoId);
+  const safeTargetId = toPositiveIntOrNull(targetCandidatoId);
+  if (!safeCandidatoId || !safeTargetId) return 0;
+
+  const [result] = await db.query(
+    `DELETE FROM candidatos_seguidos
+     WHERE seguidor_candidato_id = ?
+       AND seguido_candidato_id = ?`,
+    [safeCandidatoId, safeTargetId]
+  );
+  return Number(result?.affectedRows || 0);
+}
+
 module.exports = {
   toPositiveIntOrNull,
   toTinyBool,
   listEmpresasPublic,
   getEmpresaPublicProfile,
   followEmpresa,
-  unfollowEmpresa
+  unfollowEmpresa,
+  getCandidateSocialConfig,
+  updateCandidateSocialConfig,
+  listPublicCandidates,
+  followCandidate,
+  unfollowCandidate
 };

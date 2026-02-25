@@ -98,6 +98,7 @@ export default function Header() {
     if (role === 'candidato') {
       const links = [
         { href: '/app/candidate/empresas', label: 'Empresas' },
+        { href: '/app/candidate/personas', label: 'Personas' },
         { href: '/app/candidate/vacantes', label: 'Vacantes' },
         { href: '/app/candidate/postulaciones', label: 'Postulaciones' },
         { href: '/app/candidate/perfil', label: 'Perfil' },

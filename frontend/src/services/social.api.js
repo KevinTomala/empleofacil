@@ -13,6 +13,14 @@ function parseSocialError(error, fallbackMessage) {
   if (code === 'SOCIAL_COMPANY_PROFILE_FAILED') return 'No se pudo cargar el perfil de empresa.'
   if (code === 'SOCIAL_COMPANY_FOLLOW_FAILED') return 'No se pudo seguir la empresa.'
   if (code === 'SOCIAL_COMPANY_UNFOLLOW_FAILED') return 'No se pudo dejar de seguir la empresa.'
+  if (code === 'INVALID_CANDIDATO_ID') return 'El identificador de candidato no es valido.'
+  if (code === 'SOCIAL_CANDIDATES_LIST_FAILED') return 'No se pudieron cargar los candidatos.'
+  if (code === 'CANDIDATO_PROFILE_NOT_PUBLIC') return 'Este candidato no aparece en Personas.'
+  if (code === 'SOCIAL_CANDIDATE_CONFIG_FAILED') return 'No se pudo cargar la configuracion del resumen.'
+  if (code === 'SOCIAL_CANDIDATE_CONFIG_UPDATE_FAILED') return 'No se pudo actualizar la visibilidad del resumen.'
+  if (code === 'SOCIAL_CANDIDATE_FOLLOW_FAILED') return 'No se pudo seguir al candidato.'
+  if (code === 'SOCIAL_CANDIDATE_UNFOLLOW_FAILED') return 'No se pudo dejar de seguir al candidato.'
+  if (code === 'CANNOT_FOLLOW_SELF') return 'No puedes seguirte a ti mismo.'
   if (normalized.includes('failed to fetch')) return 'No se pudo conectar con el servidor.'
 
   return error?.message || fallbackMessage
@@ -46,6 +54,42 @@ export async function followSocialCompany(empresaId) {
 
 export async function unfollowSocialCompany(empresaId) {
   return apiRequest(`/api/social/empresas/${Number(empresaId)}/seguir`, {
+    method: 'DELETE',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function listSocialCandidates(params = {}) {
+  const query = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && String(value).trim() !== '') {
+      query.append(key, String(value))
+    }
+  })
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return apiRequest(`/api/social/candidatos${suffix}`)
+}
+
+export async function getMyCandidateSocialConfig() {
+  return apiRequest('/api/social/candidatos/me/config')
+}
+
+export async function updateMyCandidateSocialConfig(payload) {
+  return apiRequest('/api/social/candidatos/me/config', {
+    method: 'PATCH',
+    body: JSON.stringify(payload || {}),
+  })
+}
+
+export async function followSocialCandidate(candidatoId) {
+  return apiRequest(`/api/social/candidatos/${Number(candidatoId)}/seguir`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function unfollowSocialCandidate(candidatoId) {
+  return apiRequest(`/api/social/candidatos/${Number(candidatoId)}/seguir`, {
     method: 'DELETE',
     body: JSON.stringify({}),
   })

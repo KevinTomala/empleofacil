@@ -201,6 +201,158 @@
   line-height: 1.2;
 }
 
+.candidate-people-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.candidate-person-card {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 0.9rem;
+  padding: 1rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  min-height: 290px;
+}
+
+.candidate-person-card__head {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 0.35rem;
+}
+
+.candidate-person-card__avatar,
+.candidate-person-card__avatar-fallback {
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-border);
+}
+
+.candidate-person-card__avatar {
+  object-fit: cover;
+}
+
+.candidate-person-card__avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e2e8f0;
+  color: #334155;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.candidate-person-card__name {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
+.candidate-person-card__title {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.25;
+  color: color-mix(in oklch, var(--color-foreground) 80%, white);
+}
+
+.candidate-person-card__meta {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.2;
+  color: color-mix(in oklch, var(--color-foreground) 60%, white);
+}
+
+.candidate-person-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 1.8rem;
+  align-content: flex-start;
+}
+
+.candidate-person-chip {
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.69rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.candidate-person-chip.is-current {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.candidate-person-follow {
+  margin-top: auto;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: white;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.candidate-person-follow.is-following {
+  background: color-mix(in oklch, var(--color-primary) 12%, white);
+  color: var(--color-primary);
+}
+
+.candidate-person-follow:disabled {
+  opacity: 0.65;
+}
+
+@media (max-width: 1600px) {
+  .candidate-people-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1280px) {
+  .candidate-people-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 992px) {
+  .candidate-people-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .candidate-people-grid {
+    display: flex;
+    overflow-x: auto;
+    gap: 0.8rem;
+    padding-bottom: 0.2rem;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .candidate-people-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .candidate-person-card {
+    flex: 0 0 min(78vw, 270px);
+    scroll-snap-align: start;
+  }
+}
+
 @media (max-width: 1023px) {
   .candidate-map-card {
     position: static;

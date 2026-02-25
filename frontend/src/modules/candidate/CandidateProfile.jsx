@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Header from '../../components/Header'
 import { getMyPerfil, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
+import { getMyCandidateSocialConfig, getSocialErrorMessage, updateMyCandidateSocialConfig } from '../../services/social.api'
+import { showToast } from '../../utils/showToast'
 import { buildProfileSections, getNextPendingRoute, getProfileProgressMetrics } from './profileSections'
 
 export default function CandidateProfile() {
@@ -11,6 +13,9 @@ export default function CandidateProfile() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [photoError, setPhotoError] = useState(false)
+  const [socialConfig, setSocialConfig] = useState(null)
+  const [loadingSocialConfig, setLoadingSocialConfig] = useState(true)
+  const [savingSocialConfig, setSavingSocialConfig] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -31,6 +36,34 @@ export default function CandidateProfile() {
     }
 
     loadPerfil()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadSocialConfig() {
+      try {
+        setLoadingSocialConfig(true)
+        const data = await getMyCandidateSocialConfig()
+        if (!active) return
+        setSocialConfig(data?.config || { perfil_publico: false, alias_publico: null, titular_publico: null })
+      } catch (err) {
+        if (!active) return
+        setSocialConfig({ perfil_publico: false, alias_publico: null, titular_publico: null })
+        showToast({
+          type: 'error',
+          message: getSocialErrorMessage(err, 'No se pudo cargar la visibilidad de tu perfil publico.'),
+        })
+      } finally {
+        if (active) setLoadingSocialConfig(false)
+      }
+    }
+
+    loadSocialConfig()
 
     return () => {
       active = false
@@ -96,6 +129,27 @@ export default function CandidateProfile() {
     if (!parts.length) return 'CA'
     return parts.map((part) => part[0].toUpperCase()).join('')
   }, [candidatoNombre])
+
+  const socialProfileEnabled = Boolean(socialConfig?.perfil_publico)
+
+  const togglePublicProfile = async (enabled) => {
+    try {
+      setSavingSocialConfig(true)
+      const response = await updateMyCandidateSocialConfig({ perfil_publico: Boolean(enabled) })
+      setSocialConfig(response?.config || { perfil_publico: Boolean(enabled), alias_publico: null, titular_publico: null })
+      showToast({
+        type: 'success',
+        message: enabled ? 'Tu perfil publico ya es visible para otros candidatos.' : 'Tu perfil publico fue ocultado.',
+      })
+    } catch (err) {
+      showToast({
+        type: 'error',
+        message: getSocialErrorMessage(err, 'No se pudo actualizar la visibilidad del perfil publico.'),
+      })
+    } finally {
+      setSavingSocialConfig(false)
+    }
+  }
 
   const statusStyles = {
     complete: {
@@ -248,6 +302,23 @@ export default function CandidateProfile() {
                   <p className="text-xs text-emerald-700">No tienes secciones pendientes en fase actual.</p>
                 )}
               </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-white p-4 space-y-3">
+              <h2 className="text-sm font-semibold text-foreground">Resumen profesional para candidatos</h2>
+              <p className="text-xs text-foreground/70">
+                Cuando esta activo, otros candidatos ven solo un resumen profesional. No se exponen datos personales sensibles.
+              </p>
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={socialProfileEnabled}
+                  disabled={loadingSocialConfig || savingSocialConfig}
+                  onChange={(event) => togglePublicProfile(event.target.checked)}
+                />
+                {socialProfileEnabled ? 'Aparezco en Personas' : 'No aparezco en Personas'}
+              </label>
+              {savingSocialConfig ? <p className="text-xs text-foreground/60">Actualizando visibilidad...</p> : null}
             </div>
           </div>
 

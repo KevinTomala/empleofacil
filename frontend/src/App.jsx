@@ -9,6 +9,7 @@ import ChangePassword from './modules/auth/ChangePassword'
 import CandidateVacantes from './modules/candidate/CandidateVacantes'
 import CandidateEmpresas from './modules/candidate/CandidateEmpresas'
 import CandidateEmpresaPerfil from './modules/candidate/CandidateEmpresaPerfil'
+import CandidatePersonas from './modules/candidate/CandidatePersonas'
 import CandidatePostulaciones from './modules/candidate/CandidatePostulaciones'
 import CandidateProfile from './modules/candidate/CandidateProfile'
 import ProfilePerfil from './modules/candidate/ProfilePerfil'
@@ -90,6 +91,14 @@ function App() {
             element={
               <ProtectedRoute roles={['candidato', 'superadmin']}>
                 <CandidateEmpresaPerfil />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/candidate/personas"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <CandidatePersonas />
               </ProtectedRoute>
             }
           />

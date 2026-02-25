@@ -4,7 +4,12 @@ const {
   listEmpresasPublicHandler,
   getEmpresaPublicProfileHandler,
   followEmpresaHandler,
-  unfollowEmpresaHandler
+  unfollowEmpresaHandler,
+  getMyCandidateSocialConfigHandler,
+  updateMyCandidateSocialConfigHandler,
+  listPublicCandidatesHandler,
+  followCandidateHandler,
+  unfollowCandidateHandler
 } = require('../controllers/social.controller');
 
 const router = express.Router();
@@ -32,6 +37,37 @@ router.delete(
   authRequired,
   requireRole(['candidato']),
   unfollowEmpresaHandler
+);
+
+router.get(
+  '/candidatos',
+  authRequired,
+  requireRole(['candidato', 'empresa', 'administrador', 'superadmin']),
+  listPublicCandidatesHandler
+);
+router.post(
+  '/candidatos/:candidatoId/seguir',
+  authRequired,
+  requireRole(['candidato']),
+  followCandidateHandler
+);
+router.delete(
+  '/candidatos/:candidatoId/seguir',
+  authRequired,
+  requireRole(['candidato']),
+  unfollowCandidateHandler
+);
+router.get(
+  '/candidatos/me/config',
+  authRequired,
+  requireRole(['candidato']),
+  getMyCandidateSocialConfigHandler
+);
+router.patch(
+  '/candidatos/me/config',
+  authRequired,
+  requireRole(['candidato']),
+  updateMyCandidateSocialConfigHandler
 );
 
 module.exports = router;
