@@ -681,6 +681,8 @@ Errores esperados:
   - `400 INVALID_FILE_TYPE`
   - `400 FILE_PAGE_LIMIT_EXCEEDED`
   - `400 INVALID_FILE_CONTENT`
+  - `400 CERTIFICADO_TEXT_EXTRACTION_FAILED`
+  - `400 CERTIFICADO_CONTENT_MISMATCH`
   - `400 FILE_TOO_LARGE`
 
 ### GET `/api/perfil/me/formacion`
@@ -750,6 +752,8 @@ Errores esperados:
   - `400 INVALID_FILE_TYPE`
   - `400 FILE_PAGE_LIMIT_EXCEEDED`
   - `400 INVALID_FILE_CONTENT`
+  - `400 CERTIFICADO_TEXT_EXTRACTION_FAILED`
+  - `400 CERTIFICADO_CONTENT_MISMATCH`
   - `400 FILE_TOO_LARGE`
 - Equivalentes por `:candidatoId`:
   - `GET /api/perfil/:candidatoId/formacion/:formacionId/certificado` (empresa|administrador|superadmin lectura)

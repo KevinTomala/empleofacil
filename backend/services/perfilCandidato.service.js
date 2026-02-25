@@ -729,6 +729,19 @@ async function existsExperiencia(candidatoId, experienciaId) {
   return Boolean(rows.length);
 }
 
+let experienciaCertExtractionColumnsCache = null;
+async function hasExperienciaExtractionColumns() {
+  if (experienciaCertExtractionColumnsCache !== null) return experienciaCertExtractionColumnsCache;
+  try {
+    const [rows] = await db.query(`SHOW COLUMNS FROM candidatos_experiencia_certificados LIKE 'datos_extraidos_json'`);
+    experienciaCertExtractionColumnsCache = rows.length > 0;
+    return experienciaCertExtractionColumnsCache;
+  } catch (_error) {
+    experienciaCertExtractionColumnsCache = false;
+    return false;
+  }
+}
+
 async function getExperienciaCertificado(candidatoId, experienciaId) {
   const [rows] = await db.query(
     `SELECT
@@ -785,42 +798,89 @@ async function createExperienciaCertificado(candidatoId, experienciaId, payload)
   const exists = await existsExperiencia(candidatoId, experienciaId);
   if (!exists) return null;
 
-  await db.query(
-    `INSERT INTO candidatos_experiencia_certificados (
-      candidato_id,
-      experiencia_id,
-      nombre_archivo,
-      nombre_original,
-      ruta_archivo,
-      tipo_mime,
-      tamanio_kb,
-      fecha_emision,
-      descripcion,
-      estado
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      nombre_archivo = VALUES(nombre_archivo),
-      nombre_original = VALUES(nombre_original),
-      ruta_archivo = VALUES(ruta_archivo),
-      tipo_mime = VALUES(tipo_mime),
-      tamanio_kb = VALUES(tamanio_kb),
-      fecha_emision = VALUES(fecha_emision),
-      descripcion = VALUES(descripcion),
-      estado = VALUES(estado),
-      deleted_at = NULL`,
-    [
-      candidatoId,
-      experienciaId,
-      payload.nombre_archivo,
-      payload.nombre_original,
-      payload.ruta_archivo,
-      payload.tipo_mime,
-      payload.tamanio_kb,
-      payload.fecha_emision ?? null,
-      payload.descripcion ?? null,
-      payload.estado ?? 'pendiente'
-    ]
-  );
+  const hasExtractionCols = await hasExperienciaExtractionColumns();
+
+  if (hasExtractionCols) {
+    await db.query(
+      `INSERT INTO candidatos_experiencia_certificados (
+        candidato_id,
+        experiencia_id,
+        nombre_archivo,
+        nombre_original,
+        ruta_archivo,
+        tipo_mime,
+        tamanio_kb,
+        fecha_emision,
+        descripcion,
+        estado,
+        estado_extraccion,
+        datos_extraidos_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        nombre_archivo = VALUES(nombre_archivo),
+        nombre_original = VALUES(nombre_original),
+        ruta_archivo = VALUES(ruta_archivo),
+        tipo_mime = VALUES(tipo_mime),
+        tamanio_kb = VALUES(tamanio_kb),
+        fecha_emision = VALUES(fecha_emision),
+        descripcion = VALUES(descripcion),
+        estado = VALUES(estado),
+        estado_extraccion = VALUES(estado_extraccion),
+        datos_extraidos_json = VALUES(datos_extraidos_json),
+        deleted_at = NULL`,
+      [
+        candidatoId,
+        experienciaId,
+        payload.nombre_archivo,
+        payload.nombre_original,
+        payload.ruta_archivo,
+        payload.tipo_mime,
+        payload.tamanio_kb,
+        payload.fecha_emision ?? null,
+        payload.descripcion ?? null,
+        payload.estado ?? 'pendiente',
+        payload.extraction_result ? 'procesado' : 'pendiente',
+        payload.extraction_result ? JSON.stringify(payload.extraction_result) : null
+      ]
+    );
+  } else {
+    await db.query(
+      `INSERT INTO candidatos_experiencia_certificados (
+        candidato_id,
+        experiencia_id,
+        nombre_archivo,
+        nombre_original,
+        ruta_archivo,
+        tipo_mime,
+        tamanio_kb,
+        fecha_emision,
+        descripcion,
+        estado
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        nombre_archivo = VALUES(nombre_archivo),
+        nombre_original = VALUES(nombre_original),
+        ruta_archivo = VALUES(ruta_archivo),
+        tipo_mime = VALUES(tipo_mime),
+        tamanio_kb = VALUES(tamanio_kb),
+        fecha_emision = VALUES(fecha_emision),
+        descripcion = VALUES(descripcion),
+        estado = VALUES(estado),
+        deleted_at = NULL`,
+      [
+        candidatoId,
+        experienciaId,
+        payload.nombre_archivo,
+        payload.nombre_original,
+        payload.ruta_archivo,
+        payload.tipo_mime,
+        payload.tamanio_kb,
+        payload.fecha_emision ?? null,
+        payload.descripcion ?? null,
+        payload.estado ?? 'pendiente'
+      ]
+    );
+  }
 
   const cert = await getExperienciaCertificado(candidatoId, experienciaId);
   return cert.certificado;
@@ -832,6 +892,16 @@ async function updateExperienciaCertificado(candidatoId, experienciaId, patch) {
 
   const keys = Object.keys(patch);
   if (!keys.length) return 0;
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'extraction_result')) {
+    const hasExtractionCols = await hasExperienciaExtractionColumns();
+    const extractionValue = patch.extraction_result;
+    delete patch.extraction_result;
+    if (hasExtractionCols) {
+      patch.estado_extraccion = extractionValue ? 'procesado' : 'pendiente';
+      patch.datos_extraidos_json = extractionValue ? JSON.stringify(extractionValue) : null;
+    }
+  }
 
   const setSql = keys.map((key) => `${key} = ?`).join(', ');
   const [result] = await db.query(
@@ -2025,8 +2095,9 @@ async function createFormacionCertificado(candidatoId, formacionId, payload) {
       fecha_emision,
       descripcion,
       estado,
-      estado_extraccion
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      estado_extraccion,
+      datos_extraidos_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
       nombre_archivo = VALUES(nombre_archivo),
       nombre_original = VALUES(nombre_original),
@@ -2036,8 +2107,8 @@ async function createFormacionCertificado(candidatoId, formacionId, payload) {
       fecha_emision = VALUES(fecha_emision),
       descripcion = VALUES(descripcion),
       estado = VALUES(estado),
-      estado_extraccion = 'pendiente',
-      datos_extraidos_json = NULL,
+      estado_extraccion = VALUES(estado_extraccion),
+      datos_extraidos_json = VALUES(datos_extraidos_json),
       deleted_at = NULL`,
     [
       candidatoId,
@@ -2050,7 +2121,8 @@ async function createFormacionCertificado(candidatoId, formacionId, payload) {
       payload.fecha_emision ?? null,
       payload.descripcion ?? null,
       payload.estado ?? 'pendiente',
-      'pendiente'
+      payload.extraction_result ? 'procesado' : 'pendiente',
+      payload.extraction_result ? JSON.stringify(payload.extraction_result) : null
     ]
   );
 
@@ -2066,7 +2138,12 @@ async function updateFormacionCertificado(candidatoId, formacionId, patch) {
   const keys = Object.keys(patch);
   if (!keys.length) return 0;
 
-  if (keys.some((key) => ['nombre_archivo', 'nombre_original', 'ruta_archivo', 'tipo_mime', 'tamanio_kb'].includes(key))) {
+  if (Object.prototype.hasOwnProperty.call(patch, 'extraction_result')) {
+    const extractionValue = patch.extraction_result;
+    delete patch.extraction_result;
+    patch.estado_extraccion = extractionValue ? 'procesado' : 'pendiente';
+    patch.datos_extraidos_json = extractionValue ? JSON.stringify(extractionValue) : null;
+  } else if (keys.some((key) => ['nombre_archivo', 'nombre_original', 'ruta_archivo', 'tipo_mime', 'tamanio_kb'].includes(key))) {
     patch.estado_extraccion = 'pendiente';
     patch.datos_extraidos_json = null;
   }

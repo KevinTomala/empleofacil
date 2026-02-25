@@ -76,6 +76,8 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `POST certificado` sin archivo devuelve `400 FILE_REQUIRED`.
 - `POST certificado` con PDF de mas de 1 pagina devuelve `400 FILE_PAGE_LIMIT_EXCEEDED`.
 - `POST certificado` con PDF invalido/corrupto devuelve `400 INVALID_FILE_CONTENT`.
+- `POST certificado` con texto no extraible devuelve `400 CERTIFICADO_TEXT_EXTRACTION_FAILED`.
+- `POST certificado` con contenido que no coincide (candidato/contexto) devuelve `400 CERTIFICADO_CONTENT_MISMATCH`.
 - Empresa solo lectura en `/:candidatoId/formacion*` y `/:candidatoId/experiencia/:experienciaId/certificado`.
 
 ### 7) Perfil empresa (backend)

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { extractAndValidateCertificado } = require('../services/certificadoExtraction.service');
 const {
   findCandidatoIdByUserId,
   existsCandidato,
@@ -657,6 +658,44 @@ function safeRemoveManagedUploadFile(publicPath) {
   }
 }
 
+function cleanupTempUploadedFile(req) {
+  try {
+    if (req?.file?.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+  } catch (_error) {
+    // Evita romper flujo por fallo de limpieza.
+  }
+}
+
+function handleCertificadoValidationError(res, error) {
+  const code = String(error?.code || error?.message || '');
+  console.warn('[certificado_validation] rejected_request', {
+    code,
+    details: error?.details
+      ? {
+        text_length: error.details.text_length,
+        enough_text: error.details.enough_text,
+        context_matches: error.details.context_matches,
+        candidate_matches: error.details.candidate_matches,
+        document_match: error.details.document_match,
+        matched_context_tokens: error.details.matched_context_tokens,
+        matched_candidate_tokens: error.details.matched_candidate_tokens
+      }
+      : null
+  });
+  if (code === 'CERTIFICADO_TEXT_EXTRACTION_FAILED') {
+    return res.status(400).json({ error: 'CERTIFICADO_TEXT_EXTRACTION_FAILED' });
+  }
+  if (code === 'CERTIFICADO_CONTENT_MISMATCH') {
+    return res.status(400).json({
+      error: 'CERTIFICADO_CONTENT_MISMATCH',
+      extraction: error?.details || null
+    });
+  }
+  return null;
+}
+
 function normalizeDocumentoMetadataByTypeAndSide({ tipoDocumento, ladoDocumento, payload = {} } = {}) {
   const normalized = { ...payload };
   if (tipoDocumento === 'documento_identidad' && ladoDocumento === 'reverso') {
@@ -895,12 +934,29 @@ async function createExperienciaCertificadoHandler(req, res) {
 
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
 
+  let extractionResult = null;
+  try {
+    extractionResult = await extractAndValidateCertificado({
+      candidatoId: req.candidatoId,
+      filePath: req.file.path,
+      mimeType: req.file.mimetype,
+      tipo: 'experiencia',
+      referenciaId: experienciaId
+    });
+  } catch (error) {
+    cleanupTempUploadedFile(req);
+    const handled = handleCertificadoValidationError(res, error);
+    if (handled) return handled;
+    throw error;
+  }
+
   const fileMeta = buildUploadedFileMeta(req);
   const certificado = await createExperienciaCertificado(req.candidatoId, experienciaId, {
     ...fileMeta,
     fecha_emision: meta?.fecha_emision ?? null,
     descripcion: meta?.descripcion ?? null,
-    estado: meta?.estado ?? 'pendiente'
+    estado: meta?.estado ?? 'pendiente',
+    extraction_result: extractionResult?.extracted || null
   });
 
   if (!certificado) return res.status(404).json({ error: 'EXPERIENCIA_NOT_FOUND' });
@@ -918,7 +974,24 @@ async function updateExperienciaCertificadoHandler(req, res) {
 
   const patch = { ...(meta || {}) };
   if (req.file) {
+    let extractionResult = null;
+    try {
+      extractionResult = await extractAndValidateCertificado({
+        candidatoId: req.candidatoId,
+        filePath: req.file.path,
+        mimeType: req.file.mimetype,
+        tipo: 'experiencia',
+        referenciaId: experienciaId
+      });
+    } catch (error) {
+      cleanupTempUploadedFile(req);
+      const handled = handleCertificadoValidationError(res, error);
+      if (handled) return handled;
+      throw error;
+    }
+
     Object.assign(patch, buildUploadedFileMeta(req));
+    patch.extraction_result = extractionResult?.extracted || null;
   }
 
   if (!Object.keys(patch).length) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
@@ -1028,12 +1101,29 @@ async function createFormacionCertificadoHandler(req, res) {
   }
 
   if (!(await ensureCandidateExistsOr404(res, req.candidatoId))) return;
+  let extractionResult = null;
+  try {
+    extractionResult = await extractAndValidateCertificado({
+      candidatoId: req.candidatoId,
+      filePath: req.file.path,
+      mimeType: req.file.mimetype,
+      tipo: 'formacion',
+      referenciaId: formacionId
+    });
+  } catch (error) {
+    cleanupTempUploadedFile(req);
+    const handled = handleCertificadoValidationError(res, error);
+    if (handled) return handled;
+    throw error;
+  }
+
   const fileMeta = buildUploadedFileMeta(req);
   const cert = await createFormacionCertificado(req.candidatoId, formacionId, {
     ...fileMeta,
     fecha_emision: meta?.fecha_emision ?? null,
     descripcion: meta?.descripcion ?? null,
-    estado: meta?.estado ?? 'pendiente'
+    estado: meta?.estado ?? 'pendiente',
+    extraction_result: extractionResult?.extracted || null
   });
 
   if (cert === 0) return res.status(404).json({ error: 'FORMACION_NOT_FOUND' });
@@ -1052,7 +1142,24 @@ async function updateFormacionCertificadoHandler(req, res) {
 
   const patch = { ...(meta || {}) };
   if (req.file) {
+    let extractionResult = null;
+    try {
+      extractionResult = await extractAndValidateCertificado({
+        candidatoId: req.candidatoId,
+        filePath: req.file.path,
+        mimeType: req.file.mimetype,
+        tipo: 'formacion',
+        referenciaId: formacionId
+      });
+    } catch (error) {
+      cleanupTempUploadedFile(req);
+      const handled = handleCertificadoValidationError(res, error);
+      if (handled) return handled;
+      throw error;
+    }
+
     Object.assign(patch, buildUploadedFileMeta(req));
+    patch.extraction_result = extractionResult?.extracted || null;
   }
 
   if (!Object.keys(patch).length) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
