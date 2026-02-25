@@ -28,6 +28,14 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `GET /api/hoja-vida/:id/pdf` con rol `candidato` y otro id debe devolver `403 FORBIDDEN`.
 - `GET /api/hoja-vida/:id` no debe incluir `perfil.estado_academico`.
 - `GET /api/hoja-vida/:id/pdf` no debe renderizar la linea `Estado academico`.
+- `GET /api/hoja-vida/:id` debe incluir `certificado` en cada item de `experiencia_laboral` y `formaciones`.
+- `GET /api/hoja-vida/:id` con rol `empresa` no debe exponer `certificado.ruta_archivo`.
+- `GET /api/hoja-vida/:id` debe incluir `anexos_certificados_resumen`.
+- `GET /api/hoja-vida/:id/pdf` con 1 certificado valido agrega paginas anexas al final.
+- `GET /api/hoja-vida/:id/pdf` con mezcla de certificados adjunta maximo 5 por recencia.
+- `GET /api/hoja-vida/:id/pdf` con mas de 5 certificados reporta omitidos por limite en seccion de anexos.
+- `GET /api/hoja-vida/:id/pdf` si un archivo anexo falta/corrupto debe seguir devolviendo `200` y omitir ese anexo.
+- `GET /api/hoja-vida/:id/pdf` soporta anexar `pdf`, `jpg/jpeg`, `png`, `webp`.
 
 ### 5) Integraciones Ademy
 - `POST /api/integraciones/ademy/acreditados/import` con token admin debe devolver resumen `{ ok, total, created, updated, skipped, errors }`.
@@ -66,6 +74,8 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `POST /api/perfil/me/formacion/:formacionId/certificado` en item no externa devuelve `FORMACION_CERTIFICADO_NOT_ALLOWED`.
 - `GET|POST|PUT|DELETE /api/perfil/me/experiencia/:experienciaId/certificado` respetan ownership.
 - `POST certificado` sin archivo devuelve `400 FILE_REQUIRED`.
+- `POST certificado` con PDF de mas de 1 pagina devuelve `400 FILE_PAGE_LIMIT_EXCEEDED`.
+- `POST certificado` con PDF invalido/corrupto devuelve `400 INVALID_FILE_CONTENT`.
 - Empresa solo lectura en `/:candidatoId/formacion*` y `/:candidatoId/experiencia/:experienciaId/certificado`.
 
 ### 7) Perfil empresa (backend)

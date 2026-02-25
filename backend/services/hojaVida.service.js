@@ -2,10 +2,13 @@ const db = require('../db');
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
-const { pathToFileURL } = require('url');
+const { PDFDocument } = require('pdf-lib');
 const { getAbsoluteUploadPathFromPublic } = require('../utils/uploadPaths');
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+const MAX_CERTIFICADOS_ADJUNTOS = 5;
+const HOJA_VIDA_HTML_TIMEOUT_MS = Number(process.env.HOJA_VIDA_HTML_TIMEOUT_MS || 90000);
+
+// --- Helpers -----------------------------------------------------------------
 
 function toBool(value) {
   return value === 1 || value === true;
@@ -92,6 +95,7 @@ function guessMimeTypeFromPath(filePath) {
   if (ext === '.webp') return 'image/webp';
   if (ext === '.gif') return 'image/gif';
   if (ext === '.bmp') return 'image/bmp';
+  if (ext === '.pdf') return 'application/pdf';
   return 'application/octet-stream';
 }
 
@@ -150,9 +154,138 @@ function resolveFotoSource(rutaArchivo, tipoMime = null) {
   return null;
 }
 
-// ─── Servicio: obtener datos JSON (sin IDs internos) ─────────────────────────
+function normalizeMimeType(mimeType, filePath = '') {
+  const explicit = String(mimeType || '').trim().toLowerCase();
+  if (explicit) return explicit;
+  return guessMimeTypeFromPath(filePath);
+}
 
-async function obtenerHojaVidaPorEstudianteId(estudianteId) {
+function isSupportedAttachment(mimeType, filePath = '') {
+  const normalized = normalizeMimeType(mimeType, filePath);
+  return (
+    normalized === 'application/pdf' ||
+    normalized === 'image/jpeg' ||
+    normalized === 'image/png' ||
+    normalized === 'image/webp'
+  );
+}
+
+function resolveManagedFilePath(rutaArchivo) {
+  const rawPath = String(rutaArchivo || '').trim();
+  if (!rawPath) return null;
+  const fromUploads = getAbsoluteUploadPathFromPublic(rawPath);
+  if (fromUploads && fs.existsSync(fromUploads)) return fromUploads;
+  return null;
+}
+
+function formatCertEstado(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'aprobado') return 'Aprobado';
+  if (normalized === 'rechazado') return 'Rechazado';
+  if (normalized === 'vencido') return 'Vencido';
+  return 'Pendiente';
+}
+
+function sanitizeCertificadoForViewer(certificado, viewerRole) {
+  if (!certificado) return { existe: false };
+  if (viewerRole === 'empresa') {
+    const { ruta_archivo, ...rest } = certificado;
+    return rest;
+  }
+  return certificado;
+}
+
+function sortAdjuntosDesc(a, b) {
+  const aFecha = a?.sort_fecha ? new Date(a.sort_fecha).getTime() : 0;
+  const bFecha = b?.sort_fecha ? new Date(b.sort_fecha).getTime() : 0;
+  if (aFecha !== bFecha) return bFecha - aFecha;
+
+  const aFallback = a?.sort_created ? new Date(a.sort_created).getTime() : 0;
+  const bFallback = b?.sort_created ? new Date(b.sort_created).getTime() : 0;
+  if (aFallback !== bFallback) return bFallback - aFallback;
+
+  const weight = (item) => (item?.tipo_certificado === 'laboral' ? 0 : 1);
+  return weight(a) - weight(b);
+}
+
+function buildAnexosSummary(totalDetectados, totalAdjuntados, totalOmitidosPorLimite = 0) {
+  return {
+    total_detectados: totalDetectados,
+    total_adjuntados: totalAdjuntados,
+    total_omitidos: Math.max(totalDetectados - totalAdjuntados, 0),
+    total_omitidos_por_limite: Math.max(totalOmitidosPorLimite, 0),
+    limite_aplicado: MAX_CERTIFICADOS_ADJUNTOS
+  };
+}
+
+function buildExperienciaCertificadoObject(row) {
+  if (!row?.cert_id) return { existe: false };
+  return {
+    existe: true,
+    estado: row.cert_estado || 'pendiente',
+    fecha_emision: row.cert_fecha_emision || null,
+    descripcion: row.cert_descripcion || null,
+    tipo: 'laboral',
+    nombre_original: row.cert_nombre_original || null,
+    ruta_archivo: row.cert_ruta_archivo || null
+  };
+}
+
+function buildFormacionCertificadoObject(row) {
+  if (!row?.cert_id) return { existe: false };
+  return {
+    existe: true,
+    estado: row.cert_estado || 'pendiente',
+    fecha_emision: row.cert_fecha_emision || null,
+    descripcion: row.cert_descripcion || null,
+    tipo: 'curso',
+    nombre_original: row.cert_nombre_original || null,
+    ruta_archivo: row.cert_ruta_archivo || null
+  };
+}
+
+function buildAnexoMetadataFromExperiencia(row) {
+  if (!row?.cert_id || !row?.cert_ruta_archivo) return null;
+  return {
+    tipo_certificado: 'laboral',
+    origen: 'experiencia',
+    titulo: row.cargo || 'Experiencia laboral',
+    subtitulo: row.empresa_nombre || 'Empresa no especificada',
+    nombre_original: row.cert_nombre_original || row.cert_nombre_archivo || null,
+    ruta_archivo: row.cert_ruta_archivo,
+    tipo_mime: row.cert_tipo_mime || null,
+    fecha_emision: row.cert_fecha_emision || null,
+    estado: row.cert_estado || 'pendiente',
+    descripcion: row.cert_descripcion || null,
+    sort_fecha: row.cert_fecha_emision || null,
+    sort_created: row.cert_created_at || null
+  };
+}
+
+function buildAnexoMetadataFromFormacion(row) {
+  if (!row?.cert_id || !row?.cert_ruta_archivo) return null;
+  const titulo = textOrNull(row.nombre_programa) || textOrNull(row.titulo_obtenido) || 'Formacion externa';
+  return {
+    tipo_certificado: 'curso',
+    origen: 'formacion',
+    titulo,
+    subtitulo: row.institucion || 'Institucion no especificada',
+    nombre_original: row.cert_nombre_original || row.cert_nombre_archivo || null,
+    ruta_archivo: row.cert_ruta_archivo,
+    tipo_mime: row.cert_tipo_mime || null,
+    fecha_emision: row.cert_fecha_emision || null,
+    estado: row.cert_estado || 'pendiente',
+    descripcion: row.cert_descripcion || null,
+    sort_fecha: row.cert_fecha_emision || null,
+    sort_created: row.cert_created_at || null
+  };
+}
+
+// --- Servicio: obtener datos JSON (sin IDs internos) -------------------------
+
+async function obtenerHojaVidaPorEstudianteId(estudianteId, options = {}) {
+  const viewerRole = String(options.viewerRole || '').trim().toLowerCase();
+  const includeInternal = Boolean(options.includeInternal);
   const [estudianteRows] = await db.query(
     `SELECT
       e.nombres,
@@ -220,21 +353,60 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId) {
     ),
     db.query(
       `SELECT
-        empresa_nombre, cargo, fecha_inicio, fecha_fin,
-        actualmente_trabaja, tipo_contrato, descripcion
-       FROM candidatos_experiencia
-       WHERE candidato_id = ? AND deleted_at IS NULL
-       ORDER BY COALESCE(fecha_fin, CURDATE()) DESC, fecha_inicio DESC, id DESC`,
+        ce.id AS experiencia_id,
+        ce.empresa_nombre,
+        ce.cargo,
+        ce.fecha_inicio,
+        ce.fecha_fin,
+        ce.actualmente_trabaja,
+        ce.tipo_contrato,
+        ce.descripcion,
+        ec.id AS cert_id,
+        ec.nombre_archivo AS cert_nombre_archivo,
+        ec.nombre_original AS cert_nombre_original,
+        ec.ruta_archivo AS cert_ruta_archivo,
+        ec.tipo_mime AS cert_tipo_mime,
+        ec.fecha_emision AS cert_fecha_emision,
+        ec.descripcion AS cert_descripcion,
+        ec.estado AS cert_estado,
+        ec.created_at AS cert_created_at
+       FROM candidatos_experiencia ce
+       LEFT JOIN candidatos_experiencia_certificados ec
+         ON ec.experiencia_id = ce.id
+        AND ec.candidato_id = ce.candidato_id
+        AND ec.deleted_at IS NULL
+       WHERE ce.candidato_id = ? AND ce.deleted_at IS NULL
+       ORDER BY COALESCE(ce.fecha_fin, CURDATE()) DESC, ce.fecha_inicio DESC, ce.id DESC`,
       [estudianteId]
     ),
     db.query(
       `SELECT
-        categoria_formacion, subtipo_formacion, institucion,
-        nombre_programa, titulo_obtenido, fecha_aprobacion,
-        fecha_emision, fecha_vencimiento, activo
-       FROM candidatos_formaciones
-       WHERE candidato_id = ? AND deleted_at IS NULL
-       ORDER BY COALESCE(fecha_aprobacion, fecha_emision, fecha_vencimiento) DESC, id DESC`,
+        cf.id AS formacion_id,
+        cf.categoria_formacion,
+        cf.subtipo_formacion,
+        cf.institucion,
+        cf.nombre_programa,
+        cf.titulo_obtenido,
+        cf.fecha_aprobacion,
+        cf.fecha_emision,
+        cf.fecha_vencimiento,
+        cf.activo,
+        fc.id AS cert_id,
+        fc.nombre_archivo AS cert_nombre_archivo,
+        fc.nombre_original AS cert_nombre_original,
+        fc.ruta_archivo AS cert_ruta_archivo,
+        fc.tipo_mime AS cert_tipo_mime,
+        fc.fecha_emision AS cert_fecha_emision,
+        fc.descripcion AS cert_descripcion,
+        fc.estado AS cert_estado,
+        fc.created_at AS cert_created_at
+       FROM candidatos_formaciones cf
+       LEFT JOIN candidatos_formacion_certificados fc
+         ON fc.candidato_formacion_id = cf.id
+        AND fc.candidato_id = cf.candidato_id
+        AND fc.deleted_at IS NULL
+       WHERE cf.candidato_id = ? AND cf.deleted_at IS NULL
+       ORDER BY COALESCE(cf.fecha_aprobacion, cf.fecha_emision, cf.fecha_vencimiento) DESC, cf.id DESC`,
       [estudianteId]
     ),
     db.query(
@@ -259,44 +431,78 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId) {
     }
     : null;
   const educacionGeneral = educacionRows[0] || null;
-  const experiencias = experienciasRows.map((exp) => ({
-    empresa_nombre: exp.empresa_nombre,
-    cargo: exp.cargo,
-    fecha_inicio: exp.fecha_inicio,
-    fecha_fin: exp.fecha_fin,
-    actualmente_trabaja: toBool(exp.actualmente_trabaja),
-    tipo_contrato: exp.tipo_contrato,
-    descripcion: exp.descripcion
-  }));
-  const formaciones = formacionesRows.map((f) => ({
-    categoria_formacion: f.categoria_formacion,
-    subtipo_formacion: f.subtipo_formacion,
-    institucion: f.institucion,
-    nombre_programa: f.nombre_programa,
-    titulo_obtenido: f.titulo_obtenido,
-    fecha_aprobacion: f.fecha_aprobacion,
-    fecha_emision: f.fecha_emision,
-    fecha_vencimiento: f.fecha_vencimiento,
-    activo: toBool(f.activo)
-  }));
+  const anexosDetectados = [];
+  const experiencias = experienciasRows.map((row) => {
+    const certificadoRaw = buildExperienciaCertificadoObject(row);
+    const anexo = buildAnexoMetadataFromExperiencia(row);
+    if (anexo) anexosDetectados.push(anexo);
+
+    return {
+      empresa_nombre: row.empresa_nombre,
+      cargo: row.cargo,
+      fecha_inicio: row.fecha_inicio,
+      fecha_fin: row.fecha_fin,
+      actualmente_trabaja: toBool(row.actualmente_trabaja),
+      tipo_contrato: row.tipo_contrato,
+      descripcion: row.descripcion,
+      certificado: sanitizeCertificadoForViewer(certificadoRaw, viewerRole)
+    };
+  });
+  const formaciones = formacionesRows.map((row) => {
+    const certificadoRaw = buildFormacionCertificadoObject(row);
+    const anexo = buildAnexoMetadataFromFormacion(row);
+    if (anexo) anexosDetectados.push(anexo);
+
+    return {
+      categoria_formacion: row.categoria_formacion,
+      subtipo_formacion: row.subtipo_formacion,
+      institucion: row.institucion,
+      nombre_programa: row.nombre_programa,
+      titulo_obtenido: row.titulo_obtenido,
+      fecha_aprobacion: row.fecha_aprobacion,
+      fecha_emision: row.fecha_emision,
+      fecha_vencimiento: row.fecha_vencimiento,
+      activo: toBool(row.activo),
+      certificado: sanitizeCertificadoForViewer(certificadoRaw, viewerRole)
+    };
+  });
+
+  const anexosAdjuntos = anexosDetectados
+    .filter((item) => item?.ruta_archivo)
+    .sort(sortAdjuntosDesc)
+    .slice(0, MAX_CERTIFICADOS_ADJUNTOS)
+    .map((item) => {
+      if (viewerRole === 'empresa') {
+        const { ruta_archivo, ...rest } = item;
+        return rest;
+      }
+      return item;
+    });
+  const anexosResumen = buildAnexosSummary(
+    anexosDetectados.length,
+    anexosAdjuntos.length,
+    Math.max(anexosDetectados.length - anexosAdjuntos.length, 0)
+  );
 
   // Construir foto data URL para preview HTML
   const fotoDoc = (documentosRows || []).find((d) => d.tipo_documento === 'foto' && d.ruta_archivo);
   const fotoSrcForPreview = fotoDoc ? resolveFotoSourceForPdf(fotoDoc.ruta_archivo, fotoDoc.tipo_mime) || resolveFotoSource(fotoDoc.ruta_archivo, fotoDoc.tipo_mime) : null;
 
   // Construir HTML para previsualización
+  const perfil = {
+    nombres: estudiante.nombres,
+    apellidos: estudiante.apellidos,
+    nombre_completo: `${estudiante.nombres} ${estudiante.apellidos}`.trim(),
+    documento_identidad: estudiante.documento_identidad,
+    nacionalidad: estudiante.nacionalidad,
+    fecha_nacimiento: estudiante.fecha_nacimiento,
+    edad: calcularEdad(estudiante.fecha_nacimiento),
+    sexo: estudiante.sexo,
+    estado_civil: estudiante.estado_civil
+  };
+
   const previewHtml = buildHtml({
-    perfil: {
-      nombres: estudiante.nombres,
-      apellidos: estudiante.apellidos,
-      nombre_completo: `${estudiante.nombres} ${estudiante.apellidos}`.trim(),
-      documento_identidad: estudiante.documento_identidad,
-      nacionalidad: estudiante.nacionalidad,
-      fecha_nacimiento: estudiante.fecha_nacimiento,
-      edad: calcularEdad(estudiante.fecha_nacimiento),
-      sexo: estudiante.sexo,
-      estado_civil: estudiante.estado_civil
-    },
+    perfil,
     contacto,
     domicilio,
     salud,
@@ -304,21 +510,14 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId) {
     educacion: educacionGeneral,
     experiencias,
     formaciones,
-    fotoSrc: fotoSrcForPreview
+    fotoSrc: fotoSrcForPreview,
+    anexosAdjuntos,
+    anexosResumen,
+    anexosWarnings: []
   });
 
   return {
-    perfil: {
-      nombres: estudiante.nombres,
-      apellidos: estudiante.apellidos,
-      nombre_completo: `${estudiante.nombres} ${estudiante.apellidos}`.trim(),
-      documento_identidad: estudiante.documento_identidad,
-      nacionalidad: estudiante.nacionalidad,
-      fecha_nacimiento: estudiante.fecha_nacimiento,
-      edad: calcularEdad(estudiante.fecha_nacimiento),
-      sexo: estudiante.sexo,
-      estado_civil: estudiante.estado_civil
-    },
+    perfil,
     contacto,
     domicilio,
     salud,
@@ -327,11 +526,20 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId) {
     experiencia_laboral: experiencias,
     formaciones,
     documentos: documentosRows,
-    html: previewHtml
+    anexos_certificados_resumen: anexosResumen,
+    html: previewHtml,
+    ...(includeInternal
+      ? {
+        _anexos_certificados_adjuntos: anexosDetectados
+          .filter((item) => item?.ruta_archivo)
+          .sort(sortAdjuntosDesc)
+          .slice(0, MAX_CERTIFICADOS_ADJUNTOS)
+      }
+      : {})
   };
 }
 
-// ─── HTML del PDF ─────────────────────────────────────────────────────────────
+// --- HTML del PDF -------------------------------------------------------------
 
 function renderRow(label, value) {
   if (!value && value !== 0) return '';
@@ -349,10 +557,11 @@ function buildExperienciaHtml(experiencias) {
     const periodo = (() => {
       const ini = formatDateLong(exp.fecha_inicio);
       const fin = exp.actualmente_trabaja ? 'Actualidad' : formatDateLong(exp.fecha_fin);
-      if (ini && fin) return `${ini} – ${fin}`;
+      if (ini && fin) return `${ini} - ${fin}`;
       if (ini) return `Desde ${ini}`;
       return null;
     })();
+    const cert = exp.certificado || { existe: false };
     return `
       <div class="card ${idx > 0 ? 'card-mt' : ''}">
         <div class="card-header">
@@ -367,6 +576,11 @@ function buildExperienciaHtml(experiencias) {
           </div>
         </div>
         ${exp.descripcion ? `<p class="card-desc">${safe(exp.descripcion)}</p>` : ''}
+        <div class="card-detail">
+          Certificado laboral: <strong>${cert.existe ? 'Cargado' : 'Pendiente'}</strong>
+          ${cert.existe && cert.estado ? ` | Estado: ${safe(formatCertEstado(cert.estado))}` : ''}
+          ${cert.existe && cert.fecha_emision ? ` | Emision: ${safe(formatDate(cert.fecha_emision))}` : ''}
+        </div>
       </div>`;
   }).join('');
 }
@@ -374,16 +588,17 @@ function buildExperienciaHtml(experiencias) {
 function buildFormacionesHtml(formaciones) {
   if (!formaciones.length) return '<p class="empty">Sin formaciones registradas.</p>';
   return formaciones.map((f, idx) => {
-    const titulo = textOrNull(f.nombre_programa) || textOrNull(f.titulo_obtenido) || 'Formación sin nombre';
+    const titulo = textOrNull(f.nombre_programa) || textOrNull(f.titulo_obtenido) || 'Formacion sin nombre';
     const fechaRef = f.fecha_aprobacion || f.fecha_emision;
     const fechaDisplay = formatDateLong(fechaRef);
     const vencimiento = f.fecha_vencimiento ? formatDateLong(f.fecha_vencimiento) : null;
+    const cert = f.certificado || { existe: false };
     return `
       <div class="card ${idx > 0 ? 'card-mt' : ''}">
         <div class="card-header">
           <div>
             <div class="card-title">${safe(titulo)}</div>
-            <div class="card-sub">${safe(f.institucion || 'Institución no especificada')}</div>
+            <div class="card-sub">${safe(f.institucion || 'Institucion no especificada')}</div>
           </div>
           <div class="card-meta">
             ${fechaDisplay ? `<div class="periodo">${safe(fechaDisplay)}</div>` : ''}
@@ -392,14 +607,74 @@ function buildFormacionesHtml(formaciones) {
           </div>
         </div>
         ${f.titulo_obtenido && f.titulo_obtenido !== titulo ? `<div class="card-detail">Certificado: ${safe(f.titulo_obtenido)}</div>` : ''}
-        ${vencimiento ? `<div class="card-detail text-muted">Válido hasta: ${safe(vencimiento)}</div>` : ''}
+        ${vencimiento ? `<div class="card-detail text-muted">Valido hasta: ${safe(vencimiento)}</div>` : ''}
+        <div class="card-detail">
+          Certificado de curso: <strong>${cert.existe ? 'Cargado' : 'Pendiente'}</strong>
+          ${cert.existe && cert.estado ? ` | Estado: ${safe(formatCertEstado(cert.estado))}` : ''}
+          ${cert.existe && cert.fecha_emision ? ` | Emision: ${safe(formatDate(cert.fecha_emision))}` : ''}
+        </div>
       </div>`;
   }).join('');
 }
 
-function buildHtml({ perfil, contacto, domicilio, salud, logistica, educacion, experiencias, formaciones, fotoSrc }) {
+function buildAnexosHtml({ anexosAdjuntos = [], resumen = null, warnings = [] }) {
+  const summary = resumen || buildAnexosSummary(anexosAdjuntos.length, anexosAdjuntos.length, 0);
+  const warningsList = Array.isArray(warnings) ? warnings.filter(Boolean) : [];
+
+  const rows = anexosAdjuntos.map((item, index) => {
+    const fecha = item?.fecha_emision ? formatDate(item.fecha_emision) : 'N/D';
+    return `<tr>
+      <td>${index + 1}</td>
+      <td>${safe(item?.tipo_certificado === 'laboral' ? 'Laboral' : 'Curso')}</td>
+      <td>${safe(item?.titulo || 'N/D')}</td>
+      <td>${safe(item?.nombre_original || 'N/D')}</td>
+      <td>${safe(fecha)}</td>
+      <td>${safe(formatCertEstado(item?.estado || 'pendiente'))}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <div class="section">
+    <div class="section-title">Anexos de Certificados</div>
+    <div class="card">
+      <div class="card-detail"><strong>Total detectados:</strong> ${safe(summary.total_detectados)}</div>
+      <div class="card-detail"><strong>Adjuntados al PDF:</strong> ${safe(summary.total_adjuntados)}</div>
+      <div class="card-detail"><strong>Omitidos:</strong> ${safe(summary.total_omitidos)}</div>
+      ${summary.total_omitidos_por_limite ? `<div class="card-detail text-muted">(${safe(summary.total_omitidos_por_limite)} omitidos por limite de ${safe(summary.limite_aplicado)})</div>` : ''}
+    </div>
+    ${rows ? `
+      <table class="anexos-table" cellspacing="0" cellpadding="0">
+        <thead>
+          <tr>
+            <th>#</th><th>Tipo</th><th>Referencia</th><th>Archivo</th><th>Emision</th><th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>` : '<p class="empty">No hay certificados para adjuntar.</p>'}
+    ${warningsList.length ? `
+      <div class="warnings-block">
+        <div class="warnings-title">Advertencias de anexos</div>
+        <ul>${warningsList.map((msg) => `<li>${safe(msg)}</li>`).join('')}</ul>
+      </div>` : ''}
+  </div>`;
+}
+
+function buildHtml({
+  perfil,
+  contacto,
+  domicilio,
+  salud,
+  logistica,
+  educacion,
+  experiencias,
+  formaciones,
+  fotoSrc,
+  anexosAdjuntos = [],
+  anexosResumen = null,
+  anexosWarnings = []
+}) {
   const ubicacion = [domicilio?.canton, domicilio?.provincia, domicilio?.pais].filter(Boolean).join(', ');
-  const edad = perfil.edad ? `${perfil.edad} años` : null;
+  const edad = perfil.edad ? `${perfil.edad} anos` : null;
 
   const disponibilidades = [];
   if (logistica?.disp_viajar) disponibilidades.push('Disponible para viajar');
@@ -423,7 +698,7 @@ function buildHtml({ perfil, contacto, domicilio, salud, logistica, educacion, e
       background: #fff;
     }
 
-    /* ── HEADER ──────────────────────────────── */
+    /* -- HEADER -------------------------------- */
     .cv-header {
       display: flex;
       align-items: flex-start;
@@ -451,7 +726,7 @@ function buildHtml({ perfil, contacto, domicilio, salud, logistica, educacion, e
     .contact-item strong { font-weight: 600; }
     .ubic { font-size: 10.5px; color: #555; margin-top: 4px; }
 
-    /* ── SECCIONES ───────────────────────────── */
+    /* -- SECCIONES ----------------------------- */
     .section { margin-bottom: 13px; }
     .section-title {
       font-size: 12px;
@@ -464,7 +739,7 @@ function buildHtml({ perfil, contacto, domicilio, salud, logistica, educacion, e
       margin-bottom: 8px;
     }
 
-    /* ── GRID de datos personales ────────────── */
+    /* -- GRID de datos personales -------------- */
     .data-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -474,7 +749,7 @@ function buildHtml({ perfil, contacto, domicilio, salud, logistica, educacion, e
     .label { color: #555; white-space: nowrap; }
     .value { font-weight: 600; color: #1a1a2e; }
 
-    /* ── CARDS (experiencia / formaciones) ───── */
+    /* -- CARDS (experiencia / formaciones) ----- */
     .card {
       padding: 7px 10px;
       border-left: 3px solid #1a1a2e;
@@ -491,7 +766,7 @@ function buildHtml({ perfil, contacto, domicilio, salud, logistica, educacion, e
     .text-muted { color: #888; }
     .empty { font-size: 10px; color: #999; font-style: italic; }
 
-    /* ── BADGES ──────────────────────────────── */
+    /* -- BADGES -------------------------------- */
     .badge {
       display: inline-block;
       background: #e8e8f0;
@@ -504,7 +779,7 @@ function buildHtml({ perfil, contacto, domicilio, salud, logistica, educacion, e
       margin-left: 2px;
     }
 
-    /* ── CHIPS de disponibilidad ─────────────── */
+    /* -- CHIPS de disponibilidad --------------- */
     .chips { display: flex; flex-wrap: wrap; gap: 5px; }
     .chip {
       background: #1a1a2e;
@@ -514,7 +789,43 @@ function buildHtml({ perfil, contacto, domicilio, salud, logistica, educacion, e
       border-radius: 12px;
     }
 
-    /* ── PIE ─────────────────────────────────── */
+    .anexos-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 9.5px;
+    }
+    .anexos-table th,
+    .anexos-table td {
+      border: 1px solid #e4e4ea;
+      padding: 4px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .anexos-table th {
+      background: #f3f3f8;
+      font-weight: 700;
+    }
+    .warnings-block {
+      margin-top: 8px;
+      border: 1px solid #f3c8c8;
+      background: #fff5f5;
+      padding: 7px;
+      border-radius: 4px;
+    }
+    .warnings-title {
+      font-size: 10px;
+      font-weight: 700;
+      color: #9b1c1c;
+      margin-bottom: 4px;
+    }
+    .warnings-block ul {
+      margin-left: 16px;
+      color: #7a2020;
+      font-size: 9.5px;
+    }
+
+    /* -- PIE ----------------------------------- */
     .footer { margin-top: 18px; font-size: 9px; color: #aaa; text-align: right; }
   </style>
 </head>
@@ -533,7 +844,7 @@ function buildHtml({ perfil, contacto, domicilio, salud, logistica, educacion, e
         ${contacto?.telefono_celular ? `<span class="contact-item"><strong>Cel:</strong> ${safe(contacto.telefono_celular)}</span>` : ''}
         ${contacto?.telefono_fijo ? `<span class="contact-item"><strong>Tel:</strong> ${safe(contacto.telefono_fijo)}</span>` : ''}
       </div>
-      ${ubicacion ? `<div class="ubic">📍 ${safe(ubicacion)}</div>` : ''}
+      ${ubicacion ? `<div class="ubic">${safe(ubicacion)}</div>` : ''}
     </div>
   </div>
 
@@ -552,11 +863,11 @@ function buildHtml({ perfil, contacto, domicilio, salud, logistica, educacion, e
 
   <!-- EDUCACIÓN -->
   <div class="section">
-    <div class="section-title">Educación</div>
+    <div class="section-title">Educacion</div>
     <div class="data-grid">
       ${renderRow('Nivel de estudio', textOrNull(educacion?.nivel_estudio))}
-      ${renderRow('Institución', textOrNull(educacion?.institucion))}
-      ${renderRow('Título obtenido', textOrNull(educacion?.titulo_obtenido))}
+      ${renderRow('Institucion', textOrNull(educacion?.institucion))}
+      ${renderRow('Titulo obtenido', textOrNull(educacion?.titulo_obtenido))}
     </div>
   </div>
 
@@ -578,7 +889,7 @@ function buildHtml({ perfil, contacto, domicilio, salud, logistica, educacion, e
     <div class="section-title">Disponibilidad y Movilidad</div>
     <div class="data-grid">
       ${logistica?.licencia ? renderRow('Licencia de conducir', textOrNull(logistica.licencia)) : ''}
-      ${logistica?.tipo_vehiculo ? renderRow('Vehículo propio', textOrNull(logistica.tipo_vehiculo)) : ''}
+      ${logistica?.tipo_vehiculo ? renderRow('Vehiculo propio', textOrNull(logistica.tipo_vehiculo)) : ''}
     </div>
     ${disponibilidades.length ? `
       <div class="chips" style="margin-top:6px;">
@@ -586,30 +897,114 @@ function buildHtml({ perfil, contacto, domicilio, salud, logistica, educacion, e
       </div>` : ''}
   </div>` : ''}
 
+  ${buildAnexosHtml({ anexosAdjuntos, resumen: anexosResumen, warnings: anexosWarnings })}
+
   <div class="footer">Documento generado el ${safe(formatDate(new Date()))}</div>
 
 </body>
 </html>`;
 }
 
-// ─── Servicio: generar PDF ────────────────────────────────────────────────────
+// --- Servicio: generar PDF ----------------------------------------------------
 
-async function generarHojaVidaPdfPorEstudianteId(estudianteId) {
-  const hojaVida = await obtenerHojaVidaPorEstudianteId(estudianteId);
+async function renderHtmlToPdfBuffer(page, html) {
+  await page.setContent(html, {
+    waitUntil: 'domcontentloaded',
+    timeout: HOJA_VIDA_HTML_TIMEOUT_MS
+  });
+  return page.pdf({ format: 'A4', printBackground: true });
+}
+
+async function convertImageFileToPdfBuffer(page, filePath, mimeType) {
+  const dataUrl = buildDataUrlFromFile(filePath, mimeType);
+  if (!dataUrl) throw new Error('IMAGE_DATA_URL_BUILD_FAILED');
+
+  const html = `<!doctype html>
+  <html lang="es">
+  <head>
+    <meta charset="UTF-8"/>
+    <style>
+      @page { size: A4; margin: 10mm; }
+      body { margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; background: #fff; }
+      img { max-width: 100%; max-height: 100vh; object-fit: contain; }
+    </style>
+  </head>
+  <body>
+    <img src="${escapeHtml(dataUrl)}" alt="Anexo" />
+  </body>
+  </html>`;
+
+  return renderHtmlToPdfBuffer(page, html);
+}
+
+async function mergePdfBuffers(pdfBuffers) {
+  const out = await PDFDocument.create();
+
+  for (const buffer of pdfBuffers) {
+    const src = await PDFDocument.load(buffer);
+    const copiedPages = await out.copyPages(src, src.getPageIndices());
+    copiedPages.forEach((page) => out.addPage(page));
+  }
+
+  return out.save();
+}
+
+async function buildAttachmentPdfBuffers(page, anexosAdjuntos) {
+  const buffers = [];
+  const warnings = [];
+
+  for (const item of anexosAdjuntos) {
+    const absolutePath = resolveManagedFilePath(item.ruta_archivo);
+    const displayName = item.nombre_original || item.ruta_archivo || 'archivo';
+
+    if (!absolutePath) {
+      warnings.push(`No se encontro archivo de certificado: ${displayName}.`);
+      continue;
+    }
+
+    const normalizedMime = normalizeMimeType(item.tipo_mime, absolutePath);
+    if (!isSupportedAttachment(normalizedMime, absolutePath)) {
+      warnings.push(`Formato no soportado para anexo (${displayName}).`);
+      continue;
+    }
+
+    try {
+      if (normalizedMime === 'application/pdf') {
+        buffers.push(fs.readFileSync(absolutePath));
+      } else {
+        const imagePdfBuffer = await convertImageFileToPdfBuffer(page, absolutePath, normalizedMime);
+        buffers.push(imagePdfBuffer);
+      }
+    } catch (error) {
+      warnings.push(`No se pudo adjuntar certificado (${displayName}).`);
+      console.error('[hoja_vida_pdf] attachment failed', {
+        file: absolutePath,
+        message: error?.message || String(error)
+      });
+    }
+  }
+
+  return { buffers, warnings };
+}
+
+async function generarHojaVidaPdfPorEstudianteId(estudianteId, options = {}) {
+  const hojaVida = await obtenerHojaVidaPorEstudianteId(estudianteId, {
+    viewerRole: options.viewerRole || 'candidato',
+    includeInternal: true
+  });
   if (!hojaVida) return null;
 
   const { perfil, contacto, domicilio, salud, logistica, documentos } = hojaVida;
   const educacion = hojaVida.educacion_general || {};
   const experiencias = hojaVida.experiencia_laboral || [];
   const formaciones = hojaVida.formaciones || [];
+  const anexosAdjuntosTop = Array.isArray(hojaVida._anexos_certificados_adjuntos) ? hojaVida._anexos_certificados_adjuntos : [];
 
   const fotoDoc = (documentos || []).find((d) => d.tipo_documento === 'foto' && d.ruta_archivo);
   // Para PDF necesitamos base64
   const fotoSrc = fotoDoc ? resolveFotoSourceForPdf(fotoDoc.ruta_archivo, fotoDoc.tipo_mime) : null;
 
-  const html = buildHtml({ perfil, contacto, domicilio, salud, logistica, educacion, experiencias, formaciones, fotoSrc });
-
-  // ── Puppeteer ──
+  // -- Puppeteer --
   const linuxCandidates = ['/usr/bin/chromium-browser', '/usr/bin/chromium'];
   const detectedLinuxPath = linuxCandidates.find((p) => fs.existsSync(p));
   const executablePathFromEnv = process.env.PUPPETEER_EXECUTABLE_PATH || null;
@@ -643,13 +1038,49 @@ async function generarHojaVidaPdfPorEstudianteId(estudianteId) {
   });
 
   let browser;
-  let buffer;
   try {
     browser = await puppeteer.launch(launchOptions);
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    buffer = await page.pdf({ format: 'A4', printBackground: true });
+
+    const { buffers: attachmentPdfBuffers, warnings: attachmentWarnings } = await buildAttachmentPdfBuffers(page, anexosAdjuntosTop);
+    const totalDetectados = Number(hojaVida?.anexos_certificados_resumen?.total_detectados || anexosAdjuntosTop.length);
+    const totalOmitidosPorLimite = Number(hojaVida?.anexos_certificados_resumen?.total_omitidos_por_limite || 0);
+    const finalResumen = buildAnexosSummary(
+      totalDetectados,
+      attachmentPdfBuffers.length,
+      totalOmitidosPorLimite
+    );
+
+    const html = buildHtml({
+      perfil,
+      contacto,
+      domicilio,
+      salud,
+      logistica,
+      educacion,
+      experiencias,
+      formaciones,
+      fotoSrc,
+      anexosAdjuntos: anexosAdjuntosTop,
+      anexosResumen: finalResumen,
+      anexosWarnings: attachmentWarnings
+    });
+
+    const basePdfBuffer = await renderHtmlToPdfBuffer(page, html);
     await page.close();
+
+    const mergedPdfBytes = await mergePdfBuffers([basePdfBuffer, ...attachmentPdfBuffers]);
+    const buffer = Buffer.from(mergedPdfBytes);
+
+    const safeName = String(perfil.nombre_completo || estudianteId)
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9_]/g, '')
+      .slice(0, 80);
+
+    return {
+      buffer,
+      fileName: `HojaVida_${safeName || estudianteId}.pdf`
+    };
   } catch (error) {
     console.error('[hoja_vida_pdf] pdf generation failed', {
       estudianteId,
@@ -661,16 +1092,6 @@ async function generarHojaVidaPdfPorEstudianteId(estudianteId) {
   } finally {
     if (browser) await browser.close();
   }
-
-  const safeName = String(perfil.nombre_completo || estudianteId)
-    .replace(/\s+/g, '_')
-    .replace(/[^a-zA-Z0-9_]/g, '')
-    .slice(0, 80);
-
-  return {
-    buffer,
-    fileName: `HojaVida_${safeName || estudianteId}.pdf`
-  };
 }
 
 module.exports = {

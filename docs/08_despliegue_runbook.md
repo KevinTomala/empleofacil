@@ -192,3 +192,26 @@ docker compose down
 2. Validar conexion DB (`DB_*`) y estado de MySQL.
 3. Validar que `JWT_SECRET` y variables de Ademy existan.
 4. Si falla PDF, revisar instalacion de Chrome/Puppeteer en contenedor backend.
+
+## Diagnostico hoja de vida con anexos
+- Verificar que existan tablas de certificados:
+```sql
+SHOW TABLES LIKE 'candidatos_formacion_certificados';
+SHOW TABLES LIKE 'candidatos_experiencia_certificados';
+```
+- Verificar metadatos basicos de anexos por candidato:
+```sql
+SELECT candidato_id, experiencia_id, nombre_original, ruta_archivo, tipo_mime, estado, fecha_emision
+FROM candidatos_experiencia_certificados
+WHERE candidato_id = <ID_CANDIDATO> AND deleted_at IS NULL;
+
+SELECT candidato_id, candidato_formacion_id, nombre_original, ruta_archivo, tipo_mime, estado, fecha_emision
+FROM candidatos_formacion_certificados
+WHERE candidato_id = <ID_CANDIDATO> AND deleted_at IS NULL;
+```
+- Revisar logs backend durante generacion PDF:
+  - eventos `hoja_vida_pdf` (diagnostico puppeteer),
+  - eventos `attachment failed` (anexo omitido por ruta/formato/error de lectura).
+- Si el PDF sale sin anexos:
+  - validar que `ruta_archivo` inicie con `/uploads/` y exista fisicamente en `UPLOADS_ROOT`,
+  - validar tipo MIME/extension soportada (`pdf`, `jpg/jpeg`, `png`, `webp`).

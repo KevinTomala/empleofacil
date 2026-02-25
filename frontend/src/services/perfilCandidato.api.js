@@ -43,6 +43,8 @@ function parsePerfilError(error, fallbackMessage) {
     return 'Debes subir cedula por ambos lados o licencia de conducir para solicitar verificacion.'
   }
   if (code === 'INVALID_FILE_TYPE') return 'Tipo de archivo no permitido. Usa PDF o imagen.'
+  if (code === 'FILE_PAGE_LIMIT_EXCEEDED') return 'El certificado PDF debe tener maximo 1 pagina.'
+  if (code === 'INVALID_FILE_CONTENT') return 'No se pudo leer el archivo. Verifica que el PDF o imagen sea valido.'
   if (code === 'FILE_TOO_LARGE') return 'El archivo supera el limite permitido.'
   if (code === 'FILE_REQUIRED') return 'Debes seleccionar un archivo.'
 

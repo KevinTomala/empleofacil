@@ -28,7 +28,9 @@ async function getHojaVida(req, res) {
   try {
     if (!(await ensureCandidateOwnership(req, res, estudianteId))) return;
 
-    const hojaVida = await obtenerHojaVidaPorEstudianteId(estudianteId);
+    const hojaVida = await obtenerHojaVidaPorEstudianteId(estudianteId, {
+      viewerRole: req.user?.rol || ''
+    });
     if (!hojaVida) {
       return res.status(404).json({ error: 'ESTUDIANTE_NOT_FOUND' });
     }
@@ -50,7 +52,9 @@ async function getHojaVidaPdf(req, res) {
   try {
     if (!(await ensureCandidateOwnership(req, res, estudianteId))) return;
 
-    const pdf = await generarHojaVidaPdfPorEstudianteId(estudianteId);
+    const pdf = await generarHojaVidaPdfPorEstudianteId(estudianteId, {
+      viewerRole: req.user?.rol || ''
+    });
     if (!pdf) {
       return res.status(404).json({ error: 'ESTUDIANTE_NOT_FOUND' });
     }

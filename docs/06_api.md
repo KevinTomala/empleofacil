@@ -671,12 +671,16 @@ Errores esperados:
 - Roles: `candidato`.
 - `POST|PUT`: `multipart/form-data` con campo `archivo` (pdf/jpg/png/webp) y metadata opcional:
   - `fecha_emision`, `descripcion`, `estado` (`pendiente|aprobado|rechazado|vencido`)
+- Regla de archivo:
+  - si `archivo` es PDF, se valida maximo `1` pagina (configurable con `CERTIFICADO_MAX_PAGES`).
 - Errores:
   - `400 INVALID_EXPERIENCIA_ID`
   - `404 EXPERIENCIA_NOT_FOUND`
   - `404 CERTIFICADO_NOT_FOUND`
   - `400 FILE_REQUIRED`
   - `400 INVALID_FILE_TYPE`
+  - `400 FILE_PAGE_LIMIT_EXCEEDED`
+  - `400 INVALID_FILE_CONTENT`
   - `400 FILE_TOO_LARGE`
 
 ### GET `/api/perfil/me/formacion`
@@ -735,6 +739,8 @@ Errores esperados:
 - Roles: `candidato`.
 - `POST|PUT`: `multipart/form-data` con campo `archivo` (pdf/jpg/png/webp) y metadata opcional:
   - `fecha_emision`, `descripcion`, `estado` (`pendiente|aprobado|rechazado|vencido`)
+- Regla de archivo:
+  - si `archivo` es PDF, se valida maximo `1` pagina (configurable con `CERTIFICADO_MAX_PAGES`).
 - Errores:
   - `400 INVALID_FORMACION_ID`
   - `404 FORMACION_NOT_FOUND`
@@ -742,6 +748,8 @@ Errores esperados:
   - `404 CERTIFICADO_NOT_FOUND`
   - `400 FILE_REQUIRED`
   - `400 INVALID_FILE_TYPE`
+  - `400 FILE_PAGE_LIMIT_EXCEEDED`
+  - `400 INVALID_FILE_CONTENT`
   - `400 FILE_TOO_LARGE`
 - Equivalentes por `:candidatoId`:
   - `GET /api/perfil/:candidatoId/formacion/:formacionId/certificado` (empresa|administrador|superadmin lectura)
@@ -1280,6 +1288,12 @@ Base: `/api/verificaciones`
   - Si el rol es `candidato`, solo puede consultar su propio `:estudianteId`.
   - Si intenta consultar otro candidato, responde `403 FORBIDDEN`.
 - Respuesta `200`: consolidado de perfil, contacto, domicilio, salud, logistica, educacion, experiencia, formaciones, documentos.
+- Incluye por cada item de `experiencia_laboral[]` y `formaciones[]`:
+  - `certificado: { existe, estado, fecha_emision, descripcion, tipo, nombre_original, ruta_archivo? }`
+  - Nota: `ruta_archivo` se omite para rol `empresa`.
+- Incluye resumen de anexos:
+  - `anexos_certificados_resumen: { total_detectados, total_adjuntados, total_omitidos, total_omitidos_por_limite, limite_aplicado }`
+- `html` incluye seccion final `Anexos de Certificados` con indice y advertencias.
 - Errores:
   - `400 INVALID_ESTUDIANTE_ID`
   - `404 ESTUDIANTE_NOT_FOUND`
@@ -1294,6 +1308,12 @@ Base: `/api/verificaciones`
 - Respuesta `200`:
   - `Content-Type: application/pdf`
   - `Content-Disposition: inline; filename="hoja_vida_<nombre>.pdf"`
+- El PDF incluye:
+  - contenido base actual de hoja de vida,
+  - anexos reales de certificados (laboral + curso externa) al final del documento,
+  - maximo `5` anexos por fecha de emision/creacion.
+- Formatos de anexos soportados: `pdf`, `jpg/jpeg`, `png`, `webp`.
+- Si un anexo falla o no existe, se omite y el PDF se genera de todos modos (con advertencia en la seccion de anexos del documento base).
 - Errores:
   - `400 INVALID_ESTUDIANTE_ID`
   - `404 ESTUDIANTE_NOT_FOUND`

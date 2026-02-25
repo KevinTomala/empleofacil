@@ -59,6 +59,12 @@ app.use((err, _req, res, _next) => {
   if (err.message === 'INVALID_FILE_TYPE') {
     return res.status(400).json({ error: 'INVALID_FILE_TYPE' });
   }
+  if (err.message === 'FILE_PAGE_LIMIT_EXCEEDED') {
+    return res.status(400).json({ error: 'FILE_PAGE_LIMIT_EXCEEDED' });
+  }
+  if (err.message === 'INVALID_FILE_CONTENT') {
+    return res.status(400).json({ error: 'INVALID_FILE_CONTENT' });
+  }
   if (err.message === 'INVALID_CANDIDATO_ID') {
     return res.status(400).json({ error: 'INVALID_CANDIDATO_ID' });
   }

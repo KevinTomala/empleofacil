@@ -1,6 +1,8 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const multer = require('multer');
+const { PDFDocument } = require('pdf-lib');
 const db = require('../db');
 const { authRequired, requireRole } = require('../middlewares/auth.middleware');
 const {
@@ -223,6 +225,40 @@ const uploadDocumento = multer({
   }
 });
 
+const MAX_CERTIFICADO_PAGES = Number(process.env.CERTIFICADO_MAX_PAGES || 1);
+
+function cleanupUploadedTempFile(req) {
+  try {
+    if (req?.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+  } catch (_err) {
+    // noop
+  }
+}
+
+async function validateCertificadoSinglePage(req, _res, next) {
+  try {
+    if (!req.file) return next();
+
+    const mime = String(req.file.mimetype || '').toLowerCase();
+    if (mime !== 'application/pdf') return next(); // imagenes cuentan como una sola pagina
+
+    const buffer = fs.readFileSync(req.file.path);
+    const doc = await PDFDocument.load(buffer);
+    const pages = doc.getPageCount();
+
+    if (pages > MAX_CERTIFICADO_PAGES) {
+      cleanupUploadedTempFile(req);
+      req.file = null;
+      return next(new Error('FILE_PAGE_LIMIT_EXCEEDED'));
+    }
+    return next();
+  } catch (_error) {
+    cleanupUploadedTempFile(req);
+    req.file = null;
+    return next(new Error('INVALID_FILE_CONTENT'));
+  }
+}
+
 router.get('/centros-capacitacion', authRequired, requireRole(['candidato', 'administrador', 'superadmin']), listCentrosCapacitacion);
 router.get('/empresas-experiencia', authRequired, requireRole(['candidato', 'administrador', 'superadmin']), listEmpresasExperiencia);
 router.get('/me', authRequired, requireRole(['candidato']), getMyPerfil);
@@ -249,8 +285,8 @@ router.post('/me/experiencia', authRequired, requireRole(['candidato']), createM
 router.put('/me/experiencia/:experienciaId', authRequired, requireRole(['candidato']), updateMyExperiencia);
 router.delete('/me/experiencia/:experienciaId', authRequired, requireRole(['candidato']), deleteMyExperiencia);
 router.get('/me/experiencia/:experienciaId/certificado', authRequired, requireRole(['candidato']), getMyExperienciaCertificado);
-router.post('/me/experiencia/:experienciaId/certificado', authRequired, requireRole(['candidato']), uploadDocumento.single('archivo'), createMyExperienciaCertificado);
-router.put('/me/experiencia/:experienciaId/certificado', authRequired, requireRole(['candidato']), uploadDocumento.single('archivo'), updateMyExperienciaCertificado);
+router.post('/me/experiencia/:experienciaId/certificado', authRequired, requireRole(['candidato']), uploadDocumento.single('archivo'), validateCertificadoSinglePage, createMyExperienciaCertificado);
+router.put('/me/experiencia/:experienciaId/certificado', authRequired, requireRole(['candidato']), uploadDocumento.single('archivo'), validateCertificadoSinglePage, updateMyExperienciaCertificado);
 router.delete('/me/experiencia/:experienciaId/certificado', authRequired, requireRole(['candidato']), deleteMyExperienciaCertificado);
 
 router.get('/me/formacion', authRequired, requireRole(['candidato']), listMyFormacion);
@@ -258,8 +294,8 @@ router.post('/me/formacion', authRequired, requireRole(['candidato']), createMyF
 router.put('/me/formacion/:formacionId', authRequired, requireRole(['candidato']), updateMyFormacion);
 router.delete('/me/formacion/:formacionId', authRequired, requireRole(['candidato']), deleteMyFormacion);
 router.get('/me/formacion/:formacionId/certificado', authRequired, requireRole(['candidato']), getMyFormacionCertificado);
-router.post('/me/formacion/:formacionId/certificado', authRequired, requireRole(['candidato']), uploadDocumento.single('archivo'), createMyFormacionCertificado);
-router.put('/me/formacion/:formacionId/certificado', authRequired, requireRole(['candidato']), uploadDocumento.single('archivo'), updateMyFormacionCertificado);
+router.post('/me/formacion/:formacionId/certificado', authRequired, requireRole(['candidato']), uploadDocumento.single('archivo'), validateCertificadoSinglePage, createMyFormacionCertificado);
+router.put('/me/formacion/:formacionId/certificado', authRequired, requireRole(['candidato']), uploadDocumento.single('archivo'), validateCertificadoSinglePage, updateMyFormacionCertificado);
 router.delete('/me/formacion/:formacionId/certificado', authRequired, requireRole(['candidato']), deleteMyFormacionCertificado);
 
 router.get('/me/documentos', authRequired, requireRole(['candidato']), listMyDocumentos);
@@ -289,8 +325,8 @@ router.post('/:candidatoId/experiencia', authRequired, requireRole(['administrad
 router.put('/:candidatoId/experiencia/:experienciaId', authRequired, requireRole(['administrador', 'superadmin']), updateExperienciaById);
 router.delete('/:candidatoId/experiencia/:experienciaId', authRequired, requireRole(['administrador', 'superadmin']), deleteExperienciaById);
 router.get('/:candidatoId/experiencia/:experienciaId/certificado', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), getExperienciaCertificadoById);
-router.post('/:candidatoId/experiencia/:experienciaId/certificado', authRequired, requireRole(['administrador', 'superadmin']), uploadDocumento.single('archivo'), createExperienciaCertificadoById);
-router.put('/:candidatoId/experiencia/:experienciaId/certificado', authRequired, requireRole(['administrador', 'superadmin']), uploadDocumento.single('archivo'), updateExperienciaCertificadoById);
+router.post('/:candidatoId/experiencia/:experienciaId/certificado', authRequired, requireRole(['administrador', 'superadmin']), uploadDocumento.single('archivo'), validateCertificadoSinglePage, createExperienciaCertificadoById);
+router.put('/:candidatoId/experiencia/:experienciaId/certificado', authRequired, requireRole(['administrador', 'superadmin']), uploadDocumento.single('archivo'), validateCertificadoSinglePage, updateExperienciaCertificadoById);
 router.delete('/:candidatoId/experiencia/:experienciaId/certificado', authRequired, requireRole(['administrador', 'superadmin']), deleteExperienciaCertificadoById);
 
 router.get('/:candidatoId/formacion', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), listFormacionById);
@@ -298,8 +334,8 @@ router.post('/:candidatoId/formacion', authRequired, requireRole(['administrador
 router.put('/:candidatoId/formacion/:formacionId', authRequired, requireRole(['administrador', 'superadmin']), updateFormacionById);
 router.delete('/:candidatoId/formacion/:formacionId', authRequired, requireRole(['administrador', 'superadmin']), deleteFormacionById);
 router.get('/:candidatoId/formacion/:formacionId/certificado', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), getFormacionCertificadoById);
-router.post('/:candidatoId/formacion/:formacionId/certificado', authRequired, requireRole(['administrador', 'superadmin']), uploadDocumento.single('archivo'), createFormacionCertificadoById);
-router.put('/:candidatoId/formacion/:formacionId/certificado', authRequired, requireRole(['administrador', 'superadmin']), uploadDocumento.single('archivo'), updateFormacionCertificadoById);
+router.post('/:candidatoId/formacion/:formacionId/certificado', authRequired, requireRole(['administrador', 'superadmin']), uploadDocumento.single('archivo'), validateCertificadoSinglePage, createFormacionCertificadoById);
+router.put('/:candidatoId/formacion/:formacionId/certificado', authRequired, requireRole(['administrador', 'superadmin']), uploadDocumento.single('archivo'), validateCertificadoSinglePage, updateFormacionCertificadoById);
 router.delete('/:candidatoId/formacion/:formacionId/certificado', authRequired, requireRole(['administrador', 'superadmin']), deleteFormacionCertificadoById);
 
 router.get('/:candidatoId/documentos', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), listDocumentosById);
