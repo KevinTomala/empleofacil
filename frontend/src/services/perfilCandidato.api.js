@@ -1,4 +1,4 @@
-import { apiRequest } from './api'
+import { apiRequest, getAuthToken } from './api'
 
 function parsePerfilError(error, fallbackMessage) {
   const code = error?.payload?.error || error?.code || error?.message || ''
@@ -29,6 +29,9 @@ function parsePerfilError(error, fallbackMessage) {
   if (code === 'CERTIFICADO_NOT_FOUND') return 'No se encontro el certificado seleccionado.'
   if (code === 'INVALID_DOCUMENTO_ID') return 'El documento seleccionado no es valido.'
   if (code === 'DOCUMENTO_NOT_FOUND') return 'No se encontro el documento seleccionado.'
+  if (code === 'ESTUDIANTE_NOT_FOUND') return 'No se encontro la hoja de vida del candidato.'
+  if (code === 'HOJA_VIDA_FETCH_FAILED') return 'No se pudo cargar la hoja de vida para previsualizar.'
+  if (code === 'HOJA_VIDA_PDF_FAILED') return 'No se pudo generar la hoja de vida en PDF.'
   if (code === 'INVALID_TIPO_DOCUMENTO') return 'Tipo de documento invalido.'
   if (code === 'DOCUMENTO_IDENTIDAD_SIDE_REQUIRED') return 'Para cedula debes indicar si es anverso o reverso.'
   if (code === 'DOCUMENTO_IDENTIDAD_SIDE_ALREADY_EXISTS') {
@@ -64,6 +67,76 @@ export function normalizeFormacionList(items) {
 
 export async function getMyPerfil() {
   return apiRequest('/api/perfil/me')
+}
+
+function parseFileNameFromDisposition(contentDisposition, fallback = 'hoja_vida.pdf') {
+  const raw = String(contentDisposition || '')
+  if (!raw) return fallback
+
+  const utf8Match = raw.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]).replace(/^["']|["']$/g, '') || fallback
+    } catch (_error) {
+      return utf8Match[1].replace(/^["']|["']$/g, '') || fallback
+    }
+  }
+
+  const standardMatch = raw.match(/filename="?([^"]+)"?/i)
+  if (standardMatch?.[1]) return standardMatch[1].trim() || fallback
+  return fallback
+}
+
+export async function getMyHojaVidaPdf({ candidatoId, defaultFileName = '' }) {
+  const id = Number(candidatoId)
+  if (!Number.isInteger(id) || id <= 0) {
+    const error = new Error('INVALID_ESTUDIANTE_ID')
+    error.code = 'INVALID_ESTUDIANTE_ID'
+    throw error
+  }
+
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+  const token = getAuthToken()
+  const headers = {}
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  const response = await fetch(`${apiBase}/api/hoja-vida/${id}/pdf`, {
+    method: 'GET',
+    headers
+  })
+
+  if (!response.ok) {
+    let payload = null
+    try {
+      payload = await response.json()
+    } catch (_error) {
+      payload = null
+    }
+    const message = payload?.error || payload?.message || `HTTP ${response.status}`
+    const error = new Error(message)
+    error.status = response.status
+    error.payload = payload
+    error.code = payload?.error || message
+    throw error
+  }
+
+  const blob = await response.blob()
+  const fallbackName = String(defaultFileName || '').trim() || `${id}.pdf`
+  return {
+    blob,
+    fileName: parseFileNameFromDisposition(response.headers.get('Content-Disposition'), fallbackName)
+  }
+}
+
+export async function getMyHojaVida({ candidatoId }) {
+  const id = Number(candidatoId)
+  if (!Number.isInteger(id) || id <= 0) {
+    const error = new Error('INVALID_ESTUDIANTE_ID')
+    error.code = 'INVALID_ESTUDIANTE_ID'
+    throw error
+  }
+
+  return apiRequest(`/api/hoja-vida/${id}`)
 }
 
 export async function updateMyDatosBasicos(payload) {

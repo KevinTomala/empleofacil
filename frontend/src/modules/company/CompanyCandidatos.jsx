@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import FormDropdown from '../../components/FormDropdown'
 import './company.css'
 import { Briefcase, Crown, FileText, Mail, Users } from 'lucide-react'
 import Header from '../../components/Header'
@@ -280,51 +281,48 @@ export default function CompanyCandidatos() {
               <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-2 mt-3">
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-foreground/60">Convocatoria</span>
-                  <select
-                    value={convocatoriaId}
-                    onChange={(event) => setConvocatoriaId(event.target.value)}
-                    className="px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground/70"
-                    disabled={catalogLoading}
-                  >
-                    <option value="">Seleccionar</option>
-                    {convocatorias.map((convocatoria) => (
-                      <option key={convocatoria.id} value={convocatoria.id}>
-                        {convocatoria.codigo} - {convocatoria.nombre}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{ minWidth: '150px' }}>
+                    <FormDropdown
+                      value={convocatoriaId}
+                      options={[
+                        { value: '', label: 'Seleccionar' },
+                        ...convocatorias.map(c => ({ value: c.id, label: `${c.codigo} - ${c.nombre}` }))
+                      ]}
+                      onChange={(val) => setConvocatoriaId(val)}
+                      disabled={catalogLoading}
+                    />
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-foreground/60">Curso</span>
-                  <select
-                    value={cursoId}
-                    onChange={(event) => setCursoId(event.target.value)}
-                    className="px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground/70"
-                    disabled={!convocatoriaId || catalogLoading}
-                  >
-                    <option value="">Seleccionar</option>
-                    {cursos.map((curso) => (
-                      <option key={curso.curso_id || curso.id} value={curso.curso_id || curso.id}>
-                        {curso.nombre}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{ minWidth: '150px' }}>
+                    <FormDropdown
+                      value={cursoId}
+                      options={[
+                        { value: '', label: 'Seleccionar' },
+                        ...cursos.map(c => ({ value: c.curso_id || c.id, label: c.nombre }))
+                      ]}
+                      onChange={(val) => setCursoId(val)}
+                      disabled={!convocatoriaId || catalogLoading}
+                    />
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-foreground/60">Promocion</span>
-                  <select
-                    value={promocionId}
-                    onChange={(event) => setPromocionId(event.target.value)}
-                    className="px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground/70"
-                    disabled={!convocatoriaId || !cursoId || catalogLoading}
-                  >
-                    <option value="">Seleccionar</option>
-                    {promociones.filter((promo) => promo.estado === 'finalizado').map((promo) => (
-                      <option key={promo.id} value={promo.id}>
-                        {promo.numero_promocion} ({promo.estado})
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{ minWidth: '150px' }}>
+                    <FormDropdown
+                      value={promocionId}
+                      options={[
+                        { value: '', label: 'Seleccionar' },
+                        ...promociones.filter(p => p.estado === 'finalizado').map(p => ({
+                          value: p.id,
+                          label: `${p.numero_promocion} (${p.estado})`
+                        }))
+                      ]}
+                      onChange={(val) => setPromocionId(val)}
+                      disabled={!convocatoriaId || !cursoId || catalogLoading}
+                    />
+                  </div>
                 </div>
                 <div className="flex items-end">
                   <button
@@ -369,18 +367,20 @@ export default function CompanyCandidatos() {
               <div className="flex items-center gap-2">
                 <div>
                   <label className="block text-xs text-foreground/60 mb-1">Tamano pagina</label>
-                  <select
-                    className="border border-border rounded-lg px-2 py-2 text-sm bg-background"
-                    value={pageSize}
-                    onChange={(event) => {
-                      setPageSize(Number(event.target.value))
-                      setPage(1)
-                    }}
-                  >
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
+                  <div style={{ width: '100px' }}>
+                    <FormDropdown
+                      value={pageSize}
+                      options={[
+                        { value: 20, label: '20' },
+                        { value: 50, label: '50' },
+                        { value: 100, label: '100' }
+                      ]}
+                      onChange={(val) => {
+                        setPageSize(val)
+                        setPage(1)
+                      }}
+                    />
+                  </div>
                 </div>
                 <button
                   type="button"

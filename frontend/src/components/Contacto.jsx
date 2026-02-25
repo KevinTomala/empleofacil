@@ -1,6 +1,10 @@
+import { useState } from 'react'
 import { Mail, Phone, MapPin, Send } from 'lucide-react'
+import FormDropdown from './FormDropdown'
 
 export default function Contacto() {
+  const [tipo, setTipo] = useState('')
+
   return (
     <section id="contacto" className="py-20 bg-secondary">
       <div className="page-container">
@@ -14,7 +18,7 @@ export default function Contacto() {
               Tienes preguntas? Estamos para ayudarte
             </h2>
             <p className="text-foreground/70 text-lg mb-8">
-              Ya sea que tengas dudas sobre la plataforma, necesites soporte o quieras conocer 
+              Ya sea que tengas dudas sobre la plataforma, necesites soporte o quieras conocer
               mas sobre nuestros servicios, no dudes en contactarnos.
             </p>
 
@@ -89,15 +93,17 @@ export default function Contacto() {
                 <label htmlFor="tipo" className="block text-sm font-medium text-foreground mb-2">
                   Soy
                 </label>
-                <select
-                  id="tipo"
-                  className="w-full px-4 py-3 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-                >
-                  <option value="">Selecciona una opcion</option>
-                  <option value="candidato">Candidato</option>
-                  <option value="empresa">Empresa</option>
-                  <option value="otro">Otro</option>
-                </select>
+                <FormDropdown
+                  value={tipo}
+                  options={[
+                    { value: '', label: 'Selecciona una opcion' },
+                    { value: 'candidato', label: 'Candidato' },
+                    { value: 'empresa', label: 'Empresa' },
+                    { value: 'otro', label: 'Otro' }
+                  ]}
+                  onChange={(val) => setTipo(val)}
+                  customClasses="w-full"
+                />
               </div>
 
               <div>

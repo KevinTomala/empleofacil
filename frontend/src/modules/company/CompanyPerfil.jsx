@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import FormDropdown from '../../components/FormDropdown'
 import './company.css'
 import {
   Building2,
@@ -1063,17 +1064,19 @@ export default function CompanyPerfil() {
                       required
                     />
                     <div className="flex items-center gap-2">
-                      <select
-                        className="flex-1 border border-border rounded-lg px-3 py-2 text-sm"
-                        value={userForm.rol_empresa}
-                        onChange={(event) =>
-                          setUserForm((prev) => ({ ...prev, rol_empresa: event.target.value }))
-                        }
-                      >
-                        <option value="admin">Admin</option>
-                        <option value="reclutador">Reclutador</option>
-                        <option value="visor">Visor</option>
-                      </select>
+                      <div className="flex-1" style={{ minWidth: '150px' }}>
+                        <FormDropdown
+                          value={userForm.rol_empresa}
+                          options={[
+                            { value: 'admin', label: 'Admin' },
+                            { value: 'reclutador', label: 'Reclutador' },
+                            { value: 'visor', label: 'Visor' }
+                          ]}
+                          onChange={(val) =>
+                            setUserForm((prev) => ({ ...prev, rol_empresa: val }))
+                          }
+                        />
+                      </div>
                       <label className="text-xs inline-flex items-center gap-1">
                         <input
                           type="checkbox"
@@ -1104,16 +1107,18 @@ export default function CompanyPerfil() {
                           <span className="px-2 py-0.5 rounded-full bg-secondary">{user.estado}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <select
-                            className="border border-border rounded px-2 py-1"
-                            value={user.rol_empresa}
-                            onChange={(event) => handleUpdateUserRole(user, event.target.value)}
-                            disabled={Boolean(updatingUserId)}
-                          >
-                            <option value="admin">Admin</option>
-                            <option value="reclutador">Reclutador</option>
-                            <option value="visor">Visor</option>
-                          </select>
+                          <div style={{ width: '130px' }}>
+                            <FormDropdown
+                              value={user.rol_empresa}
+                              options={[
+                                { value: 'admin', label: 'Admin' },
+                                { value: 'reclutador', label: 'Reclutador' },
+                                { value: 'visor', label: 'Visor' }
+                              ]}
+                              onChange={(val) => handleUpdateUserRole(user, val)}
+                              disabled={Boolean(updatingUserId)}
+                            />
+                          </div>
                           <button
                             type="button"
                             className="px-2 py-1 border border-border rounded"

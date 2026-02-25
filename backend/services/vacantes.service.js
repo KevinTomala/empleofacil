@@ -169,7 +169,7 @@ async function listVacantes({
   tipoContrato = null,
   estado = null,
   posted = null
-} = {}, { ownEmpresaId = null, onlyActive = false } = {}) {
+} = {}, { ownEmpresaId = null, onlyActive = false, candidatoId = null } = {}) {
   const safePage = toPage(page);
   const safePageSize = toPageSize(pageSize);
   const offset = (safePage - 1) * safePageSize;
@@ -216,14 +216,16 @@ async function listVacantes({
       v.fecha_cierre,
       v.created_at,
       v.updated_at
+      ${candidatoId ? ', IF(p.id IS NOT NULL, 1, 0) AS postulado' : ''}
      FROM vacantes_publicadas v
      INNER JOIN empresas e
        ON e.id = v.empresa_id
       AND e.deleted_at IS NULL
+     ${candidatoId ? 'LEFT JOIN postulaciones p ON p.vacante_id = v.id AND p.candidato_id = ? AND p.deleted_at IS NULL' : ''}
      ${whereSql}
      ORDER BY v.created_at DESC
      LIMIT ? OFFSET ?`,
-    [...params, safePageSize, offset]
+    candidatoId ? [candidatoId, ...params, safePageSize, offset] : [...params, safePageSize, offset]
   );
 
   const statsByEmpresaId = await fetchEmpresaExperienciaStats(rows.map((row) => row.empresa_id));

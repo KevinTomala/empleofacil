@@ -2,6 +2,22 @@ const {
   obtenerHojaVidaPorEstudianteId,
   generarHojaVidaPdfPorEstudianteId
 } = require('../services/hojaVida.service');
+const { findCandidatoIdByUserId } = require('../services/perfilCandidato.service');
+
+async function ensureCandidateOwnership(req, res, estudianteId) {
+  if (req.user?.rol !== 'candidato') return true;
+
+  const ownCandidatoId = await findCandidatoIdByUserId(req.user?.id);
+  if (!ownCandidatoId) {
+    res.status(404).json({ error: 'CANDIDATO_NOT_FOUND' });
+    return false;
+  }
+  if (ownCandidatoId !== estudianteId) {
+    res.status(403).json({ error: 'FORBIDDEN' });
+    return false;
+  }
+  return true;
+}
 
 async function getHojaVida(req, res) {
   const estudianteId = Number(req.params.estudianteId);
@@ -10,6 +26,8 @@ async function getHojaVida(req, res) {
   }
 
   try {
+    if (!(await ensureCandidateOwnership(req, res, estudianteId))) return;
+
     const hojaVida = await obtenerHojaVidaPorEstudianteId(estudianteId);
     if (!hojaVida) {
       return res.status(404).json({ error: 'ESTUDIANTE_NOT_FOUND' });
@@ -30,6 +48,8 @@ async function getHojaVidaPdf(req, res) {
   }
 
   try {
+    if (!(await ensureCandidateOwnership(req, res, estudianteId))) return;
+
     const pdf = await generarHojaVidaPdfPorEstudianteId(estudianteId);
     if (!pdf) {
       return res.status(404).json({ error: 'ESTUDIANTE_NOT_FOUND' });

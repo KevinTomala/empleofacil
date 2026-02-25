@@ -36,6 +36,7 @@ backend/uploads/
 backend/storage/
 .vscode
 AGENTS.md
+initNew.sql
 docker-compose.prod.yml
 # ==========================
 # Sistema

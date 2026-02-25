@@ -10,6 +10,7 @@ const {
   updateVacante
 } = require('../services/vacantes.service');
 const { resolveEmpresaIdForUser } = require('../services/companyPerfil.service');
+const { findCandidatoIdByUserId } = require('../services/postulaciones.service');
 
 function isPlainObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
@@ -101,6 +102,11 @@ async function listVacantesPublic(req, res) {
   }
 
   try {
+    let candidatoId = null;
+    if (req.user && req.user.rol === 'candidato') {
+      candidatoId = await findCandidatoIdByUserId(req.user.id);
+    }
+
     const result = await listVacantes({
       page: req.query.page,
       pageSize: req.query.page_size,
@@ -111,7 +117,7 @@ async function listVacantesPublic(req, res) {
       modalidad: req.query.modalidad,
       tipoContrato: req.query.tipo_contrato,
       posted: req.query.posted
-    }, { onlyActive: true });
+    }, { onlyActive: true, candidatoId });
 
     return res.json(result);
   } catch (error) {

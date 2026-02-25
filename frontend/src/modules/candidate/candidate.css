@@ -114,7 +114,7 @@
   }
 
   .candidate-vacantes-list {
-    max-height: calc(100vh - 240px);
+    max-height: 540px;
     overflow-y: auto;
     padding-right: 0.5rem;
     scrollbar-width: none;
@@ -367,5 +367,211 @@
 
   .candidate-filters-row .candidate-reset {
     justify-self: start;
+  }
+}
+
+.candidate-metrics-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.candidate-metric-card {
+  border: 1px solid var(--color-border);
+  border-radius: 0.95rem;
+  padding: 0.9rem;
+  background: white;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+}
+
+.candidate-metric-value {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  line-height: 1.1;
+  font-weight: 700;
+}
+
+.candidate-metric-label {
+  font-size: 0.75rem;
+  color: color-mix(in oklch, var(--color-foreground) 65%, white);
+  margin-top: 0.2rem;
+  font-weight: 600;
+}
+
+.candidate-metric-card.tone-total {
+  background: linear-gradient(135deg, #f8fafc, #eef2ff);
+}
+
+.candidate-metric-card.tone-process {
+  background: linear-gradient(135deg, #ecfeff, #ecfdf5);
+}
+
+.candidate-metric-card.tone-interview {
+  background: linear-gradient(135deg, #faf5ff, #f5f3ff);
+}
+
+.candidate-metric-card.tone-offer {
+  background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+}
+
+.candidate-metric-card.tone-rejected {
+  background: linear-gradient(135deg, #fff1f2, #fff7ed);
+}
+
+.candidate-metric-card.tone-active-rate {
+  background: linear-gradient(135deg, #eff6ff, #ecfeff);
+}
+
+.candidate-postulaciones-filter-box {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  padding: 0.9rem;
+}
+
+.candidate-postulaciones-filters {
+  display: grid;
+  gap: 0.6rem;
+  align-items: end;
+  grid-template-columns: minmax(220px, 1.5fr) minmax(160px, 1fr) minmax(160px, 1fr) auto auto;
+}
+
+.candidate-postulaciones-btn {
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.candidate-postulaciones-btn.btn-primary {
+  background: var(--color-primary);
+  color: white;
+}
+
+.candidate-postulaciones-btn.btn-secondary {
+  background: white;
+  color: var(--color-foreground);
+  border-color: var(--color-border);
+}
+
+.candidate-postulaciones-grid {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+
+.candidate-postulaciones-list {
+  display: grid;
+}
+
+.candidate-postulacion-card {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 0.95rem;
+  padding: 0.9rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+.candidate-postulacion-card:hover {
+  border-color: color-mix(in oklch, var(--color-primary) 50%, white);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.candidate-postulacion-card.is-selected {
+  border-color: color-mix(in oklch, var(--color-primary) 75%, white);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
+  background: linear-gradient(180deg, #ffffff, #f9fafb);
+}
+
+.candidate-postulacion-meta {
+  margin-top: 0.6rem;
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.76rem;
+  color: color-mix(in oklch, var(--color-foreground) 68%, white);
+}
+
+.candidate-postulaciones-detail {
+  position: sticky;
+  top: 6rem;
+}
+
+.candidate-postulaciones-detail-card {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
+  max-height: calc(100vh - 9rem);
+  overflow-y: auto;
+}
+
+.candidate-detail-chip {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: color-mix(in oklch, var(--color-foreground) 75%, white);
+  background: #f8fafc;
+  text-transform: capitalize;
+}
+
+.candidate-detail-meta {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.75rem;
+  border-radius: 0.8rem;
+  border: 1px solid var(--color-border);
+  background: #fafafa;
+  font-size: 0.78rem;
+  color: color-mix(in oklch, var(--color-foreground) 75%, white);
+}
+
+.candidate-skeleton-card {
+  height: 130px;
+  border-radius: 0.95rem;
+  border: 1px solid var(--color-border);
+  background: linear-gradient(90deg, #f1f5f9, #f8fafc);
+}
+
+.candidate-postulaciones-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  padding: 1rem;
+  display: flex;
+  align-items: flex-end;
+}
+
+.candidate-postulaciones-modal-card {
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: white;
+  border-radius: 1rem 1rem 0 0;
+  padding: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .candidate-postulaciones-grid {
+    grid-template-columns: 1.1fr 0.9fr;
+  }
+
+  .candidate-postulaciones-list {
+    max-height: calc(100vh - 16rem);
+    overflow-y: auto;
+    padding-right: 0.4rem;
+  }
+}
+
+@media (max-width: 1023px) {
+  .candidate-postulaciones-filters {
+    grid-template-columns: 1fr;
   }
 }

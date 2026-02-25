@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import FormDropdown from '../../components/FormDropdown'
 import {
   ArrowLeft,
   BriefcaseBusiness,
@@ -128,6 +129,15 @@ export default function CompanyVacantes() {
   const [preferenciasEmpresa, setPreferenciasEmpresa] = useState({ modalidades_permitidas: [] })
   const [openActionsVacanteId, setOpenActionsVacanteId] = useState(null)
 
+  const [dropdownsOpen, setDropdownsOpen] = useState({
+    provincia: false,
+    ciudad: false,
+    area: false
+  })
+
+  const [provinciaSearch, setProvinciaSearch] = useState('')
+  const [ciudadSearch, setCiudadSearch] = useState('')
+
   const [postulados, setPostulados] = useState([])
   const [postuladosLoading, setPostuladosLoading] = useState(false)
   const [postuladosError, setPostuladosError] = useState('')
@@ -172,6 +182,18 @@ export default function CompanyVacantes() {
       .filter((item) => item.label)
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [selectedProvinciaId])
+
+  const filteredProvinciasCatalog = useMemo(() => {
+    const term = provinciaSearch.trim().toLowerCase()
+    if (!term) return provinciasCatalog
+    return provinciasCatalog.filter(p => p.label.toLowerCase().includes(term))
+  }, [provinciasCatalog, provinciaSearch])
+
+  const filteredCantonesCatalog = useMemo(() => {
+    const term = ciudadSearch.trim().toLowerCase()
+    if (!term) return cantonesCatalog
+    return cantonesCatalog.filter(c => c.label.toLowerCase().includes(term))
+  }, [cantonesCatalog, ciudadSearch])
 
   async function fetchVacantes() {
     try {
@@ -343,6 +365,8 @@ export default function CompanyVacantes() {
     const defaultModalidad = resolveDefaultModalidad(preferenciasEmpresa.modalidades_permitidas)
     setEditingId(null)
     setForm(initialForm(defaultModalidad))
+    setProvinciaSearch('')
+    setCiudadSearch('')
     setIsModalOpen(true)
     setOpenActionsVacanteId(null)
   }
@@ -354,6 +378,8 @@ export default function CompanyVacantes() {
       ...item,
       fecha_cierre: item.fecha_cierre ? String(item.fecha_cierre).slice(0, 10) : ''
     })
+    setProvinciaSearch('')
+    setCiudadSearch('')
     setIsModalOpen(true)
     setOpenActionsVacanteId(null)
   }
@@ -366,9 +392,8 @@ export default function CompanyVacantes() {
       })
       showToast({
         type: 'success',
-        message: `Vacante ${
-          estado === 'pausada' ? 'pausada' : estado === 'activa' ? 'activada' : estado === 'cerrada' ? 'cerrada' : 'actualizada'
-        }.`
+        message: `Vacante ${estado === 'pausada' ? 'pausada' : estado === 'activa' ? 'activada' : estado === 'cerrada' ? 'cerrada' : 'actualizada'
+          }.`
       })
       setOpenActionsVacanteId(null)
       fetchVacantes()
@@ -420,9 +445,22 @@ export default function CompanyVacantes() {
             </section>
 
             <section className="company-card p-3">
-              <form className="grid md:grid-cols-[1fr_180px] gap-2" onSubmit={(e) => { e.preventDefault(); setPage(1); fetchVacantes(); }}>
-                <label className="relative"><Search className="w-2 h-2 absolute left-3 top-1/2 -translate-y-1/2 text-foreground/45" /><input className="w-full border border-border rounded-xl pl-10 pr-3 py-2.5 text-sm bg-background" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por titulo, area o ubicacion..." /></label>
-                <label className="relative"><ListFilter className="w-2 h-2 absolute left-3 top-1/2 -translate-y-1/2 text-foreground/45" /><select className="w-full border border-border rounded-xl pl-10 pr-3 py-2.5 text-sm bg-background appearance-none" value={estadoFiltro} onChange={(e) => { setEstadoFiltro(e.target.value); setPage(1) }}>{['', ...ESTADOS].map((it) => <option key={it || 'all'} value={it}>{it || 'Todos'}</option>)}</select></label>
+              <form className="grid md:grid-cols-[1fr_180px] gap-2 items-center" onSubmit={(e) => { e.preventDefault(); setPage(1); fetchVacantes(); }}>
+                <label className="relative"><Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-foreground/45" /><input className="w-full border border-border rounded-xl pl-10 pr-3 py-2.5 text-sm bg-background" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por titulo, area o ubicacion..." /></label>
+                <div style={{ height: '42px' }}>
+                  <FormDropdown
+                    value={estadoFiltro}
+                    options={[
+                      { value: '', label: 'Todos' },
+                      ...ESTADOS.map(it => ({ value: it, label: it }))
+                    ]}
+                    onChange={(value) => {
+                      setEstadoFiltro(value)
+                      setPage(1)
+                    }}
+                    placeholder="Estado"
+                  />
+                </div>
               </form>
             </section>
 
@@ -627,38 +665,131 @@ export default function CompanyVacantes() {
               <label className="text-xs text-foreground/65">Area<input className="w-full mt-1 border border-border rounded-lg px-3 py-2 text-sm" value={form.area} onChange={(e) => setForm((prev) => ({ ...prev, area: e.target.value }))} /></label>
               <label className="text-xs text-foreground/65">
                 Provincia
-                <select
-                  className="w-full mt-1 border border-border rounded-lg px-3 py-2 text-sm"
-                  value={selectedProvinciaId}
-                  onChange={(e) => {
-                    const selected = provinciasCatalog.find((item) => item.id === e.target.value)
-                    setForm((prev) => ({ ...prev, provincia: selected?.label || '', ciudad: '' }))
+                <div
+                  className="ef-dropdown w-full mt-1"
+                  tabIndex={0}
+                  onBlur={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget)) {
+                      setDropdownsOpen(prev => ({ ...prev, provincia: false }))
+                    }
                   }}
                 >
-                  <option value="">Selecciona provincia</option>
-                  {provinciasCatalog.map((item) => (
-                    <option key={item.id} value={item.id}>{item.label}</option>
-                  ))}
-                </select>
+                  <input
+                    className="ef-control w-full"
+                    placeholder="Selecciona provincia"
+                    value={dropdownsOpen.provincia ? provinciaSearch : (provinciasCatalog.find(p => p.id === selectedProvinciaId)?.label || form.provincia || '')}
+                    onFocus={() => {
+                      setProvinciaSearch(form.provincia || '')
+                      setDropdownsOpen(prev => ({ ...prev, provincia: true }))
+                    }}
+                    onChange={(e) => {
+                      setProvinciaSearch(e.target.value)
+                      setForm((prev) => ({ ...prev, provincia: e.target.value, ciudad: '' }))
+                      setCiudadSearch('')
+                      setDropdownsOpen(prev => ({ ...prev, provincia: true }))
+                    }}
+                  />
+                  {dropdownsOpen.provincia && (
+                    <div className="ef-dropdown-menu">
+                      {filteredProvinciasCatalog.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="ef-dropdown-option"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setForm((prev) => ({ ...prev, provincia: item.label, ciudad: '' }))
+                            setCiudadSearch('')
+                            setDropdownsOpen(prev => ({ ...prev, provincia: false }))
+                          }}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                      {!filteredProvinciasCatalog.length && (
+                        <p className="px-3 py-2 text-xs text-foreground/60">Sin coincidencias</p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </label>
               <label className="text-xs text-foreground/65">
                 Ciudad
-                <select
-                  className="w-full mt-1 border border-border rounded-lg px-3 py-2 text-sm"
-                  value={form.ciudad}
-                  onChange={(e) => setForm((prev) => ({ ...prev, ciudad: e.target.value }))}
-                  disabled={!selectedProvinciaId}
+                <div
+                  className={`ef-dropdown w-full mt-1 ${!selectedProvinciaId ? 'opacity-50 pointer-events-none' : ''}`}
+                  tabIndex={0}
+                  onBlur={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget)) {
+                      setDropdownsOpen(prev => ({ ...prev, ciudad: false }))
+                    }
+                  }}
                 >
-                  <option value="">Selecciona ciudad</option>
-                  {cantonesCatalog.map((item) => (
-                    <option key={item.id} value={item.label}>{item.label}</option>
-                  ))}
-                </select>
+                  <input
+                    className="ef-control w-full"
+                    placeholder="Selecciona ciudad"
+                    value={dropdownsOpen.ciudad ? ciudadSearch : form.ciudad}
+                    onFocus={() => {
+                      setCiudadSearch(form.ciudad || '')
+                      setDropdownsOpen(prev => ({ ...prev, ciudad: true }))
+                    }}
+                    onChange={(e) => {
+                      setCiudadSearch(e.target.value)
+                      setForm((prev) => ({ ...prev, ciudad: e.target.value }))
+                      setDropdownsOpen(prev => ({ ...prev, ciudad: true }))
+                    }}
+                    disabled={!selectedProvinciaId}
+                  />
+                  {dropdownsOpen.ciudad && (
+                    <div className="ef-dropdown-menu">
+                      {filteredCantonesCatalog.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="ef-dropdown-option"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setForm((prev) => ({ ...prev, ciudad: item.label }))
+                            setDropdownsOpen(prev => ({ ...prev, ciudad: false }))
+                          }}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                      {!filteredCantonesCatalog.length && (
+                        <p className="px-3 py-2 text-xs text-foreground/60">Sin coincidencias</p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </label>
-              <label className="text-xs text-foreground/65">Modalidad<select className="w-full mt-1 border border-border rounded-lg px-3 py-2 text-sm" value={form.modalidad} onChange={(e) => setForm((prev) => ({ ...prev, modalidad: e.target.value }))}>{MODALIDADES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-              <label className="text-xs text-foreground/65">Tipo contrato<select className="w-full mt-1 border border-border rounded-lg px-3 py-2 text-sm" value={form.tipo_contrato} onChange={(e) => setForm((prev) => ({ ...prev, tipo_contrato: e.target.value }))}>{TIPOS_CONTRATO.map((item) => <option key={item} value={item}>{formatTipoContratoLabel(item)}</option>)}</select></label>
+              <label className="text-xs text-foreground/65">Modalidad
+                <div className="mt-1" style={{ height: '40px' }}>
+                  <FormDropdown
+                    value={form.modalidad}
+                    options={MODALIDADES.map(item => ({ value: item, label: item }))}
+                    onChange={(val) => setForm(prev => ({ ...prev, modalidad: val }))}
+                  />
+                </div>
+              </label>
+              <label className="text-xs text-foreground/65">Tipo contrato
+                <div className="mt-1" style={{ height: '40px' }}>
+                  <FormDropdown
+                    value={form.tipo_contrato}
+                    options={TIPOS_CONTRATO.map(item => ({ value: item, label: formatTipoContratoLabel(item) }))}
+                    onChange={(val) => setForm(prev => ({ ...prev, tipo_contrato: val }))}
+                  />
+                </div>
+              </label>
               {!editingId ? (
-                <label className="text-xs text-foreground/65">Estado inicial<select className="w-full mt-1 border border-border rounded-lg px-3 py-2 text-sm" value={form.estado} onChange={(e) => setForm((prev) => ({ ...prev, estado: e.target.value }))}>{ESTADOS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+                <label className="text-xs text-foreground/65">Estado inicial
+                  <div className="mt-1" style={{ height: '40px' }}>
+                    <FormDropdown
+                      value={form.estado}
+                      options={ESTADOS.map(item => ({ value: item, label: item }))}
+                      onChange={(val) => setForm(prev => ({ ...prev, estado: val }))}
+                    />
+                  </div>
+                </label>
               ) : null}
               <label className="text-xs text-foreground/65">Fecha cierre<input className="w-full mt-1 border border-border rounded-lg px-3 py-2 text-sm" type="date" value={form.fecha_cierre} onChange={(e) => setForm((prev) => ({ ...prev, fecha_cierre: e.target.value }))} /></label>
               <label className="text-xs text-foreground/65 sm:col-span-2">Descripcion<textarea className="w-full mt-1 border border-border rounded-lg px-3 py-2 text-sm" value={form.descripcion} onChange={(e) => setForm((prev) => ({ ...prev, descripcion: e.target.value }))} /></label>

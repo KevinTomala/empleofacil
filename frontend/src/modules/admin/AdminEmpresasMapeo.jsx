@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import FormDropdown from '../../components/FormDropdown'
 import './admin.css'
 import { Building2, Link2, Link2Off, RefreshCw, Search, Shuffle } from 'lucide-react'
 import Header from '../../components/Header'
@@ -530,9 +531,8 @@ export default function AdminEmpresasMapeo() {
                     <button
                       key={empresa.id}
                       type="button"
-                      className={`w-full text-left border rounded-lg p-3 ${
-                        String(selectedEmpresaId) === String(empresa.id) ? 'border-primary bg-primary/5' : 'border-border'
-                      }`}
+                      className={`w-full text-left border rounded-lg p-3 ${String(selectedEmpresaId) === String(empresa.id) ? 'border-primary bg-primary/5' : 'border-border'
+                        }`}
                       onClick={() => setSelectedEmpresaId(String(empresa.id))}
                     >
                       <div className="flex items-start justify-between gap-2">

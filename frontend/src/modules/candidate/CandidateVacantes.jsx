@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import FormDropdown from '../../components/FormDropdown'
 import Header from '../../components/Header'
 import provinciasData from '../../assets/provincias.json'
 import { apiRequest } from '../../services/api'
@@ -61,10 +62,21 @@ export default function CandidateVacantes() {
   const [allVacantes, setAllVacantes] = useState([])
   const [loading, setLoading] = useState(true)
   const [postingId, setPostingId] = useState(null)
+  const [selectedVacante, setSelectedVacante] = useState(null)
   const [error, setError] = useState('')
   const [q, setQ] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [selectedProvince, setSelectedProvince] = useState('')
+  const [provinceSearch, setProvinceSearch] = useState('')
+  const [citySearch, setCitySearch] = useState('')
+  const [areaSearch, setAreaSearch] = useState('')
+
+  const [dropdownsOpen, setDropdownsOpen] = useState({
+    province: false,
+    city: false,
+    area: false
+  })
+
   const [filters, setFilters] = useState({
     city: '',
     area: '',
@@ -114,6 +126,18 @@ export default function CandidateVacantes() {
     return [...selectedProvinceData.cantones].sort((a, b) => a.localeCompare(b))
   }, [provinceCatalog, selectedProvince])
 
+  const filteredCityOptions = useMemo(() => {
+    const term = citySearch.trim().toLowerCase()
+    if (!term) return cityOptions
+    return cityOptions.filter(c => c.toLowerCase().includes(term))
+  }, [cityOptions, citySearch])
+
+  const filteredProvinceOptions = useMemo(() => {
+    const term = provinceSearch.trim().toLowerCase()
+    if (!term) return provinceOptions
+    return provinceOptions.filter(p => p.label.toLowerCase().includes(term))
+  }, [provinceOptions, provinceSearch])
+
   const options = useMemo(() => {
     const areas = new Set()
     allVacantes.forEach((item) => {
@@ -123,6 +147,12 @@ export default function CandidateVacantes() {
       areas: Array.from(areas).sort((a, b) => a.localeCompare(b))
     }
   }, [allVacantes])
+
+  const filteredAreaOptions = useMemo(() => {
+    const term = areaSearch.trim().toLowerCase()
+    if (!term) return options.areas
+    return options.areas.filter(a => a.toLowerCase().includes(term))
+  }, [options.areas, areaSearch])
 
   const bindSvgProvinceClicks = useCallback((svgDoc) => {
     if (!svgDoc || svgBoundDocsRef.current.has(svgDoc)) return
@@ -189,19 +219,24 @@ export default function CandidateVacantes() {
     }
   }, [])
 
-  async function fetchVacantes() {
+  async function fetchVacantes(overrides = {}) {
     try {
       setLoading(true)
+      const activeQ = 'q' in overrides ? overrides.q : q
+      const activeProv = 'provincia' in overrides ? overrides.provincia : selectedProvince
+      const activeFilters = 'filters' in overrides ? overrides.filters : filters
+      const activePage = 'page' in overrides ? overrides.page : page
+      const activePageSize = 'pageSize' in overrides ? overrides.pageSize : pageSize
       const params = new URLSearchParams()
-      params.set('page', String(page))
-      params.set('page_size', String(pageSize))
-      if (q.trim()) params.set('q', q.trim())
-      if (selectedProvince.trim()) params.set('provincia', selectedProvince.trim())
-      if (filters.city.trim()) params.set('ciudad', filters.city.trim())
-      if (filters.modality) params.set('modalidad', filters.modality)
-      if (filters.contractType) params.set('tipo_contrato', filters.contractType)
-      if (filters.area.trim()) params.set('area', filters.area.trim())
-      if (filters.posted) params.set('posted', filters.posted)
+      params.set('page', String(activePage))
+      params.set('page_size', String(activePageSize))
+      if (activeQ.trim()) params.set('q', activeQ.trim())
+      if (activeProv.trim()) params.set('provincia', activeProv.trim())
+      if (activeFilters.city.trim()) params.set('ciudad', activeFilters.city.trim())
+      if (activeFilters.modality) params.set('modalidad', activeFilters.modality)
+      if (activeFilters.contractType) params.set('tipo_contrato', activeFilters.contractType)
+      if (activeFilters.area.trim()) params.set('area', activeFilters.area.trim())
+      if (activeFilters.posted) params.set('posted', activeFilters.posted)
       const data = await apiRequest(`/api/vacantes?${params.toString()}`)
       setItems(Array.isArray(data?.items) ? data.items : [])
       setTotal(Number(data?.total || 0))
@@ -226,18 +261,17 @@ export default function CandidateVacantes() {
   }
 
   const clearFilters = () => {
+    const emptyFilters = { city: '', area: '', contractType: '', modality: '', posted: '' }
     setQ('')
     setShowFilters(false)
     setSelectedProvince('')
-    setFilters({
-      city: '',
-      area: '',
-      contractType: '',
-      modality: '',
-      posted: ''
-    })
+    setProvinceSearch('')
+    setCitySearch('')
+    setAreaSearch('')
+    setFilters(emptyFilters)
     setPage(1)
     setPageSize(20)
+    fetchVacantes({ q: '', provincia: '', filters: emptyFilters, page: 1, pageSize: 20 })
   }
 
   const postular = async (vacanteId) => {
@@ -248,6 +282,7 @@ export default function CandidateVacantes() {
         body: JSON.stringify({ vacante_id: vacanteId })
       })
       showToast({ type: 'success', message: 'Postulacion registrada.' })
+      setItems(prev => prev.map(v => (v.id === vacanteId ? { ...v, postulado: 1 } : v)))
     } catch (err) {
       const code = err?.payload?.error || err.message
       if (code === 'POSTULACION_DUPLICADA') {
@@ -266,9 +301,24 @@ export default function CandidateVacantes() {
     <div className="candidate-page">
       <Header />
       <main className="page-container candidate-content space-y-8">
-        <section className="space-y-2">
-          <h1 className="font-heading text-3xl sm:text-4xl font-bold">Vacantes activas</h1>
-          <p className="text-foreground/70 max-w-2xl">Filtra oportunidades por mapa, provincia, ciudad y fecha para postular a vacantes activas.</p>
+        <section className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div className="space-y-2">
+            <h1 className="font-heading text-3xl sm:text-4xl font-bold">Vacantes activas</h1>
+            <p className="text-foreground/70 max-w-2xl">Filtra oportunidades por mapa, provincia, ciudad y fecha para postular a vacantes activas.</p>
+          </div>
+
+          <div className="bg-white border border-border rounded-xl p-3 shadow-sm md:min-w-[400px]">
+            <form className="flex items-end gap-2" onSubmit={onSearch}>
+              <label className="text-xs text-foreground/65 flex-1">
+                Buscar
+                <input className="ef-control mt-1 w-full" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Titulo, empresa o ubicacion" />
+              </label>
+              <button className="candidate-cta !mt-0 !w-auto h-9 px-3 flex items-center justify-center" type="submit">Buscar</button>
+              <button className="px-3 h-9 border border-border rounded-lg text-sm text-foreground/70 hover:bg-slate-50 transition-colors" type="button" onClick={clearFilters}>
+                Limpiar
+              </button>
+            </form>
+          </div>
         </section>
 
         <section className="candidate-vacantes-grid">
@@ -294,110 +344,239 @@ export default function CandidateVacantes() {
                 <div className="candidate-filters-row">
                   <label className="candidate-filter-inline">
                     Provincia
-                    <select
-                      className="ef-control"
-                      value={selectedProvince}
-                      onChange={(event) => {
-                        setSelectedProvince(event.target.value)
-                        setFilters((prev) => ({ ...prev, city: '' }))
-                        setPage(1)
+                    <div
+                      className="ef-dropdown w-full"
+                      tabIndex={0}
+                      onBlur={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget)) {
+                          setDropdownsOpen(prev => ({ ...prev, province: false }))
+                        }
                       }}
                     >
-                      <option value="">Selecciona provincia</option>
-                      {provinceOptions.map((prov) => (
-                        <option key={prov.value} value={prov.value}>
-                          {prov.label}
-                        </option>
-                      ))}
-                    </select>
+                      <input
+                        className="ef-control w-full"
+                        placeholder="Todas las provincias"
+                        value={dropdownsOpen.province ? provinceSearch : selectedProvince}
+                        onFocus={() => {
+                          setProvinceSearch(selectedProvince)
+                          setDropdownsOpen(prev => ({ ...prev, province: true }))
+                        }}
+                        onChange={(e) => {
+                          setProvinceSearch(e.target.value)
+                          setSelectedProvince(e.target.value)
+                          if (!e.target.value) {
+                            setFilters((prev) => ({ ...prev, city: '' }))
+                            setCitySearch('')
+                            setPage(1)
+                          }
+                          setDropdownsOpen(prev => ({ ...prev, province: true }))
+                        }}
+                      />
+                      {dropdownsOpen.province && (
+                        <div className="ef-dropdown-menu">
+                          <button
+                            type="button"
+                            className="ef-dropdown-option text-foreground/70 font-medium"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setSelectedProvince('')
+                              setFilters((prev) => ({ ...prev, city: '' }))
+                              setCitySearch('')
+                              setProvinceSearch('')
+                              setDropdownsOpen(prev => ({ ...prev, province: false }))
+                              setPage(1)
+                            }}
+                          >
+                            Todas las provincias
+                          </button>
+                          {filteredProvinceOptions.map(prov => (
+                            <button
+                              key={prov.value}
+                              type="button"
+                              className="ef-dropdown-option"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setSelectedProvince(prov.value)
+                                setFilters((prev) => ({ ...prev, city: '' }))
+                                setCitySearch('')
+                                setDropdownsOpen(prev => ({ ...prev, province: false }))
+                                setPage(1)
+                              }}
+                            >
+                              {prov.label}
+                            </button>
+                          ))}
+                          {!filteredProvinceOptions.length && (
+                            <p className="px-3 py-2 text-xs text-foreground/60">Sin coincidencias</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </label>
+
                   <label className="candidate-filter-inline">
                     Ciudad (Canton)
-                    <select
-                      className="ef-control"
-                      value={filters.city}
-                      onChange={(event) => {
-                        setFilters((prev) => ({ ...prev, city: event.target.value }))
-                        setPage(1)
+                    <div
+                      className={`ef-dropdown w-full ${!selectedProvince ? 'opacity-50 pointer-events-none' : ''}`}
+                      tabIndex={0}
+                      onBlur={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget)) {
+                          setDropdownsOpen(prev => ({ ...prev, city: false }))
+                        }
                       }}
-                      disabled={!selectedProvince}
                     >
-                      <option value="">Todas</option>
-                      {cityOptions.map((city) => (
-                        <option key={city} value={city}>
-                          {city}
-                        </option>
-                      ))}
-                    </select>
+                      <input
+                        className="ef-control w-full"
+                        placeholder="Todas las ciudades"
+                        value={dropdownsOpen.city ? citySearch : filters.city}
+                        onFocus={() => {
+                          setCitySearch(filters.city)
+                          setDropdownsOpen(prev => ({ ...prev, city: true }))
+                        }}
+                        onChange={(e) => {
+                          setCitySearch(e.target.value)
+                          setFilters((prev) => ({ ...prev, city: e.target.value }))
+                          setDropdownsOpen(prev => ({ ...prev, city: true }))
+                          if (!e.target.value) setPage(1)
+                        }}
+                        disabled={!selectedProvince}
+                      />
+                      {dropdownsOpen.city && (
+                        <div className="ef-dropdown-menu">
+                          <button
+                            type="button"
+                            className="ef-dropdown-option text-foreground/70 font-medium"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setFilters((prev) => ({ ...prev, city: '' }))
+                              setCitySearch('')
+                              setDropdownsOpen(prev => ({ ...prev, city: false }))
+                              setPage(1)
+                            }}
+                          >
+                            Todas las ciudades
+                          </button>
+                          {filteredCityOptions.map(city => (
+                            <button
+                              key={city}
+                              type="button"
+                              className="ef-dropdown-option"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setFilters((prev) => ({ ...prev, city }))
+                                setDropdownsOpen(prev => ({ ...prev, city: false }))
+                                setPage(1)
+                              }}
+                            >
+                              {city}
+                            </button>
+                          ))}
+                          {!filteredCityOptions.length && (
+                            <p className="px-3 py-2 text-xs text-foreground/60">Sin coincidencias</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </label>
+
                   <label className="candidate-filter-inline">
                     Cargo
-                    <select
-                      className="ef-control"
-                      value={filters.area}
-                      onChange={(event) => {
-                        setFilters((prev) => ({ ...prev, area: event.target.value }))
-                        setPage(1)
+                    <div
+                      className="ef-dropdown w-full"
+                      tabIndex={0}
+                      onBlur={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget)) {
+                          setDropdownsOpen(prev => ({ ...prev, area: false }))
+                        }
                       }}
                     >
-                      <option value="">Todas</option>
-                      {options.areas.map((area) => (
-                        <option key={area} value={area}>
-                          {area}
-                        </option>
-                      ))}
-                    </select>
+                      <input
+                        className="ef-control w-full"
+                        placeholder="Todas las areas"
+                        value={dropdownsOpen.area ? areaSearch : filters.area}
+                        onFocus={() => {
+                          setAreaSearch(filters.area)
+                          setDropdownsOpen(prev => ({ ...prev, area: true }))
+                        }}
+                        onChange={(e) => {
+                          setAreaSearch(e.target.value)
+                          setFilters((prev) => ({ ...prev, area: e.target.value }))
+                          setDropdownsOpen(prev => ({ ...prev, area: true }))
+                          if (!e.target.value) setPage(1)
+                        }}
+                      />
+                      {dropdownsOpen.area && (
+                        <div className="ef-dropdown-menu">
+                          <button
+                            type="button"
+                            className="ef-dropdown-option text-foreground/70 font-medium"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setFilters((prev) => ({ ...prev, area: '' }))
+                              setAreaSearch('')
+                              setDropdownsOpen(prev => ({ ...prev, area: false }))
+                              setPage(1)
+                            }}
+                          >
+                            Todas las areas
+                          </button>
+                          {filteredAreaOptions.map(area => (
+                            <button
+                              key={area}
+                              type="button"
+                              className="ef-dropdown-option"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setFilters((prev) => ({ ...prev, area }))
+                                setDropdownsOpen(prev => ({ ...prev, area: false }))
+                                setPage(1)
+                              }}
+                            >
+                              {area}
+                            </button>
+                          ))}
+                          {!filteredAreaOptions.length && (
+                            <p className="px-3 py-2 text-xs text-foreground/60">Sin coincidencias</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </label>
                   <label className="candidate-filter-inline">
                     Tipo
-                    <select
-                      className="ef-control"
+                    <FormDropdown
                       value={filters.contractType}
-                      onChange={(event) => {
-                        setFilters((prev) => ({ ...prev, contractType: event.target.value }))
+                      options={TIPO_CONTRATO_OPTIONS}
+                      onChange={(value) => {
+                        setFilters((prev) => ({ ...prev, contractType: value }))
                         setPage(1)
                       }}
-                    >
-                      {TIPO_CONTRATO_OPTIONS.map((type) => (
-                        <option key={type.value || 'all'} value={type.value}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Todos"
+                    />
                   </label>
                   <label className="candidate-filter-inline">
                     Modalidad
-                    <select
-                      className="ef-control"
+                    <FormDropdown
                       value={filters.modality}
-                      onChange={(event) => {
-                        setFilters((prev) => ({ ...prev, modality: event.target.value }))
+                      options={MODALIDAD_OPTIONS}
+                      onChange={(value) => {
+                        setFilters((prev) => ({ ...prev, modality: value }))
                         setPage(1)
                       }}
-                    >
-                      {MODALIDAD_OPTIONS.map((modality) => (
-                        <option key={modality.value || 'all'} value={modality.value}>
-                          {modality.label}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Todas"
+                    />
                   </label>
                   <label className="candidate-filter-inline">
                     Fecha
-                    <select
-                      className="ef-control"
+                    <FormDropdown
                       value={filters.posted}
-                      onChange={(event) => {
-                        setFilters((prev) => ({ ...prev, posted: event.target.value }))
+                      options={POSTED_OPTIONS}
+                      onChange={(value) => {
+                        setFilters((prev) => ({ ...prev, posted: value }))
                         setPage(1)
                       }}
-                    >
-                      {POSTED_OPTIONS.map((item) => (
-                        <option key={item.value || 'all'} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Todas"
+                    />
                   </label>
                   <button
                     type="button"
@@ -411,21 +590,9 @@ export default function CandidateVacantes() {
             )}
           </aside>
 
-          <div className="space-y-4">
-            <section className="bg-white border border-border rounded-xl p-4">
-              <form className="grid md:grid-cols-[1fr_auto_auto] gap-2 items-end" onSubmit={onSearch}>
-                <label className="text-xs text-foreground/65">
-                  Buscar
-                  <input className="ef-control mt-1" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Titulo, empresa o ubicacion" />
-                </label>
-                <button className="candidate-cta md:w-auto" type="submit">Buscar</button>
-                <button className="px-4 py-2 border border-border rounded-lg text-sm" type="button" onClick={clearFilters}>
-                  Limpiar
-                </button>
-              </form>
-            </section>
+          <div className="space-y-3">
 
-            <section className="space-y-3 candidate-vacantes-list">
+            <section className="space-y-1 candidate-vacantes-list">
               {loading && <div className="bg-white border border-border rounded-xl p-5 text-sm text-foreground/70">Cargando vacantes...</div>}
               {!loading && error && <div className="bg-white border border-border rounded-xl p-5 text-sm text-rose-700">{error}</div>}
               {!loading && !error && items.length === 0 && (
@@ -436,24 +603,64 @@ export default function CandidateVacantes() {
                 </div>
               )}
               {!loading && !error && items.map((item) => (
-                <article key={item.id} className="candidate-job-card">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h2 className="font-semibold text-lg">{item.titulo}</h2>
-                      <p className="text-sm text-foreground/70">{item.empresa_nombre || 'Empresa'}</p>
+                <article key={item.id} className="bg-white border border-border rounded-xl p-4 hover:border-primary/30 hover:shadow-md transition-all flex flex-col">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h2 className="font-semibold text-lg text-foreground leading-tight mb-1">{item.titulo}</h2>
+                      <p className="text-sm font-medium text-foreground/70">{item.empresa_nombre || 'Empresa'}</p>
                     </div>
-                    <span className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700">{item.modalidad}</span>
+                    <span className="text-[11px] font-semibold tracking-wide px-2 py-1 rounded-full bg-primary/10 text-primary uppercase whitespace-nowrap">
+                      {item.modalidad}
+                    </span>
                   </div>
-                  <div className="mt-2 text-xs text-foreground/60">
-                    {item.provincia || 'Provincia N/D'} - {item.ciudad || 'Ciudad N/D'} - {item.tipo_contrato}
+
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-foreground/70 mt-1">
+                    <span className="flex items-center gap-1.5 break-all">
+                      <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      {item.provincia || 'Provincia N/D'}, {item.ciudad || 'Ciudad N/D'}
+                    </span>
+                    <span className="flex items-center gap-1.5 break-all">
+                      <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      {item.area || 'Area no definida'}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {item.tipo_contrato?.replace('_', ' ')}
+                    </span>
                   </div>
-                  <div className="mt-2 text-xs text-foreground/60">{item.area || 'Area no definida'}</div>
-                  <div className="mt-2 text-xs text-foreground/60">
-                    Publicada: {String(item.fecha_publicacion || '').slice(0, 10) || 'N/D'}
+
+                  <div className="mt-1.5 pt-3 border-t border-border/50 flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-[11px] text-foreground/50 font-medium">
+                      Publicada: {String(item.fecha_publicacion || '').slice(0, 10) || 'N/D'}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-border text-foreground/70 hover:bg-slate-50 transition-colors"
+                        type="button"
+                        onClick={() => setSelectedVacante(item)}
+                      >
+                        Ver detalles
+                      </button>
+                      <button
+                        className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${item.postulado
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed'
+                          : 'bg-primary/80 text-white hover:bg-primary hover:shadow-lg'
+                          }`}
+                        type="button"
+                        disabled={Boolean(item.postulado) || postingId === item.id}
+                        onClick={() => postular(item.id)}
+                      >
+                        {item.postulado ? 'Ya postulado ✔' : (postingId === item.id ? 'Postulando...' : 'Postular ahora')}
+                      </button>
+                    </div>
                   </div>
-                  <button className="candidate-cta" type="button" disabled={postingId === item.id} onClick={() => postular(item.id)}>
-                    {postingId === item.id ? 'Postulando...' : 'Postular ahora'}
-                  </button>
                 </article>
               ))}
             </section>
@@ -462,19 +669,20 @@ export default function CandidateVacantes() {
 
         <section className="bg-white border border-border rounded-xl p-4 flex flex-wrap items-center justify-between gap-3 text-sm">
           <div className="text-foreground/70">Pagina {page} de {totalPages} - Total {total}</div>
-          <div className="flex items-center gap-2">
-            <select
-              className="ef-control"
+          <div className="flex flex-wrap items-center gap-2">
+            <FormDropdown
               value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value))
+              options={[
+                { value: 20, label: '20' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' }
+              ]}
+              onChange={(value) => {
+                setPageSize(value)
                 setPage(1)
               }}
-            >
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+              placeholder="20"
+            />
             <button className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-50" type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
               Anterior
             </button>
@@ -484,6 +692,134 @@ export default function CandidateVacantes() {
           </div>
         </section>
       </main>
+
+      {selectedVacante && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setSelectedVacante(null) }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setSelectedVacante(null) }}
+          tabIndex={-1}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-start justify-between gap-4 p-6 border-b border-border">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[11px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-primary/10 text-primary uppercase">
+                    {selectedVacante.modalidad}
+                  </span>
+                  <span className="text-[11px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase">
+                    {selectedVacante.tipo_contrato?.replace(/_/g, ' ')}
+                  </span>
+                  {selectedVacante.postulado ? (
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Ya postulado ✔</span>
+                  ) : null}
+                </div>
+                <h2 className="font-heading font-bold text-xl text-foreground leading-tight">{selectedVacante.titulo}</h2>
+                <p className="text-sm font-medium text-foreground/70 mt-0.5">{selectedVacante.empresa_nombre || 'Empresa'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedVacante(null)}
+                className="text-foreground/40 hover:text-foreground transition-colors p-1 rounded-lg hover:bg-slate-100 flex-shrink-0 mt-0.5"
+                aria-label="Cerrar"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Detail fields */}
+            <div className="p-6 space-y-5 flex-1">
+              {/* Meta info row */}
+              <div className="flex flex-wrap gap-4 text-xs text-foreground/70">
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  {selectedVacante.provincia || 'N/D'}, {selectedVacante.ciudad || 'N/D'}
+                </span>
+                {selectedVacante.area && (
+                  <span className="flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    {selectedVacante.area}
+                  </span>
+                )}
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Publicada: {String(selectedVacante.fecha_publicacion || '').slice(0, 10) || 'N/D'}
+                </span>
+                {selectedVacante.fecha_cierre && (
+                  <span className="flex items-center gap-1.5 text-amber-600 font-medium">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Cierra: {String(selectedVacante.fecha_cierre || '').slice(0, 10)}
+                  </span>
+                )}
+              </div>
+
+              {selectedVacante.descripcion && (
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-2">Descripción</h3>
+                  <p className="text-sm text-foreground/75 whitespace-pre-line leading-relaxed">{selectedVacante.descripcion}</p>
+                </div>
+              )}
+
+              {selectedVacante.requisitos && (
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-2">Requisitos</h3>
+                  <p className="text-sm text-foreground/75 whitespace-pre-line leading-relaxed">{selectedVacante.requisitos}</p>
+                </div>
+              )}
+
+              {!selectedVacante.descripcion && !selectedVacante.requisitos && (
+                <p className="text-sm text-foreground/50 italic">El empleador no añadió descripción ni requisitos.
+                </p>
+              )}
+            </div>
+
+            {/* Modal footer */}
+            <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setSelectedVacante(null)}
+                className="px-4 py-2 text-sm rounded-xl border border-border text-foreground/70 hover:bg-slate-50 transition-colors"
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(selectedVacante.postulado) || postingId === selectedVacante.id}
+                onClick={async () => {
+                  await postular(selectedVacante.id)
+                  setSelectedVacante(prev => prev ? { ...prev, postulado: 1 } : prev)
+                }}
+                className={`px-5 py-2 text-sm font-semibold rounded-xl transition-all duration-200 ${selectedVacante.postulado
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed'
+                  : 'bg-primary text-white hover:bg-primary/90 hover:shadow-md'
+                  }`}
+              >
+                {selectedVacante.postulado
+                  ? 'Ya postulado ✔'
+                  : postingId === selectedVacante.id
+                    ? 'Postulando...'
+                    : 'Postular ahora'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
