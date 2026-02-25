@@ -7,6 +7,8 @@ import Register from './modules/auth/Register'
 import RequestPassword from './modules/auth/RequestPassword'
 import ChangePassword from './modules/auth/ChangePassword'
 import CandidateVacantes from './modules/candidate/CandidateVacantes'
+import CandidateEmpresas from './modules/candidate/CandidateEmpresas'
+import CandidateEmpresaPerfil from './modules/candidate/CandidateEmpresaPerfil'
 import CandidatePostulaciones from './modules/candidate/CandidatePostulaciones'
 import CandidateProfile from './modules/candidate/CandidateProfile'
 import ProfilePerfil from './modules/candidate/ProfilePerfil'
@@ -72,6 +74,22 @@ function App() {
             element={
               <ProtectedRoute roles={['candidato', 'superadmin']}>
                 <CandidateVacantes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/candidate/empresas"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <CandidateEmpresas />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/candidate/empresas/:empresaId"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <CandidateEmpresaPerfil />
               </ProtectedRoute>
             }
           />

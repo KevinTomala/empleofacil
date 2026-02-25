@@ -178,7 +178,7 @@ export default function CandidateVacantes() {
         if (!mounted) return
         const sourceItems = Array.isArray(data?.items) ? data.items : []
         setAllVacantes(sourceItems)
-      } catch (_) {
+      } catch {
         if (!mounted) return
         setAllVacantes([])
       }

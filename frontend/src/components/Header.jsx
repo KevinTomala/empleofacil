@@ -47,7 +47,7 @@ export default function Header() {
           setProfilePhotoUrl(rawPath.startsWith('/') ? `${apiBase}${rawPath}` : `${apiBase}/${rawPath}`)
         }
         setPhotoError(false)
-      } catch (_error) {
+      } catch {
         if (!active) return
         setProfilePhotoUrl('')
         setPhotoError(false)
@@ -97,6 +97,7 @@ export default function Header() {
 
     if (role === 'candidato') {
       const links = [
+        { href: '/app/candidate/empresas', label: 'Empresas' },
         { href: '/app/candidate/vacantes', label: 'Vacantes' },
         { href: '/app/candidate/postulaciones', label: 'Postulaciones' },
         { href: '/app/candidate/perfil', label: 'Perfil' },

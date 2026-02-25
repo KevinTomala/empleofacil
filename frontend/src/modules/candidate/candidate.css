@@ -153,6 +153,54 @@
   gap: 1rem;
 }
 
+.candidate-company-avatars {
+  display: flex;
+  align-items: center;
+  padding-left: 0.2rem;
+}
+
+.candidate-company-avatar {
+  width: 2rem;
+  height: 2rem;
+  margin-left: -0.45rem;
+  border-radius: 9999px;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px var(--color-border);
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.candidate-company-avatar:first-child {
+  margin-left: 0;
+}
+
+.candidate-company-avatar.is-current {
+  box-shadow: 0 0 0 1px #86efac;
+}
+
+.candidate-company-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.candidate-company-avatar-extra {
+  margin-left: 0.35rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 9999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 @media (max-width: 1023px) {
   .candidate-map-card {
     position: static;

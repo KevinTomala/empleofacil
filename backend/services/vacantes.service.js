@@ -52,6 +52,53 @@ function normalizePosted(value) {
   return posted;
 }
 
+function isSchemaDriftError(error) {
+  if (!error) return false;
+  const code = String(error.code || '');
+  const errno = Number(error.errno || 0);
+  return code === 'ER_BAD_FIELD_ERROR' || code === 'ER_NO_SUCH_TABLE' || errno === 1054 || errno === 1146;
+}
+
+async function fetchEmpresaExperienciaStats(empresaIds = []) {
+  const uniqueIds = Array.from(
+    new Set(
+      (Array.isArray(empresaIds) ? empresaIds : [])
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  );
+  if (!uniqueIds.length) return new Map();
+
+  const placeholders = uniqueIds.map(() => '?').join(', ');
+  try {
+    const [rows] = await db.query(
+      `SELECT
+         empresa_id,
+         COUNT(DISTINCT candidato_id) AS personas_total,
+         COUNT(DISTINCT CASE WHEN actualmente_trabaja = 1 THEN candidato_id END) AS personas_actuales
+       FROM candidatos_experiencia
+       WHERE deleted_at IS NULL
+         AND empresa_id IN (${placeholders})
+       GROUP BY empresa_id`,
+      uniqueIds
+    );
+
+    const stats = new Map();
+    rows.forEach((row) => {
+      const empresaId = Number(row?.empresa_id || 0);
+      if (!empresaId) return;
+      stats.set(empresaId, {
+        personas_total: Number(row?.personas_total || 0),
+        personas_actuales: Number(row?.personas_actuales || 0)
+      });
+    });
+    return stats;
+  } catch (error) {
+    if (isSchemaDriftError(error)) return new Map();
+    throw error;
+  }
+}
+
 function buildVacantesWhereClause(filters, { ownEmpresaId = null, onlyActive = false } = {}) {
   const where = ['v.deleted_at IS NULL', 'v.activo = 1'];
   const params = [];
@@ -179,8 +226,18 @@ async function listVacantes({
     [...params, safePageSize, offset]
   );
 
+  const statsByEmpresaId = await fetchEmpresaExperienciaStats(rows.map((row) => row.empresa_id));
+  const items = rows.map((row) => {
+    const stats = statsByEmpresaId.get(Number(row.empresa_id)) || { personas_total: 0, personas_actuales: 0 };
+    return {
+      ...row,
+      empresa_personas_total: stats.personas_total,
+      empresa_personas_actuales: stats.personas_actuales
+    };
+  });
+
   return {
-    items: rows,
+    items,
     page: safePage,
     page_size: safePageSize,
     total: Number(countRows[0]?.total || 0)
