@@ -31,37 +31,61 @@ export default function Header() {
   const navigate = useNavigate()
   const { user, logout, hasCompanyAccess } = useAuth()
   const role = user?.rol
+  const userId = Number(user?.id || 0)
+  const photoCacheKey = useMemo(
+    () => (userId > 0 && role ? `auth_profile_photo_url:${role}:${userId}` : ''),
+    [role, userId]
+  )
+
+  useEffect(() => {
+    if (!photoCacheKey) {
+      setProfilePhotoUrl('')
+      setPhotoError(false)
+      return
+    }
+
+    const cached = String(sessionStorage.getItem(photoCacheKey) || '').trim()
+    setProfilePhotoUrl(cached)
+    setPhotoError(false)
+  }, [photoCacheKey])
 
   useEffect(() => {
     let active = true
 
     async function loadPhoto() {
       try {
+        let nextPhotoUrl = ''
+
         if (role === 'candidato') {
           const perfil = await getMyPerfil()
           if (!active) return
           const documentos = Array.isArray(perfil?.documentos) ? perfil.documentos : []
           const foto = documentos.find((doc) => doc?.tipo_documento === 'foto' && doc?.ruta_archivo)
-          setProfilePhotoUrl(foto?.ruta_archivo ? toAssetUrl(foto.ruta_archivo) : '')
-          setPhotoError(false)
-          return
-        }
-
-        if (role === 'empresa') {
+          nextPhotoUrl = foto?.ruta_archivo ? toAssetUrl(foto.ruta_archivo) : ''
+        } else if (role === 'empresa') {
           const perfilEmpresa = await getMyCompanyPerfil()
           if (!active) return
           const logo = String(perfilEmpresa?.perfil?.logo_url || '').trim()
-          setProfilePhotoUrl(logo ? toAssetUrl(logo) : '')
-          setPhotoError(false)
-          return
+          nextPhotoUrl = logo ? toAssetUrl(logo) : ''
+        } else {
+          if (!active) return
+          nextPhotoUrl = ''
         }
 
         if (!active) return
-        setProfilePhotoUrl('')
+
+        setProfilePhotoUrl(nextPhotoUrl)
         setPhotoError(false)
+
+        if (photoCacheKey) {
+          if (nextPhotoUrl) sessionStorage.setItem(photoCacheKey, nextPhotoUrl)
+          else sessionStorage.removeItem(photoCacheKey)
+        }
       } catch {
         if (!active) return
-        setProfilePhotoUrl('')
+        // Conserva foto cacheada si existe para evitar parpadeo/fallback al navegar.
+        const cached = photoCacheKey ? String(sessionStorage.getItem(photoCacheKey) || '').trim() : ''
+        if (cached) setProfilePhotoUrl(cached)
         setPhotoError(false)
       }
     }
@@ -71,7 +95,7 @@ export default function Header() {
     return () => {
       active = false
     }
-  }, [role, user?.id])
+  }, [role, userId, photoCacheKey])
 
   const homeLink = useMemo(() => {
     if (role === 'superadmin' || role === 'administrador') return '/app/admin'
@@ -133,7 +157,10 @@ export default function Header() {
   }, [role, hasCompanyAccess])
 
   const handleLogout = () => {
+    if (photoCacheKey) sessionStorage.removeItem(photoCacheKey)
     logout()
+    setProfilePhotoUrl('')
+    setPhotoError(false)
     setIsProfileOpen(false)
     if (location.pathname.startsWith('/app')) {
       navigate('/')

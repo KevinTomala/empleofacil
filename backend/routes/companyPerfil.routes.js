@@ -9,6 +9,7 @@ const {
   requireCompanyAdmin
 } = require('../middlewares/companyAccess.middleware');
 const {
+  getMyCompanyAccess,
   getMyCompanyPerfil,
   updateMyCompanyDatosGenerales,
   uploadMyCompanyLogo,
@@ -60,6 +61,7 @@ const uploadLogo = multer({
   }
 });
 
+router.get('/acceso/me', authRequired, getMyCompanyAccess);
 router.get('/perfil/me', authRequired, companyContextRequired(), getMyCompanyPerfil);
 router.get('/reactivacion/me', authRequired, requireRole(['empresa']), getMyCompanyReactivationRequest);
 router.post('/reactivacion/me/solicitar', authRequired, requireRole(['empresa']), requestMyCompanyReactivation);

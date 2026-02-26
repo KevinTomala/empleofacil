@@ -21,6 +21,19 @@ function toTextOrNull(value) {
   return text || null;
 }
 
+function hasText(value) {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+function isTruthyNumber(value) {
+  return Number(value) === 1;
+}
+
+function hasFiniteNumber(value) {
+  if (value === null || value === undefined || value === '') return false;
+  return Number.isFinite(Number(value));
+}
+
 function normalizeEstadoProceso(value) {
   const estado = toTextOrNull(value);
   if (!estado) return null;
@@ -156,6 +169,192 @@ async function findVacanteForApply(vacanteId) {
     [vacanteId]
   );
   return rows[0] || null;
+}
+
+async function getCandidateApplyProfileReadiness(candidatoId) {
+  await ensurePostulacionesSchema();
+  const [rows] = await db.query(
+    `SELECT
+      c.nombres,
+      c.apellidos,
+      c.documento_identidad,
+      cc.email,
+      cc.telefono_celular,
+      cd.provincia,
+      cd.canton,
+      cd.parroquia,
+      cs.tipo_sangre,
+      cs.estatura,
+      cs.peso,
+      cs.tatuaje,
+      cl.movilizacion,
+      cl.tipo_vehiculo,
+      cl.disp_viajar,
+      cl.disp_turnos,
+      cl.disp_fines_semana,
+      ce.nivel_estudio,
+      ce.institucion,
+      ce.titulo_obtenido,
+      (
+        SELECT COUNT(*)
+        FROM candidatos_formaciones f
+        WHERE f.candidato_id = c.id
+          AND f.deleted_at IS NULL
+      ) AS formacion_count,
+      (
+        SELECT COUNT(*)
+        FROM candidatos_idiomas ci
+        WHERE ci.candidato_id = c.id
+          AND ci.deleted_at IS NULL
+      ) AS idiomas_count,
+      (
+        SELECT COUNT(*)
+        FROM candidatos_experiencia ex
+        WHERE ex.candidato_id = c.id
+          AND ex.deleted_at IS NULL
+      ) AS experiencia_count,
+      (
+        SELECT COUNT(*)
+        FROM candidatos_documentos d
+        WHERE d.candidato_id = c.id
+          AND d.deleted_at IS NULL
+      ) AS documentos_count
+     FROM candidatos c
+     LEFT JOIN candidatos_contacto cc
+       ON cc.candidato_id = c.id
+      AND cc.deleted_at IS NULL
+     LEFT JOIN candidatos_domicilio cd
+       ON cd.candidato_id = c.id
+      AND cd.deleted_at IS NULL
+     LEFT JOIN candidatos_salud cs
+       ON cs.candidato_id = c.id
+      AND cs.deleted_at IS NULL
+     LEFT JOIN candidatos_logistica cl
+       ON cl.candidato_id = c.id
+      AND cl.deleted_at IS NULL
+     LEFT JOIN (
+       SELECT ce1.candidato_id, ce1.nivel_estudio, ce1.institucion, ce1.titulo_obtenido
+       FROM candidatos_educacion_general ce1
+       LEFT JOIN candidatos_educacion_general ce2
+         ON ce2.candidato_id = ce1.candidato_id
+        AND ce2.deleted_at IS NULL
+        AND (
+          ce2.updated_at > ce1.updated_at
+          OR (ce2.updated_at = ce1.updated_at AND ce2.created_at > ce1.created_at)
+        )
+       WHERE ce1.deleted_at IS NULL
+         AND ce2.candidato_id IS NULL
+     ) ce
+       ON ce.candidato_id = c.id
+     WHERE c.id = ?
+       AND c.deleted_at IS NULL
+     LIMIT 1`,
+    [candidatoId]
+  );
+
+  const row = rows[0];
+  if (!row) {
+    return {
+      exists: false,
+      is_ready: false,
+      missing_sections: ['perfil', 'domicilio', 'movilidad', 'salud', 'formacion', 'idiomas', 'experiencia', 'documentos'],
+      missing_fields: [
+        'datos_basicos.nombres',
+        'datos_basicos.apellidos',
+        'datos_basicos.documento_identidad',
+        'contacto.email_or_telefono_celular',
+        'domicilio.provincia',
+        'domicilio.canton',
+        'domicilio.parroquia',
+        'logistica.(movilizacion|tipo_vehiculo|disp_viajar|disp_turnos|disp_fines_semana)',
+        'salud.(tipo_sangre|estatura|peso|tatuaje)',
+        'formacion.(educacion_general|formacion_detalle)',
+        'idiomas.at_least_one',
+        'experiencia.at_least_one',
+        'documentos.at_least_one'
+      ]
+    };
+  }
+
+  const missingFields = [];
+  const missingSections = [];
+
+  const hasEmail = hasText(row.email);
+  const hasPhone = hasText(row.telefono_celular);
+  const perfilComplete = hasText(row.nombres)
+    && hasText(row.apellidos)
+    && hasText(row.documento_identidad)
+    && (hasEmail || hasPhone);
+
+  if (!perfilComplete) {
+    missingSections.push('perfil');
+    if (!hasText(row.nombres)) missingFields.push('datos_basicos.nombres');
+    if (!hasText(row.apellidos)) missingFields.push('datos_basicos.apellidos');
+    if (!hasText(row.documento_identidad)) missingFields.push('datos_basicos.documento_identidad');
+    if (!hasEmail && !hasPhone) missingFields.push('contacto.email_or_telefono_celular');
+  }
+
+  const domicilioComplete = hasText(row.provincia) && hasText(row.canton) && hasText(row.parroquia);
+  if (!domicilioComplete) {
+    missingSections.push('domicilio');
+    if (!hasText(row.provincia)) missingFields.push('domicilio.provincia');
+    if (!hasText(row.canton)) missingFields.push('domicilio.canton');
+    if (!hasText(row.parroquia)) missingFields.push('domicilio.parroquia');
+  }
+
+  const movilidadComplete = isTruthyNumber(row.movilizacion)
+    || hasText(row.tipo_vehiculo)
+    || isTruthyNumber(row.disp_viajar)
+    || isTruthyNumber(row.disp_turnos)
+    || isTruthyNumber(row.disp_fines_semana);
+  if (!movilidadComplete) {
+    missingSections.push('movilidad');
+    missingFields.push('logistica.(movilizacion|tipo_vehiculo|disp_viajar|disp_turnos|disp_fines_semana)');
+  }
+
+  const saludComplete = hasText(row.tipo_sangre)
+    || hasFiniteNumber(row.estatura)
+    || hasFiniteNumber(row.peso)
+    || hasText(row.tatuaje);
+  if (!saludComplete) {
+    missingSections.push('salud');
+    missingFields.push('salud.(tipo_sangre|estatura|peso|tatuaje)');
+  }
+
+  const formacionCount = Number(row.formacion_count || 0);
+  const formacionComplete = formacionCount > 0
+    || hasText(row.nivel_estudio)
+    || hasText(row.institucion)
+    || hasText(row.titulo_obtenido);
+  if (!formacionComplete) {
+    missingSections.push('formacion');
+    missingFields.push('formacion.(educacion_general|formacion_detalle)');
+  }
+
+  const idiomasCount = Number(row.idiomas_count || 0);
+  if (idiomasCount <= 0) {
+    missingSections.push('idiomas');
+    missingFields.push('idiomas.at_least_one');
+  }
+
+  const experienciaCount = Number(row.experiencia_count || 0);
+  if (experienciaCount <= 0) {
+    missingSections.push('experiencia');
+    missingFields.push('experiencia.at_least_one');
+  }
+
+  const documentosCount = Number(row.documentos_count || 0);
+  if (documentosCount <= 0) {
+    missingSections.push('documentos');
+    missingFields.push('documentos.at_least_one');
+  }
+
+  return {
+    exists: true,
+    is_ready: missingSections.length === 0,
+    missing_sections: missingSections,
+    missing_fields: missingFields
+  };
 }
 
 async function existsPostulacion(vacanteId, candidatoId) {
@@ -511,6 +710,7 @@ module.exports = {
   normalizeEstadoProceso,
   normalizePosted,
   findCandidatoIdByUserId,
+  getCandidateApplyProfileReadiness,
   findVacanteForApply,
   existsPostulacion,
   createPostulacion,

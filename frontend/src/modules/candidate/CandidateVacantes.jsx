@@ -452,6 +452,25 @@ export default function CandidateVacantes() {
         showToast({ type: 'warning', message: 'Ya te postulaste a esta vacante.' })
       } else if (code === 'VACANTE_NOT_ACTIVE') {
         showToast({ type: 'warning', message: 'Esta vacante ya no esta activa.' })
+      } else if (code === 'CANDIDATE_PROFILE_INCOMPLETE') {
+        const missingSections = Array.isArray(err?.payload?.evidencia?.missing_sections)
+          ? err.payload.evidencia.missing_sections
+          : []
+        const sectionLabels = {
+          perfil: 'Perfil',
+          domicilio: 'Domicilio',
+          movilidad: 'Movilidad',
+          salud: 'Salud',
+          formacion: 'Formacion',
+          idiomas: 'Idiomas',
+          experiencia: 'Experiencia',
+          documentos: 'Documentos'
+        }
+        const labels = missingSections
+          .map((section) => sectionLabels[section] || section)
+          .filter(Boolean)
+        const suffix = labels.length ? ` Faltan: ${labels.join(', ')}.` : ''
+        showToast({ type: 'warning', message: `Completa tu perfil (Fase 1 y Fase 2) antes de postular.${suffix}` })
       } else {
         showToast({ type: 'error', message: code || 'No se pudo registrar la postulacion.' })
       }

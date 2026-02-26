@@ -472,7 +472,7 @@ export default function CandidateProfile() {
                 <section className="space-y-3">
                   <div>
                     <h2 className="text-sm font-semibold text-foreground">Perfil obligatorio</h2>
-                    <p className="text-xs text-foreground/65">Fase 1. Debe estar completo para postular.</p>
+                    <p className="text-xs text-foreground/65">Debes completar Fase 1 y Fase 2 para postular.</p>
                   </div>
                   <div className="space-y-3">{requiredSections.map((section) => renderSectionCard(section))}</div>
                 </section>

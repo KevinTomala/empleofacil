@@ -4,6 +4,7 @@ const {
   normalizeEstadoProceso,
   normalizePosted,
   findCandidatoIdByUserId,
+  getCandidateApplyProfileReadiness,
   findVacanteForApply,
   existsPostulacion,
   createPostulacion,
@@ -57,6 +58,15 @@ async function createPostulacionHandler(req, res) {
   try {
     const candidatoId = await findCandidatoIdByUserId(req.user?.id);
     if (!candidatoId) return res.status(404).json({ error: 'CANDIDATO_NOT_FOUND' });
+
+    const profileReadiness = await getCandidateApplyProfileReadiness(candidatoId);
+    if (!profileReadiness?.is_ready) {
+      return res.status(422).json({
+        error: 'CANDIDATE_PROFILE_INCOMPLETE',
+        details: 'Completa tu perfil (Fase 1 y Fase 2) antes de postular.',
+        evidencia: profileReadiness
+      });
+    }
 
     const vacante = await findVacanteForApply(vacanteId);
     if (!vacante || vacante.deleted_at) return res.status(404).json({ error: 'VACANTE_NOT_FOUND' });

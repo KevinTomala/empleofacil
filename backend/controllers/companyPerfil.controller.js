@@ -278,6 +278,21 @@ function removeLocalLogoIfManaged(logoUrl) {
   }
 }
 
+async function getMyCompanyAccess(req, res) {
+  try {
+    const empresaId = await resolveMyEmpresa(req);
+    return res.json({
+      has_access: Boolean(empresaId),
+      empresa_id: empresaId || null
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'PROFILE_FETCH_FAILED',
+      details: String(error.message || error)
+    });
+  }
+}
+
 function safeRemoveFile(filePath) {
   if (!filePath) return;
   try {
@@ -718,6 +733,7 @@ async function deleteMyCompanyPerfil(req, res) {
 }
 
 module.exports = {
+  getMyCompanyAccess,
   getMyCompanyPerfil,
   updateMyCompanyDatosGenerales,
   uploadMyCompanyLogo,
