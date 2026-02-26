@@ -67,6 +67,316 @@
   border-radius: 999px;
 }
 
+.company-candidate-stat {
+  background: linear-gradient(135deg, hsla(var(--primary), 0.12), hsla(var(--ring), 0.14));
+  border: 1px solid hsla(var(--primary), 0.3);
+  border-radius: 12px;
+  padding: 0.7rem 1rem;
+  min-width: 170px;
+}
+
+.company-candidate-stat-label {
+  margin: 0;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.company-candidate-stat-value {
+  margin: 0.1rem 0 0;
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: hsl(var(--foreground));
+}
+
+.company-candidate-search {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.company-candidate-search svg {
+  color: hsl(var(--muted-foreground));
+}
+
+.company-candidate-card {
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.company-candidate-card:hover {
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+  transform: translateY(-1px);
+}
+
+.company-candidate-meta {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.company-candidate-message-context {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--secondary));
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+}
+
+.company-candidate-warning,
+.company-candidate-ok {
+  margin: 0;
+  font-size: 0.84rem;
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+}
+
+.company-candidate-warning {
+  color: #9f1239;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+}
+
+.company-candidate-ok {
+  color: #166534;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.company-candidate-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.company-candidate-btn {
+  border: 0;
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.company-candidate-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.company-candidate-btn-secondary {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+.company-candidate-btn-primary {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--ring)));
+  color: hsl(var(--primary-foreground));
+}
+
+.company-profile-modal {
+  position: relative;
+  width: min(920px, 96vw);
+  max-height: calc(100vh - 2rem);
+  overflow: hidden;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.company-profile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.company-profile-head h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.company-profile-head p {
+  margin: 0.2rem 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.82rem;
+}
+
+.company-profile-state,
+.company-profile-error {
+  margin: 1rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+.company-profile-state {
+  background: hsl(var(--secondary));
+  color: hsl(var(--muted-foreground));
+}
+
+.company-profile-error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.company-profile-body {
+  overflow-y: auto;
+  padding: 1rem;
+  background: hsl(var(--secondary));
+}
+
+.company-profile-resume {
+  background: #fff;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.company-resume-header {
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: linear-gradient(135deg, hsla(var(--primary), 0.06), hsla(var(--ring), 0.08));
+}
+
+.company-resume-kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+  font-weight: 700;
+}
+
+.company-resume-header h4 {
+  margin: 0.25rem 0 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: hsl(var(--foreground));
+}
+
+.company-resume-summary {
+  margin: 0.45rem 0 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: hsl(var(--foreground));
+}
+
+.company-resume-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+}
+
+.company-resume-sidebar {
+  padding: 0.9rem;
+  border-right: 1px solid hsl(var(--border));
+  background: hsl(var(--secondary));
+  display: grid;
+  gap: 0.65rem;
+}
+
+.company-resume-main {
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.company-resume-block {
+  background: #fff;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  padding: 0.7rem;
+}
+
+.company-resume-block h5 {
+  margin: 0 0 0.5rem;
+  font-size: 0.77rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: hsl(var(--muted-foreground));
+}
+
+.company-resume-fact-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.company-resume-fact-list p {
+  margin: 0;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.company-resume-fact-list span {
+  font-size: 0.72rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.company-resume-fact-list strong {
+  font-size: 0.84rem;
+  color: hsl(var(--foreground));
+}
+
+.company-profile-section {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  padding: 0.8rem;
+}
+
+.company-profile-section h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.company-profile-section p {
+  margin: 0;
+  font-size: 0.83rem;
+  color: hsl(var(--foreground));
+}
+
+.company-profile-item + .company-profile-item {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed hsl(var(--border));
+}
+
+.company-profile-item-title {
+  margin-bottom: 0.15rem;
+  font-weight: 700;
+}
+
+.company-profile-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.company-profile-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  background: hsla(var(--primary), 0.1);
+  color: hsl(var(--primary));
+  border: 1px solid hsla(var(--primary), 0.24);
+}
+
+.company-profile-actions {
+  border-top: 1px solid hsl(var(--border));
+  padding: 0.8rem 1rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .efmsg-shell {
   display: grid;
   grid-template-columns: 350px minmax(0, 1fr);
@@ -762,6 +1072,15 @@
 }
 
 @media (max-width: 640px) {
+  .company-resume-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .company-resume-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid hsl(var(--border));
+  }
+
   .efmsg-mensajes-header h2 {
     font-size: 1.8rem;
   }

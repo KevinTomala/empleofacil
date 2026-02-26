@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import FormDropdown from '../../components/FormDropdown'
 import {
   ArrowLeft,
@@ -7,14 +8,13 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
+  Download,
   Eye,
   Ellipsis,
   FileText,
   ListFilter,
-  Mail,
   MapPin,
   Monitor,
-  Phone,
   Pencil,
   Plus,
   Pause,
@@ -28,9 +28,10 @@ import Header from '../../components/Header'
 import provinciasData from '../../assets/provincias.json'
 import { apiRequest } from '../../services/api'
 import { getMyCompanyPreferences } from '../../services/companyPerfil.api'
+import { createMensajesVacanteConversation, getMensajesErrorMessage } from '../../services/mensajes.api'
+import { downloadPostulacionCurriculumPdf, getPostulacionesErrorMessage } from '../../services/postulaciones.api'
 import { showToast } from '../../utils/showToast'
-import CandidatoPerfilDrawer from './components/CandidatoPerfilDrawer'
-import { getPerfilById, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
+import CandidatoPerfilProfesionalModal from './components/CandidatoPerfilProfesionalModal'
 import './company.css'
 
 const ESTADOS = ['borrador', 'activa', 'pausada', 'cerrada']
@@ -128,6 +129,7 @@ function formatEstadoProcesoLabel(value) {
 }
 
 export default function CompanyVacantes() {
+  const navigate = useNavigate()
   const [viewMode, setViewMode] = useState('vacantes')
   const [selectedVacante, setSelectedVacante] = useState(null)
   const [items, setItems] = useState([])
@@ -170,11 +172,9 @@ export default function CompanyVacantes() {
     contratados: 0
   })
 
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [drawerLoading, setDrawerLoading] = useState(false)
-  const [drawerError, setDrawerError] = useState('')
-  const [drawerPerfil, setDrawerPerfil] = useState(null)
-  const [drawerCandidatoName, setDrawerCandidatoName] = useState('')
+  const [profileModalOpen, setProfileModalOpen] = useState(false)
+  const [profileCandidate, setProfileCandidate] = useState(null)
+  const [downloadingPostulacionId, setDownloadingPostulacionId] = useState(0)
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize])
   const postuladosTotalPages = useMemo(() => Math.max(1, Math.ceil(postuladosTotal / postuladosPageSize)), [postuladosTotal, postuladosPageSize])
@@ -353,29 +353,68 @@ export default function CompanyVacantes() {
     fetchPostuladosKpis(vacante.id)
   }
 
-  const handleOpenPerfil = async (id, name) => {
-    setDrawerOpen(true)
-    setDrawerLoading(true)
-    setDrawerError('')
-    setDrawerPerfil(null)
-    setDrawerCandidatoName(name)
+  const handleOpenPerfil = (id, name) => {
+    setProfileCandidate({ id, name })
+    setProfileModalOpen(true)
+  }
+
+  const handleOpenMensajes = async (candidatoId) => {
+    const vacanteId = Number(selectedVacante?.id || 0)
+    const parsedCandidatoId = Number(candidatoId || 0)
+    if (!Number.isInteger(vacanteId) || vacanteId <= 0) {
+      showToast({ type: 'warning', message: 'Selecciona una vacante valida.' })
+      return
+    }
+    if (!Number.isInteger(parsedCandidatoId) || parsedCandidatoId <= 0) {
+      showToast({ type: 'warning', message: 'El candidato seleccionado no es valido.' })
+      return
+    }
+
     try {
-      setDrawerPerfil(await getPerfilById(id))
-    } catch (err) {
-      setDrawerError(getPerfilErrorMessage(err, 'No se pudo cargar el perfil del candidato.'))
-    } finally {
-      setDrawerLoading(false)
+      const response = await createMensajesVacanteConversation({
+        vacante_id: vacanteId,
+        candidato_id: parsedCandidatoId
+      })
+      const conversationId = Number(response?.conversacion?.id || 0)
+      if (conversationId > 0) {
+        navigate(`/app/company/mensajes?conv=${conversationId}`)
+      } else {
+        navigate('/app/company/mensajes')
+      }
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: getMensajesErrorMessage(error, 'No se pudo abrir la conversacion con el candidato.')
+      })
     }
   }
 
-  const copyValue = async (value, label) => {
-    const text = String(value || '').trim()
-    if (!text) return showToast({ type: 'warning', message: `${label} no disponible.` })
+  const handleDownloadCurriculum = async (item, candidateName) => {
+    const postulacionId = Number(item?.id || 0)
+    if (!Number.isInteger(postulacionId) || postulacionId <= 0) {
+      showToast({ type: 'error', message: 'La postulacion seleccionada no es valida.' })
+      return
+    }
+
     try {
-      await navigator.clipboard.writeText(text)
-      showToast({ type: 'success', message: `${label} copiado.` })
-    } catch (_err) {
-      showToast({ type: 'error', message: `No se pudo copiar ${label.toLowerCase()}.` })
+      setDownloadingPostulacionId(postulacionId)
+      const safeName = String(candidateName || 'candidato').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')
+      const { blob, fileName } = await downloadPostulacionCurriculumPdf({
+        postulacionId,
+        defaultFileName: `CV_${safeName || postulacionId}.pdf`
+      })
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = fileName || `curriculum_postulacion_${postulacionId}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(objectUrl)
+    } catch (error) {
+      showToast({ type: 'error', message: getPostulacionesErrorMessage(error, 'No se pudo descargar el curriculum.') })
+    } finally {
+      setDownloadingPostulacionId(0)
     }
   }
 
@@ -594,7 +633,7 @@ export default function CompanyVacantes() {
 
             <section className="company-card p-3">
               <form className="grid md:grid-cols-1 gap-2 items-end" onSubmit={(e) => { e.preventDefault(); setPostuladosPage(1); fetchPostuladosByVacante(selectedVacante?.id, postuladosQuery, 1, postuladosPageSize) }}>
-                <label className="relative"><Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-foreground/45" /><input className="w-full border border-border rounded-xl pl-10 pr-3 py-2.5 text-sm bg-background" value={postuladosQuery} onChange={(e) => setPostuladosQuery(e.target.value)} placeholder="Buscar por nombre, documento o email..." /></label>
+                <label className="relative"><Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-foreground/45" /><input className="w-full border border-border rounded-xl pl-10 pr-3 py-2.5 text-sm bg-background" value={postuladosQuery} onChange={(e) => setPostuladosQuery(e.target.value)} placeholder="Buscar por nombre o documento..." /></label>
               </form>
             </section>
 
@@ -624,16 +663,21 @@ export default function CompanyVacantes() {
                           </div>
                           <div className="flex flex-wrap items-center gap-4 text-sm text-foreground/70">
                             <span className="inline-flex items-center gap-1"><FileText className="w-4 h-4" /> {asText(item.documento_identidad)}</span>
-                            <span className="inline-flex items-center gap-1"><Mail className="w-4 h-4" /> {asText(item.email)}</span>
-                            <span className="inline-flex items-center gap-1"><Phone className="w-4 h-4" /> {asText(item.telefono_celular)}</span>
                             <span className="inline-flex items-center gap-1"><CalendarDays className="w-4 h-4" /> {formatDate(item.fecha_postulacion)}</span>
                           </div>
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <button type="button" className="inline-flex items-center gap-2 px-4 py-2 bg-[#0D4D8F] text-white rounded-xl text-sm font-semibold" onClick={() => handleOpenPerfil(item.candidato_id, name)}><User className="w-4 h-4" /> Ver perfil</button>
-                        <button type="button" className="inline-flex items-center gap-2 px-3 py-2 border border-border rounded-xl text-sm bg-white" onClick={() => copyValue(item.email, 'Email')}><Mail className="w-4 h-4" /> Email</button>
-                        <button type="button" className="inline-flex items-center gap-2 px-3 py-2 border border-border rounded-xl text-sm bg-white" onClick={() => copyValue(item.telefono_celular, 'Telefono')}><Phone className="w-4 h-4" /> Telefono</button>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-2 px-3 py-2 border border-border rounded-xl text-sm bg-white disabled:opacity-60"
+                          onClick={() => handleDownloadCurriculum(item, name)}
+                          disabled={downloadingPostulacionId === Number(item.id)}
+                        >
+                          <Download className="w-4 h-4" /> {downloadingPostulacionId === Number(item.id) ? 'Descargando...' : 'Descargar CV'}
+                        </button>
+                        <button type="button" className="inline-flex items-center gap-2 px-3 py-2 border border-border rounded-xl text-sm bg-white" onClick={() => handleOpenMensajes(item.candidato_id)}><Users className="w-4 h-4" /> Enviar mensaje</button>
                       </div>
                     </div>
                   </article>
@@ -860,7 +904,16 @@ export default function CompanyVacantes() {
         </div>
       )}
 
-      <CandidatoPerfilDrawer open={drawerOpen} candidatoName={drawerCandidatoName} loading={drawerLoading} error={drawerError} perfil={drawerPerfil} onClose={() => setDrawerOpen(false)} />
+      <CandidatoPerfilProfesionalModal
+        open={profileModalOpen}
+        candidate={profileCandidate}
+        onClose={() => setProfileModalOpen(false)}
+        onSendMessage={(candidate) => {
+          if (!candidate?.id) return
+          setProfileModalOpen(false)
+          handleOpenMensajes(candidate.id)
+        }}
+      />
     </div>
   )
 }

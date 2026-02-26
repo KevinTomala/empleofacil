@@ -506,6 +506,29 @@ async function listPostulacionesByContratante({
   };
 }
 
+async function getEmpresaPostulacionForCurriculum({ postulacionId, empresaId }) {
+  await ensurePostulacionesSchema();
+  const safePostulacionId = toPositiveIntOrNull(postulacionId);
+  const safeEmpresaId = toPositiveIntOrNull(empresaId);
+  if (!safePostulacionId || !safeEmpresaId) return null;
+
+  const [rows] = await db.query(
+    `SELECT
+      p.id AS postulacion_id,
+      p.candidato_id,
+      p.vacante_id
+     FROM postulaciones p
+     WHERE p.id = ?
+       AND p.deleted_at IS NULL
+       AND p.contratante_tipo = 'empresa'
+       AND p.empresa_id = ?
+     LIMIT 1`,
+    [safePostulacionId, safeEmpresaId]
+  );
+
+  return rows[0] || null;
+}
+
 module.exports = {
   toPositiveIntOrNull,
   normalizeEstadoProceso,
@@ -518,5 +541,6 @@ module.exports = {
   getPostulacionesResumenByCandidato,
   getPostulacionDetailByCandidato,
   listPostulacionesByContratante,
+  getEmpresaPostulacionForCurriculum,
   listPostulacionesByEmpresa: listPostulacionesByContratante
 };

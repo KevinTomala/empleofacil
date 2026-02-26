@@ -165,6 +165,8 @@ export default function CandidatoPerfilDrawer({
 }) {
   if (!open) return null
 
+  const hasEducacionGeneral = Array.isArray(perfil?.educacion_general_items) && perfil.educacion_general_items.length > 0
+
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
@@ -205,16 +207,9 @@ export default function CandidatoPerfilDrawer({
                   { label: 'Activo', value: perfil?.datos_basicos?.activo }
                 ]}
               />
-              <FieldsGrid
-                title="Contacto"
-                fields={[
-                  { label: 'Email', value: perfil?.contacto?.email },
-                  { label: 'Telefono celular', value: perfil?.contacto?.telefono_celular },
-                  { label: 'Telefono fijo', value: perfil?.contacto?.telefono_fijo },
-                  { label: 'Contacto emergencia', value: perfil?.contacto?.contacto_emergencia_nombre },
-                  { label: 'Telefono emergencia', value: perfil?.contacto?.contacto_emergencia_telefono }
-                ]}
-              />
+              <p className="text-xs text-foreground/70 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
+                El contacto se gestiona por mensajeria interna.
+              </p>
               <FieldsGrid
                 title="Domicilio"
                 fields={[
@@ -241,14 +236,16 @@ export default function CandidatoPerfilDrawer({
                   { label: 'Disponible fines semana', value: perfil?.logistica?.disp_fines_semana }
                 ]}
               />
-              <FieldsGrid
-                title="Educacion"
-                fields={[
-                  { label: 'Nivel estudio', value: perfil?.educacion?.nivel_estudio },
-                  { label: 'Institucion', value: perfil?.educacion?.institucion },
-                  { label: 'Titulo', value: perfil?.educacion?.titulo_obtenido }
-                ]}
-              />
+              {!hasEducacionGeneral ? (
+                <FieldsGrid
+                  title="Educacion"
+                  fields={[
+                    { label: 'Nivel estudio', value: perfil?.educacion?.nivel_estudio },
+                    { label: 'Institucion', value: perfil?.educacion?.institucion },
+                    { label: 'Titulo', value: perfil?.educacion?.titulo_obtenido }
+                  ]}
+                />
+              ) : null}
               <EducacionGeneralSection items={perfil?.educacion_general_items} />
               <FormacionSection items={perfil?.formacion_detalle} />
               <ExperienceSection items={perfil.experiencia} />

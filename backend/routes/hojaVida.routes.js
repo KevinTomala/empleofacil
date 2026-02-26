@@ -7,7 +7,7 @@ const router = express.Router();
 router.get(
   '/:estudianteId/pdf',
   authRequired,
-  requireRole(['administrador', 'superadmin', 'empresa', 'candidato']),
+  requireRole(['administrador', 'superadmin', 'candidato']),
   getHojaVidaPdf
 );
 

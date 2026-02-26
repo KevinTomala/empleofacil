@@ -115,7 +115,7 @@ EmpleoFacil API
 - Query params:
   - `page` (default `1`)
   - `page_size` (default `20`, max `100`)
-  - `q` (filtro por nombre, apellido, documento o email)
+  - `q` (filtro por nombre, apellido o documento)
 - Respuesta `200`:
 ```json
 {
@@ -126,9 +126,7 @@ EmpleoFacil API
       "apellidos": "Perez",
       "documento_identidad": "1234567890",
       "nacionalidad": "Ecuatoriana",
-      "fecha_nacimiento": "2000-01-01",
-      "email": "juan@correo.com",
-      "telefono_celular": "0999999999"
+      "fecha_nacimiento": "2000-01-01"
     }
   ],
   "page": 1,
@@ -419,6 +417,28 @@ EmpleoFacil API
   - `403 CONTRATANTE_ACCESS_REQUIRED`
   - `500 POSTULACIONES_FETCH_FAILED`
 
+### GET `/api/postulaciones/empresa/:postulacionId/curriculum/pdf`
+- Auth: requerido.
+- Roles: `empresa`.
+- Middlewares adicionales:
+  - contexto de empresa activo (`companyContextRequired`).
+  - rol interno de empresa `admin|reclutador` (`requireCompanyAnyWrite`).
+- Params:
+  - `postulacionId` (numero positivo).
+- Regla de seguridad:
+  - solo permite descargar CV cuando la postulación pertenece a la misma empresa autenticada.
+  - la autorizacion se resuelve por ownership de `postulacionId`; no acepta `candidatoId` suelto.
+- Respuesta `200`:
+  - `Content-Type: application/pdf`
+  - `Content-Disposition: attachment; filename="HojaVida_<nombre>.pdf"`
+- Errores:
+  - `400 INVALID_PAYLOAD` (`details=postulacionId`)
+  - `403 COMPANY_ACCESS_REQUIRED`
+  - `403 COMPANY_ROLE_FORBIDDEN`
+  - `404 POSTULACION_NOT_FOUND`
+  - `404 ESTUDIANTE_NOT_FOUND`
+  - `500 HOJA_VIDA_PDF_FAILED`
+
 ## Mensajes
 
 Base: `/api/mensajes`
@@ -585,6 +605,10 @@ Respuesta `GET` exitosa:
   "formacion_detalle": []
 }
 ```
+
+Nota de privacidad:
+- En `GET /api/perfil/:candidatoId`, la propiedad `contacto` se devuelve como `null` para rol `empresa`.
+- `contacto` solo se expone completo en contexto administrativo (`administrador`, `superadmin`) o al propio candidato en `/api/perfil/me`.
 
 Respuesta `PUT` exitosa:
 ```json
@@ -928,6 +952,9 @@ Errores esperados:
 ### GET `/api/perfil/:candidatoId`
 - Auth: requerido.
 - Roles: `empresa`, `administrador`, `superadmin`.
+- Regla de privacidad:
+  - Para `empresa`, `contacto` se retorna en `null`.
+  - Solo `administrador` y `superadmin` reciben `contacto` completo.
 
 ### PUT `/api/perfil/:candidatoId/datos-basicos`
 ### PUT `/api/perfil/:candidatoId/contacto`
@@ -1417,10 +1444,13 @@ Base: `/api/verificaciones`
 
 ### GET `/api/hoja-vida/:estudianteId/pdf`
 - Auth: requerido.
-- Roles: `administrador`, `superadmin`, `empresa`, `candidato`.
+- Roles: `administrador`, `superadmin`, `candidato`.
 - Regla de ownership:
   - Si el rol es `candidato`, solo puede consultar su propio `:estudianteId`.
   - Si intenta consultar otro candidato, responde `403 FORBIDDEN`.
+- Nota de seguridad:
+  - El rol `empresa` no usa este endpoint para evitar bypass por `estudianteId` directo.
+  - Las empresas deben descargar CV por postulación con `GET /api/postulaciones/empresa/:postulacionId/curriculum/pdf`.
 - Respuesta `200`:
   - `Content-Type: application/pdf`
   - `Content-Disposition: inline; filename="hoja_vida_<nombre>.pdf"`

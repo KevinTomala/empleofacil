@@ -10,9 +10,11 @@ const {
   listPostulacionesByCandidato,
   getPostulacionesResumenByCandidato,
   getPostulacionDetailByCandidato,
-  listPostulacionesByContratante
+  listPostulacionesByContratante,
+  getEmpresaPostulacionForCurriculum
 } = require('../services/postulaciones.service');
 const { ensureConversationForVacanteCandidate } = require('../services/mensajes.service');
+const { generarHojaVidaPdfPorEstudianteId } = require('../services/hojaVida.service');
 
 function resolveAdminOwnerType(req) {
   const raw = String(req.query?.contratante_tipo || req.body?.contratante_tipo || '').trim().toLowerCase();
@@ -178,10 +180,35 @@ async function listEmpresaPostulacionesHandler(req, res) {
   }
 }
 
+async function downloadEmpresaPostulacionCurriculumPdfHandler(req, res) {
+  const postulacionId = toPositiveIntOrNull(req.params.postulacionId);
+  if (!postulacionId) return res.status(400).json({ error: 'INVALID_PAYLOAD', details: 'postulacionId' });
+
+  const empresaId = toPositiveIntOrNull(req.companyContext?.empresaId);
+  if (!empresaId) return res.status(403).json({ error: 'COMPANY_ACCESS_REQUIRED' });
+
+  try {
+    const postulacion = await getEmpresaPostulacionForCurriculum({ postulacionId, empresaId });
+    if (!postulacion?.candidato_id) return res.status(404).json({ error: 'POSTULACION_NOT_FOUND' });
+
+    const pdf = await generarHojaVidaPdfPorEstudianteId(postulacion.candidato_id, { viewerRole: 'empresa' });
+    if (!pdf) return res.status(404).json({ error: 'ESTUDIANTE_NOT_FOUND' });
+
+    const pdfBuffer = Buffer.isBuffer(pdf.buffer) ? pdf.buffer : Buffer.from(pdf.buffer);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${pdf.fileName}"`);
+    res.setHeader('Content-Length', String(pdfBuffer.length));
+    return res.status(200).send(pdfBuffer);
+  } catch (error) {
+    return res.status(500).json({ error: 'HOJA_VIDA_PDF_FAILED', details: String(error.message || error) });
+  }
+}
+
 module.exports = {
   createPostulacionHandler,
   listMyPostulacionesHandler,
   getMyPostulacionesResumenHandler,
   getMyPostulacionDetailHandler,
-  listEmpresaPostulacionesHandler
+  listEmpresaPostulacionesHandler,
+  downloadEmpresaPostulacionCurriculumPdfHandler
 };

@@ -17,15 +17,13 @@ async function listCandidatos(req, res) {
   )`;
   const params = [];
   if (q) {
-    where += ' AND (e.nombres LIKE ? OR e.apellidos LIKE ? OR e.documento_identidad LIKE ? OR c.email LIKE ?)';
-    params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+    where += ' AND (e.nombres LIKE ? OR e.apellidos LIKE ? OR e.documento_identidad LIKE ?)';
+    params.push(`%${q}%`, `%${q}%`, `%${q}%`);
   }
 
   const [rows] = await db.query(
-    `SELECT e.id, e.nombres, e.apellidos, e.documento_identidad, e.nacionalidad, e.fecha_nacimiento,
-            c.email, c.telefono_celular
+    `SELECT e.id, e.nombres, e.apellidos, e.documento_identidad, e.nacionalidad, e.fecha_nacimiento
      FROM candidatos e
-     LEFT JOIN candidatos_contacto c ON c.candidato_id = e.id
      ${where}
      ORDER BY e.created_at DESC
      LIMIT ? OFFSET ?`,

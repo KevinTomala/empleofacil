@@ -79,6 +79,11 @@ function safe(value, fallback = '') {
   return escapeHtml(value ?? fallback);
 }
 
+function withNd(value) {
+  const normalized = textOrNull(value);
+  return normalized || 'N/D';
+}
+
 function safeReadDir(dir) {
   try {
     if (!dir || !fs.existsSync(dir)) return [];
@@ -316,7 +321,7 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId, options = {}) {
     [documentosRows]
   ] = await Promise.all([
     db.query(
-      `SELECT email, telefono_celular, telefono_fijo
+      `SELECT email, telefono_celular, telefono_fijo, contacto_emergencia_nombre, contacto_emergencia_telefono
        FROM candidatos_contacto
        WHERE candidato_id = ? AND deleted_at IS NULL
        LIMIT 1`,
@@ -542,8 +547,7 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId, options = {}) {
 // --- HTML del PDF -------------------------------------------------------------
 
 function renderRow(label, value) {
-  if (!value && value !== 0) return '';
-  return `<div class="row"><span class="label">${label}:</span><span class="value">${safe(value)}</span></div>`;
+  return `<div class="row"><span class="label">${label}:</span><span class="value">${safe(withNd(value))}</span></div>`;
 }
 
 function renderBadge(text) {
@@ -674,7 +678,7 @@ function buildHtml({
   anexosWarnings = []
 }) {
   const ubicacion = [domicilio?.canton, domicilio?.provincia, domicilio?.pais].filter(Boolean).join(', ');
-  const edad = perfil.edad ? `${perfil.edad} anos` : null;
+  const edad = perfil.edad ? `${perfil.edad} años` : null;
 
   const disponibilidades = [];
   if (logistica?.disp_viajar) disponibilidades.push('Disponible para viajar');
@@ -833,18 +837,18 @@ function buildHtml({
 
   <!-- ENCABEZADO -->
   <div class="cv-header">
-    <div class="photo-box">
-      ${fotoSrc ? `<img src="${escapeHtml(fotoSrc)}" alt="Foto"/>` : 'FOTO<br/>CARNET'}
-    </div>
     <div class="header-info">
       <div class="cv-name">${safe(perfil.nombre_completo)}</div>
-      <div class="cv-doc">C.I. / Pasaporte: ${safe(perfil.documento_identidad)}</div>
+      <div class="cv-doc">C.I. / Pasaporte: ${safe(withNd(perfil.documento_identidad))}</div>
       <div class="contact-line">
-        ${contacto?.email ? `<span class="contact-item"><strong>Email:</strong> ${safe(contacto.email)}</span>` : ''}
-        ${contacto?.telefono_celular ? `<span class="contact-item"><strong>Cel:</strong> ${safe(contacto.telefono_celular)}</span>` : ''}
-        ${contacto?.telefono_fijo ? `<span class="contact-item"><strong>Tel:</strong> ${safe(contacto.telefono_fijo)}</span>` : ''}
+        <span class="contact-item"><strong>Email:</strong> ${safe(withNd(contacto?.email))}</span>
+        <span class="contact-item"><strong>Cel:</strong> ${safe(withNd(contacto?.telefono_celular))}</span>
+        <span class="contact-item"><strong>Tel:</strong> ${safe(withNd(contacto?.telefono_fijo))}</span>
       </div>
-      ${ubicacion ? `<div class="ubic">${safe(ubicacion)}</div>` : ''}
+      <div class="ubic">${safe(withNd(ubicacion))}</div>
+    </div>
+    <div class="photo-box">
+      ${fotoSrc ? `<img src="${escapeHtml(fotoSrc)}" alt="Foto"/>` : 'FOTO<br/>CARNET'}
     </div>
   </div>
 
@@ -857,7 +861,9 @@ function buildHtml({
       ${renderRow('Edad', edad)}
       ${renderRow('Sexo', textOrNull(perfil.sexo))}
       ${renderRow('Estado civil', textOrNull(perfil.estado_civil))}
-      ${salud?.tipo_sangre ? renderRow('Tipo de sangre', textOrNull(salud.tipo_sangre)) : ''}
+      ${renderRow('Tipo de sangre', textOrNull(salud?.tipo_sangre))}
+      ${renderRow('Contacto emergencia', textOrNull(contacto?.contacto_emergencia_nombre))}
+      ${renderRow('Telefono emergencia', textOrNull(contacto?.contacto_emergencia_telefono))}
     </div>
   </div>
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Info,
@@ -179,6 +180,7 @@ function ConversationInfoPanel({ selected, detail, role, onBack, isMobileInfo })
 }
 
 export default function CompanyMensajes() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
   const role = user?.rol || ''
   const currentUserId = Number(user?.id || 0)
@@ -319,6 +321,19 @@ export default function CompanyMensajes() {
   useEffect(() => {
     fetchMessagesAndDetail(selectedId)
   }, [selectedId, fetchMessagesAndDetail])
+
+  useEffect(() => {
+    const requestedConversationId = Number(searchParams.get('conv') || 0)
+    if (!Number.isInteger(requestedConversationId) || requestedConversationId <= 0) return
+    if (!items.some((item) => Number(item?.id) === requestedConversationId)) return
+
+    setSelectedId(requestedConversationId)
+    if (isMobile) setMobileView('mensaje')
+
+    const next = new URLSearchParams(searchParams)
+    next.delete('conv')
+    setSearchParams(next, { replace: true })
+  }, [items, isMobile, searchParams, setSearchParams])
 
   const fetchVacantesActivas = useCallback(async () => {
     try {
