@@ -381,6 +381,7 @@
   display: grid;
   grid-template-columns: 350px minmax(0, 1fr);
   gap: 0.75rem;
+  height: calc(100vh - 170px);
   min-height: calc(100vh - 170px);
   max-height: calc(100vh - 170px);
 }
@@ -398,6 +399,12 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.efmsg-thread-pane {
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
 }
 
 .efmsg-icon-btn {
@@ -631,11 +638,16 @@
 
 .efmsg-thread-body {
   flex: 1;
+  min-height: 0;
+  max-height: 100%;
   overflow-y: auto;
   padding: 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .efmsg-bubble-wrap {
@@ -666,6 +678,12 @@
 .efmsg-bubble p {
   white-space: pre-wrap;
   line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.efmsg-thread-body::-webkit-scrollbar {
+  display: none;
 }
 
 .efmsg-bubble small {
@@ -1048,6 +1066,7 @@
 @media (max-width: 1023px) {
   .efmsg-shell {
     display: block;
+    height: calc(100vh - 165px);
     min-height: calc(100vh - 165px);
     max-height: calc(100vh - 165px);
   }
