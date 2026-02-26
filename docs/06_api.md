@@ -178,10 +178,12 @@ EmpleoFacil API
 
 ### GET `/api/vacantes/mias`
 - Auth: requerido.
-- Roles: `empresa`, `administrador`, `superadmin`.
+- Roles: `candidato`, `empresa`, `administrador`, `superadmin`.
 - Query params:
   - `page`, `page_size`, `q`, `provincia`, `ciudad`, `area`, `modalidad`, `tipo_contrato`, `posted`, `estado`
-  - `empresa_id` (solo admin/superadmin, opcional)
+  - `contratante_tipo` (`empresa|persona`, admin/superadmin, opcional)
+  - `empresa_id` (admin/superadmin cuando `contratante_tipo=empresa`)
+  - `candidato_id` (admin/superadmin cuando `contratante_tipo=persona`)
 - Respuesta `200`: mismo contrato `{ items, page, page_size, total }`.
 - Errores:
   - `403 COMPANY_ACCESS_REQUIRED`
@@ -189,7 +191,7 @@ EmpleoFacil API
 
 ### POST `/api/vacantes`
 - Auth: requerido.
-- Roles: `empresa`, `administrador`, `superadmin`.
+- Roles: `candidato`, `empresa`, `administrador`, `superadmin`.
 - Body minimo:
 ```json
 {
@@ -215,7 +217,7 @@ EmpleoFacil API
 
 ### PUT `/api/vacantes/:vacanteId`
 - Auth: requerido.
-- Roles: `empresa`, `administrador`, `superadmin`.
+- Roles: `candidato`, `empresa`, `administrador`, `superadmin`.
 - Body permitido (parcial):
   - `titulo`, `area`, `provincia`, `ciudad`, `modalidad`, `tipo_contrato`, `descripcion`, `requisitos`, `fecha_cierre`
 - Respuesta `200`:
@@ -232,7 +234,7 @@ EmpleoFacil API
 
 ### PUT `/api/vacantes/:vacanteId/estado`
 - Auth: requerido.
-- Roles: `empresa`, `administrador`, `superadmin`.
+- Roles: `candidato`, `empresa`, `administrador`, `superadmin`.
 - Body:
 ```json
 { "estado": "activa" }
@@ -377,10 +379,12 @@ EmpleoFacil API
 
 ### GET `/api/postulaciones/empresa`
 - Auth: requerido.
-- Roles: `empresa`, `administrador`, `superadmin`.
+- Roles: `candidato`, `empresa`, `administrador`, `superadmin`.
 - Query params:
   - `page`, `page_size`, `vacante_id`, `q`
-  - `empresa_id` (solo admin/superadmin, opcional)
+  - `contratante_tipo` (`empresa|persona`, admin/superadmin, opcional)
+  - `empresa_id` (admin/superadmin cuando `contratante_tipo=empresa`)
+  - `candidato_id` (admin/superadmin cuando `contratante_tipo=persona`)
 - Respuesta `200`:
 ```json
 {
@@ -409,9 +413,117 @@ EmpleoFacil API
   - tambien puede consumirse filtrado por una vacante especifica desde `/app/company/vacantes`:
     - `GET /api/postulaciones/empresa?vacante_id=<id>&page=1&page_size=20&q=<texto>`
     - junto con `GET /api/vacantes/mias` para el flujo hub de vacantes.
+- Alias adicional:
+  - `GET /api/postulaciones/contratante` (mismo contrato que `/api/postulaciones/empresa`).
 - Errores:
-  - `403 COMPANY_ACCESS_REQUIRED`
+  - `403 CONTRATANTE_ACCESS_REQUIRED`
   - `500 POSTULACIONES_FETCH_FAILED`
+
+## Mensajes
+
+Base: `/api/mensajes`
+
+### GET `/api/mensajes/resumen`
+- Auth: requerido.
+- Roles: `candidato`, `empresa`, `administrador`, `superadmin`.
+- Respuesta `200`:
+```json
+{ "unread_total": 0 }
+```
+
+### GET `/api/mensajes/conversaciones`
+- Auth: requerido.
+- Roles: `candidato`, `empresa`, `administrador`, `superadmin`.
+- Query params:
+  - `page`, `page_size`, `q`
+  - `tipo` (`vacante|directa|soporte`, opcional)
+- Respuesta `200`:
+```json
+{
+  "items": [],
+  "page": 1,
+  "page_size": 20,
+  "total": 0
+}
+```
+
+### POST `/api/mensajes/conversaciones`
+- Auth: requerido.
+- Roles: `candidato`, `empresa`, `administrador`, `superadmin`.
+- Crear/obtener conversacion por vacante:
+```json
+{
+  "tipo": "vacante",
+  "vacante_id": 21,
+  "candidato_id": 19
+}
+```
+- Crear/obtener conversacion directa (solo admin/superadmin):
+```json
+{
+  "tipo": "directa",
+  "usuario_objetivo_id": 45
+}
+```
+
+### GET `/api/mensajes/conversaciones/:conversacionId`
+- Auth: requerido.
+- Roles: `candidato`, `empresa`, `administrador`, `superadmin`.
+- Respuesta `200`:
+```json
+{
+  "conversacion": {}
+}
+```
+
+### GET `/api/mensajes/conversaciones/:conversacionId/mensajes`
+- Auth: requerido.
+- Roles: `candidato`, `empresa`, `administrador`, `superadmin`.
+- Query params:
+  - `page`, `page_size`
+- Respuesta `200`:
+```json
+{
+  "items": [],
+  "page": 1,
+  "page_size": 50,
+  "total": 0
+}
+```
+
+### POST `/api/mensajes/conversaciones/:conversacionId/mensajes`
+- Auth: requerido.
+- Roles: `candidato`, `empresa`, `administrador`, `superadmin`.
+- Body:
+```json
+{
+  "cuerpo": "Hola, seguimos con tu proceso."
+}
+```
+- Respuesta `201`:
+```json
+{
+  "ok": true,
+  "mensaje": {}
+}
+```
+
+### POST `/api/mensajes/conversaciones/:conversacionId/leer`
+- Auth: requerido.
+- Roles: `candidato`, `empresa`, `administrador`, `superadmin`.
+- Body opcional:
+```json
+{
+  "mensaje_id": 1001
+}
+```
+- Respuesta `200`:
+```json
+{
+  "ok": true,
+  "ultimo_leido_mensaje_id": 1001
+}
+```
 
 ## Perfil de candidato
 

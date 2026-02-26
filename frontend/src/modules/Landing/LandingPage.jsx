@@ -7,6 +7,7 @@ import ModalidadesContratacion from '../../components/ModalidadesContratacion'
 import CTA from '../../components/CTA'
 import Contacto from '../../components/Contacto'
 import Footer from '../../components/Footer'
+import ScrollToTop from '../../components/ScrollToTop'
 
 export default function LandingPage() {
   return (
@@ -14,14 +15,15 @@ export default function LandingPage() {
       <Header />
       <main>
         <Hero />
-        <BeneficiosEmpresas />
         <BeneficiosAgentes />
+        <BeneficiosEmpresas />
         <ModalidadesContratacion />
         <ComoFunciona />
         <CTA />
         <Contacto />
       </main>
       <Footer />
+      <ScrollToTop />
     </div>
   )
 }

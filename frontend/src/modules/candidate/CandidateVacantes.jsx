@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import FormDropdown from '../../components/FormDropdown'
 import Header from '../../components/Header'
 import provinciasData from '../../assets/provincias.json'
@@ -57,7 +58,99 @@ function normalizeProvinceText(value) {
     .trim()
 }
 
+function formatModalidadLabel(value) {
+  const map = {
+    presencial: 'Presencial',
+    remoto: 'Remoto',
+    hibrido: 'Hibrido'
+  }
+  return map[String(value || '').toLowerCase()] || 'Modalidad N/D'
+}
+
+function formatTipoContratoLabel(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return 'Contrato N/D'
+  return raw
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function formatPagoVacante(monto, periodo) {
+  const numeric = Number(monto)
+  if (!Number.isFinite(numeric) || numeric <= 0) return 'Pago a convenir'
+  const amount = new Intl.NumberFormat('es-EC', {
+    minimumFractionDigits: Number.isInteger(numeric) ? 0 : 2,
+    maximumFractionDigits: 2
+  }).format(numeric)
+  const period = periodo === 'dia' ? 'dia' : 'mes'
+  return `$${amount}/${period}`
+}
+
+function hasPagoVacante(monto) {
+  const numeric = Number(monto)
+  return Number.isFinite(numeric) && numeric > 0
+}
+
+function parseLocalDateTime(value) {
+  if (!value) return null
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value
+
+  const raw = String(value).trim()
+  if (!raw) return null
+
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/)
+  if (match) {
+    const year = Number(match[1])
+    const monthIndex = Number(match[2]) - 1
+    const day = Number(match[3])
+    const hour = Number(match[4] || 0)
+    const minute = Number(match[5] || 0)
+    const second = Number(match[6] || 0)
+    const date = new Date(year, monthIndex, day, hour, minute, second)
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+
+  const parsed = new Date(raw)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function formatFechaPublicacionParts(value) {
+  const date = parseLocalDateTime(value)
+  if (!date) return { dateLabel: 'N/D', timeLabel: '--:--' }
+
+  const now = new Date()
+  const isToday = (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  )
+
+  const timeLabel = new Intl.DateTimeFormat('es-EC', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(date)
+
+  if (isToday) return { dateLabel: 'Hoy', timeLabel }
+
+  const dateLabel = new Intl.DateTimeFormat('es-EC', {
+    day: '2-digit',
+    month: 'short'
+  }).format(date)
+
+  return { dateLabel, timeLabel }
+}
+
+function formatProvinceMapTooltip(provinceName, count) {
+  const name = String(provinceName || '').trim()
+  if (!name) return ''
+  if (!Number.isInteger(count) || count < 1) return name
+  return `${name} · ${count} vacante${count === 1 ? '' : 's'}`
+}
+
 export default function CandidateVacantes() {
+  const location = useLocation()
   const [items, setItems] = useState([])
   const [allVacantes, setAllVacantes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -87,13 +180,19 @@ export default function CandidateVacantes() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [total, setTotal] = useState(0)
+  const [provinceCountRows, setProvinceCountRows] = useState([])
   const svgBoundDocsRef = useRef(new WeakSet())
+  const svgDocRef = useRef(null)
   const provinceOptionsRef = useRef([])
 
   const totalPages = useMemo(() => {
     const pages = Math.ceil(total / pageSize)
     return pages > 0 ? pages : 1
   }, [total, pageSize])
+  const selectedPublishedAt = useMemo(
+    () => formatFechaPublicacionParts(selectedVacante?.fecha_publicacion),
+    [selectedVacante?.fecha_publicacion]
+  )
 
   const provinceCatalog = useMemo(() => {
     return Object.values(provinciasData || {}).map((provincia) => {
@@ -117,6 +216,24 @@ export default function CandidateVacantes() {
   useEffect(() => {
     provinceOptionsRef.current = provinceOptions
   }, [provinceOptions])
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const provinciaFromUrl = String(params.get('provincia') || '').trim()
+    if (!provinciaFromUrl) return
+
+    const normalizedUrlProvince = normalizeProvinceText(provinciaFromUrl)
+    const matchedProvince = provinceOptions.find((opt) => normalizeProvinceText(opt.value) === normalizedUrlProvince)
+    if (!matchedProvince) return
+
+    setSelectedProvince((prev) => {
+      if (normalizeProvinceText(prev) === normalizedUrlProvince) return prev
+      return matchedProvince.value
+    })
+    setShowFilters(true)
+    setFilters((prev) => ({ ...prev, city: '' }))
+    setPage(1)
+  }, [location.search, provinceOptions])
 
   const cityOptions = useMemo(() => {
     if (!selectedProvince) return []
@@ -154,6 +271,38 @@ export default function CandidateVacantes() {
     return options.areas.filter(a => a.toLowerCase().includes(term))
   }, [options.areas, areaSearch])
 
+  const provinceCountMap = useMemo(() => {
+    const map = new Map()
+    provinceCountRows.forEach((row) => {
+      const normalizedProvince = normalizeProvinceText(row?.provincia)
+      if (!normalizedProvince) return
+      map.set(normalizedProvince, Number(row?.total || 0))
+    })
+    return map
+  }, [provinceCountRows])
+
+  const syncSvgProvinceTooltips = useCallback((svgDoc) => {
+    if (!svgDoc) return
+    const provincePaths = svgDoc.querySelectorAll('#features path[name]')
+    if (!provincePaths.length) return
+
+    provincePaths.forEach((path) => {
+      const provinceName = String(path.getAttribute('name') || '').trim()
+      if (!provinceName) return
+
+      const normalizedProvince = normalizeProvinceText(provinceName)
+      const count = Number(provinceCountMap.get(normalizedProvince) || 0)
+      const tooltipText = formatProvinceMapTooltip(provinceName, count)
+
+      const existingTitle = path.querySelector('title')
+      if (existingTitle) existingTitle.remove()
+      const title = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'title')
+      title.textContent = tooltipText
+      path.prepend(title)
+      path.style.cursor = 'pointer'
+    })
+  }, [provinceCountMap])
+
   const bindSvgProvinceClicks = useCallback((svgDoc) => {
     if (!svgDoc || svgBoundDocsRef.current.has(svgDoc)) return
     const provincePaths = svgDoc.querySelectorAll('#features path[name]')
@@ -182,20 +331,15 @@ export default function CandidateVacantes() {
   const handleSvgLoad = useCallback((event) => {
     const svgDoc = event.currentTarget?.contentDocument
     if (!svgDoc) return
-
-    const paths = svgDoc.querySelectorAll('#features path')
-    paths.forEach((path) => {
-      const hasTitle = path.querySelector('title')
-      if (hasTitle) return
-      const name = path.getAttribute('name') || path.getAttribute('id')
-      if (!name) return
-      const title = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'title')
-      title.textContent = name
-      path.prepend(title)
-    })
-
+    svgDocRef.current = svgDoc
+    syncSvgProvinceTooltips(svgDoc)
     bindSvgProvinceClicks(svgDoc)
-  }, [bindSvgProvinceClicks])
+  }, [bindSvgProvinceClicks, syncSvgProvinceTooltips])
+
+  useEffect(() => {
+    if (!svgDocRef.current) return
+    syncSvgProvinceTooltips(svgDocRef.current)
+  }, [syncSvgProvinceTooltips])
 
   useEffect(() => {
     let mounted = true
@@ -214,6 +358,25 @@ export default function CandidateVacantes() {
       }
     }
     fetchOptionsSource()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
+    async function fetchProvinceCounts() {
+      try {
+        const data = await apiRequest('/api/vacantes/public/provincias-count', {}, false)
+        if (!mounted) return
+        setProvinceCountRows(Array.isArray(data?.items) ? data.items : [])
+      } catch {
+        if (!mounted) return
+        setProvinceCountRows([])
+      }
+    }
+
+    fetchProvinceCounts()
     return () => {
       mounted = false
     }
@@ -602,15 +765,23 @@ export default function CandidateVacantes() {
                     : 'No hay vacantes activas disponibles en este momento.'}
                 </div>
               )}
-              {!loading && !error && items.map((item) => (
-                <article key={item.id} className="bg-white border border-border rounded-xl p-4 hover:border-primary/30 hover:shadow-md transition-all flex flex-col">
+              {!loading && !error && items.map((item) => {
+                const publishedAt = formatFechaPublicacionParts(item.fecha_publicacion)
+                return (
+                  <article key={item.id} className="bg-white border border-border rounded-xl p-4 hover:border-primary/30 hover:shadow-md transition-all flex flex-col">
                   <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
+                      <span className="inline-flex text-[11px] font-semibold tracking-wide px-2 py-1 rounded-full bg-primary/10 text-primary uppercase mb-2">
+                        {formatModalidadLabel(item.modalidad)}
+                      </span>
                       <h2 className="font-semibold text-lg text-foreground leading-tight mb-1">{item.titulo}</h2>
                       <p className="text-sm font-medium text-foreground/70">{item.empresa_nombre || 'Empresa'}</p>
                     </div>
-                    <span className="text-[11px] font-semibold tracking-wide px-2 py-1 rounded-full bg-primary/10 text-primary uppercase whitespace-nowrap">
-                      {item.modalidad}
+                    <span className={`inline-flex text-[11px] font-semibold tracking-wide px-2 py-1 rounded-full whitespace-nowrap ${hasPagoVacante(item.pago_monto)
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-slate-100 text-slate-600'
+                      }`}>
+                      {formatPagoVacante(item.pago_monto, item.pago_periodo)}
                     </span>
                   </div>
 
@@ -632,13 +803,24 @@ export default function CandidateVacantes() {
                       <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      {item.tipo_contrato?.replace('_', ' ')}
+                      {formatTipoContratoLabel(item.tipo_contrato)}
                     </span>
                   </div>
 
                   <div className="mt-1.5 pt-3 border-t border-border/50 flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-[11px] text-foreground/50 font-medium">
-                      Publicada: {String(item.fecha_publicacion || '').slice(0, 10) || 'N/D'}
+                    <div className="text-[11px] text-foreground/50 font-medium flex items-center gap-3 flex-wrap">
+                      <span className="inline-flex items-center gap-1">
+                        <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        {publishedAt.dateLabel}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {publishedAt.timeLabel}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -661,8 +843,9 @@ export default function CandidateVacantes() {
                       </button>
                     </div>
                   </div>
-                </article>
-              ))}
+                  </article>
+                )
+              })}
             </section>
           </div>
         </section>
@@ -710,10 +893,13 @@ export default function CandidateVacantes() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-[11px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-primary/10 text-primary uppercase">
-                    {selectedVacante.modalidad}
+                    {formatModalidadLabel(selectedVacante.modalidad)}
                   </span>
                   <span className="text-[11px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase">
-                    {selectedVacante.tipo_contrato?.replace(/_/g, ' ')}
+                    {formatTipoContratoLabel(selectedVacante.tipo_contrato)}
+                  </span>
+                  <span className="text-[11px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                    {formatPagoVacante(selectedVacante.pago_monto, selectedVacante.pago_periodo)}
                   </span>
                   {selectedVacante.postulado ? (
                     <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Ya postulado ✔</span>
@@ -753,11 +939,21 @@ export default function CandidateVacantes() {
                     {selectedVacante.area}
                   </span>
                 )}
+                <span className="flex items-center gap-1.5 font-medium text-emerald-700">
+                  <svg className="w-3.5 h-3.5 opacity-80 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-2.21 0-4 1.12-4 2.5S9.79 13 12 13s4 1.12 4 2.5S14.21 18 12 18m0-10v10m0-10c1.4 0 2.65.45 3.37 1.15M12 8c-1.4 0-2.65.45-3.37 1.15" />
+                  </svg>
+                  {formatPagoVacante(selectedVacante.pago_monto, selectedVacante.pago_periodo)}
+                </span>
                 <span className="flex items-center gap-1.5">
                   <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
-                  Publicada: {String(selectedVacante.fecha_publicacion || '').slice(0, 10) || 'N/D'}
+                  {selectedPublishedAt.dateLabel}
+                  <svg className="w-3.5 h-3.5 opacity-70 flex-shrink-0 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {selectedPublishedAt.timeLabel}
                 </span>
                 {selectedVacante.fecha_cierre && (
                   <span className="flex items-center gap-1.5 text-amber-600 font-medium">

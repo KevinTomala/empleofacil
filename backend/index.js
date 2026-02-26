@@ -16,6 +16,7 @@ const verificacionesRoutes = require('./routes/verificaciones.routes');
 const vacantesRoutes = require('./routes/vacantes.routes');
 const postulacionesRoutes = require('./routes/postulaciones.routes');
 const socialRoutes = require('./routes/social.routes');
+const mensajesRoutes = require('./routes/mensajes.routes');
 
 dotenv.config();
 
@@ -48,6 +49,7 @@ app.use('/api/verificaciones', verificacionesRoutes);
 app.use('/api/vacantes', vacantesRoutes);
 app.use('/api/postulaciones', postulacionesRoutes);
 app.use('/api/social', socialRoutes);
+app.use('/api/mensajes', mensajesRoutes);
 app.use('/uploads', express.static(UPLOADS_ROOT));
 const legacyUploadsRoot = path.join(__dirname, 'uploads');
 if (path.resolve(legacyUploadsRoot) !== path.resolve(UPLOADS_ROOT)) {

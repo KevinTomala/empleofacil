@@ -1,10 +1,14 @@
 const {
   toPositiveIntOrNull,
+  normalizeContratanteTipo,
   normalizeEstado,
   normalizeModalidad,
   normalizeTipoContrato,
+  normalizePagoPeriodo,
+  normalizePagoMonto,
   normalizePosted,
   listVacantes,
+  listVacantesCountByProvincia,
   createVacante,
   findVacanteById,
   updateVacante
@@ -16,20 +20,55 @@ function isPlainObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
 }
 
-async function resolveEmpresaScope(req, { allowAdminParam = false } = {}) {
+function resolveAdminOwnerType(req) {
+  const explicit = normalizeContratanteTipo(req.query?.contratante_tipo || req.body?.contratante_tipo || req.params?.contratanteTipo);
+  if (explicit) return explicit;
+  const candidatoId = toPositiveIntOrNull(req.query?.candidato_id || req.body?.candidato_id || req.params?.candidatoId);
+  return candidatoId ? 'persona' : 'empresa';
+}
+
+async function resolveOwnerScope(req, { allowAdminParam = false } = {}) {
   const rol = req.user?.rol;
   const userId = req.user?.id;
 
   if (rol === 'empresa') {
-    if (req.companyContext?.empresaId) return req.companyContext.empresaId;
-    return resolveEmpresaIdForUser(userId, { autoCreate: true });
+    if (req.companyContext?.empresaId) return { type: 'empresa', empresaId: req.companyContext.empresaId };
+    const empresaId = await resolveEmpresaIdForUser(userId, { autoCreate: true });
+    return empresaId ? { type: 'empresa', empresaId } : null;
+  }
+
+  if (rol === 'candidato') {
+    const candidatoId = await findCandidatoIdByUserId(userId);
+    return candidatoId ? { type: 'persona', candidatoId } : null;
   }
 
   if ((rol === 'administrador' || rol === 'superadmin') && allowAdminParam) {
-    return toPositiveIntOrNull(req.query?.empresa_id || req.body?.empresa_id || req.params?.empresaId);
+    const ownerType = resolveAdminOwnerType(req);
+    if (ownerType === 'persona') {
+      const candidatoId = toPositiveIntOrNull(req.query?.candidato_id || req.body?.candidato_id || req.params?.candidatoId);
+      return candidatoId ? { type: 'persona', candidatoId } : null;
+    }
+
+    const empresaId = toPositiveIntOrNull(req.query?.empresa_id || req.body?.empresa_id || req.params?.empresaId);
+    return empresaId ? { type: 'empresa', empresaId } : null;
   }
 
   return null;
+}
+
+function isVacanteOwnedByScope(vacante, ownerScope) {
+  if (!vacante || !ownerScope) return false;
+  const vacanteTipo = normalizeContratanteTipo(vacante.contratante_tipo) || (vacante.empresa_id ? 'empresa' : 'persona');
+
+  if (ownerScope.type === 'empresa') {
+    return vacanteTipo === 'empresa' && Number(vacante.empresa_id) === Number(ownerScope.empresaId);
+  }
+
+  if (ownerScope.type === 'persona') {
+    return vacanteTipo === 'persona' && Number(vacante.contratante_candidato_id) === Number(ownerScope.candidatoId);
+  }
+
+  return false;
 }
 
 function validateCreateVacantePayload(payload) {
@@ -46,6 +85,12 @@ function validateCreateVacantePayload(payload) {
 
   const fechaCierre = payload.fecha_cierre ? String(payload.fecha_cierre).trim() : null;
   if (fechaCierre && !/^\d{4}-\d{2}-\d{2}$/.test(fechaCierre)) return null;
+  const hasAnyPaymentField = payload.pago_monto !== undefined || payload.pago_periodo !== undefined;
+  const clearPagoMonto = payload.pago_monto === null || payload.pago_monto === undefined || payload.pago_monto === '';
+  const clearPagoPeriodo = payload.pago_periodo === null || payload.pago_periodo === undefined || payload.pago_periodo === '';
+  const pagoMonto = normalizePagoMonto(payload.pago_monto);
+  const pagoPeriodo = normalizePagoPeriodo(payload.pago_periodo);
+  if (hasAnyPaymentField && !(clearPagoMonto && clearPagoPeriodo) && (pagoMonto === null || pagoPeriodo === null)) return null;
 
   return {
     titulo,
@@ -56,6 +101,8 @@ function validateCreateVacantePayload(payload) {
     tipo_contrato: tipoContrato,
     descripcion: payload.descripcion ? String(payload.descripcion).trim() : null,
     requisitos: payload.requisitos ? String(payload.requisitos).trim() : null,
+    pago_monto: hasAnyPaymentField ? (clearPagoMonto ? null : pagoMonto) : null,
+    pago_periodo: hasAnyPaymentField ? (clearPagoPeriodo ? null : pagoPeriodo) : null,
     estado,
     fecha_cierre: fechaCierre
   };
@@ -63,7 +110,7 @@ function validateCreateVacantePayload(payload) {
 
 function validateUpdateVacantePayload(payload) {
   if (!isPlainObject(payload)) return null;
-  const allowed = ['titulo', 'area', 'provincia', 'ciudad', 'modalidad', 'tipo_contrato', 'descripcion', 'requisitos', 'fecha_cierre'];
+  const allowed = ['titulo', 'area', 'provincia', 'ciudad', 'modalidad', 'tipo_contrato', 'descripcion', 'requisitos', 'fecha_cierre', 'pago_monto', 'pago_periodo'];
   const keys = Object.keys(payload);
   if (!keys.length) return null;
   if (!keys.every((key) => allowed.includes(key))) return null;
@@ -88,6 +135,24 @@ function validateUpdateVacantePayload(payload) {
     const fechaCierre = payload.fecha_cierre ? String(payload.fecha_cierre).trim() : null;
     if (fechaCierre && !/^\d{4}-\d{2}-\d{2}$/.test(fechaCierre)) return null;
     patch.fecha_cierre = fechaCierre;
+  }
+  if ('pago_monto' in payload || 'pago_periodo' in payload) {
+    if (!('pago_monto' in payload) || !('pago_periodo' in payload)) return null;
+    const montoRaw = payload.pago_monto;
+    const periodoRaw = payload.pago_periodo;
+    const clearMonto = montoRaw === null || montoRaw === undefined || montoRaw === '';
+    const clearPeriodo = periodoRaw === null || periodoRaw === undefined || periodoRaw === '';
+
+    if (clearMonto && clearPeriodo) {
+      patch.pago_monto = null;
+      patch.pago_periodo = null;
+    } else {
+      const pagoMonto = normalizePagoMonto(montoRaw);
+      const pagoPeriodo = normalizePagoPeriodo(periodoRaw);
+      if (pagoMonto === null || pagoPeriodo === null) return null;
+      patch.pago_monto = pagoMonto;
+      patch.pago_periodo = pagoPeriodo;
+    }
   }
   ['area', 'provincia', 'ciudad', 'descripcion', 'requisitos'].forEach((key) => {
     if (key in payload) patch[key] = payload[key] ? String(payload[key]).trim() : null;
@@ -125,6 +190,33 @@ async function listVacantesPublic(req, res) {
   }
 }
 
+async function listVacantesLatestPublic(req, res) {
+  const limit = Math.min(10, toPositiveIntOrNull(req.query.limit) || 3);
+
+  try {
+    const result = await listVacantes({
+      page: 1,
+      pageSize: limit
+    }, { onlyActive: true });
+
+    return res.json({
+      items: Array.isArray(result?.items) ? result.items : [],
+      total: Number(result?.total || 0)
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'VACANTES_FETCH_FAILED', details: String(error.message || error) });
+  }
+}
+
+async function listVacantesProvinciaCountPublic(req, res) {
+  try {
+    const items = await listVacantesCountByProvincia({ onlyActive: true });
+    return res.json({ items });
+  } catch (error) {
+    return res.status(500).json({ error: 'VACANTES_FETCH_FAILED', details: String(error.message || error) });
+  }
+}
+
 async function listMyVacantes(req, res) {
   const postedParam = req.query.posted != null ? String(req.query.posted).trim() : '';
   if (postedParam && !normalizePosted(postedParam)) {
@@ -132,8 +224,8 @@ async function listMyVacantes(req, res) {
   }
 
   try {
-    const empresaId = await resolveEmpresaScope(req, { allowAdminParam: true });
-    if (!empresaId) return res.status(403).json({ error: 'COMPANY_ACCESS_REQUIRED' });
+    const ownerScope = await resolveOwnerScope(req, { allowAdminParam: true });
+    if (!ownerScope) return res.status(403).json({ error: 'CONTRATANTE_ACCESS_REQUIRED' });
 
     const result = await listVacantes({
       page: req.query.page,
@@ -146,7 +238,7 @@ async function listMyVacantes(req, res) {
       tipoContrato: req.query.tipo_contrato,
       estado: req.query.estado,
       posted: req.query.posted
-    }, { ownEmpresaId: empresaId });
+    }, { ownerScope });
 
     return res.json(result);
   } catch (error) {
@@ -159,10 +251,10 @@ async function createVacanteHandler(req, res) {
   if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
 
   try {
-    const empresaId = await resolveEmpresaScope(req, { allowAdminParam: true });
-    if (!empresaId) return res.status(403).json({ error: 'COMPANY_ACCESS_REQUIRED' });
+    const ownerScope = await resolveOwnerScope(req, { allowAdminParam: true });
+    if (!ownerScope) return res.status(403).json({ error: 'CONTRATANTE_ACCESS_REQUIRED' });
 
-    const created = await createVacante(empresaId, req.user?.id || null, payload);
+    const created = await createVacante(ownerScope, req.user?.id || null, payload);
     return res.status(201).json({ ok: true, id: created.id });
   } catch (error) {
     return res.status(500).json({ error: 'VACANTE_UPDATE_FAILED', details: String(error.message || error) });
@@ -177,12 +269,12 @@ async function updateVacanteHandler(req, res) {
   if (!patch) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
 
   try {
-    const empresaId = await resolveEmpresaScope(req, { allowAdminParam: true });
-    if (!empresaId) return res.status(403).json({ error: 'COMPANY_ACCESS_REQUIRED' });
+    const ownerScope = await resolveOwnerScope(req, { allowAdminParam: true });
+    if (!ownerScope) return res.status(403).json({ error: 'CONTRATANTE_ACCESS_REQUIRED' });
 
     const vacante = await findVacanteById(vacanteId);
     if (!vacante || vacante.deleted_at) return res.status(404).json({ error: 'VACANTE_NOT_FOUND' });
-    if (vacante.empresa_id !== empresaId) return res.status(403).json({ error: 'FORBIDDEN' });
+    if (!isVacanteOwnedByScope(vacante, ownerScope)) return res.status(403).json({ error: 'FORBIDDEN' });
 
     const affected = await updateVacante(vacanteId, patch);
     if (!affected) return res.status(404).json({ error: 'VACANTE_NOT_FOUND' });
@@ -199,12 +291,12 @@ async function updateVacanteEstadoHandler(req, res) {
   if (!estado) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
 
   try {
-    const empresaId = await resolveEmpresaScope(req, { allowAdminParam: true });
-    if (!empresaId) return res.status(403).json({ error: 'COMPANY_ACCESS_REQUIRED' });
+    const ownerScope = await resolveOwnerScope(req, { allowAdminParam: true });
+    if (!ownerScope) return res.status(403).json({ error: 'CONTRATANTE_ACCESS_REQUIRED' });
 
     const vacante = await findVacanteById(vacanteId);
     if (!vacante || vacante.deleted_at) return res.status(404).json({ error: 'VACANTE_NOT_FOUND' });
-    if (vacante.empresa_id !== empresaId) return res.status(403).json({ error: 'FORBIDDEN' });
+    if (!isVacanteOwnedByScope(vacante, ownerScope)) return res.status(403).json({ error: 'FORBIDDEN' });
 
     const patch = { estado };
     if (estado === 'cerrada' && !vacante.fecha_cierre) {
@@ -219,6 +311,8 @@ async function updateVacanteEstadoHandler(req, res) {
 }
 
 module.exports = {
+  listVacantesLatestPublic,
+  listVacantesProvinciaCountPublic,
   listVacantesPublic,
   listMyVacantes,
   createVacanteHandler,

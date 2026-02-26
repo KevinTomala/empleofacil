@@ -1,23 +1,23 @@
 .company-scope {
-  --background: 36 33% 97%;
-  --foreground: 222 20% 12%;
+  --background: 210 42% 97%;
+  --foreground: 220 27% 16%;
   --card: 0 0% 100%;
-  --card-foreground: 222 20% 12%;
+  --card-foreground: 220 27% 16%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222 20% 12%;
-  --primary: 16 72% 45%;
+  --popover-foreground: 220 27% 16%;
+  --primary: 210 100% 38%;
   --primary-foreground: 0 0% 98%;
-  --secondary: 36 25% 93%;
-  --secondary-foreground: 222 20% 12%;
-  --muted: 36 20% 92%;
-  --muted-foreground: 222 10% 40%;
-  --accent: 20 50% 92%;
-  --accent-foreground: 222 20% 12%;
+  --secondary: 210 34% 94%;
+  --secondary-foreground: 220 27% 16%;
+  --muted: 210 28% 92%;
+  --muted-foreground: 215 13% 42%;
+  --accent: 200 76% 90%;
+  --accent-foreground: 220 27% 16%;
   --destructive: 0 72% 50%;
   --destructive-foreground: 0 0% 98%;
-  --border: 24 20% 86%;
-  --input: 24 20% 86%;
-  --ring: 16 72% 45%;
+  --border: 214 25% 86%;
+  --input: 214 25% 86%;
+  --ring: 190 92% 44%;
   --radius: 0.75rem;
 }
 
@@ -65,4 +65,713 @@
 .company-scope .company-list::-webkit-scrollbar-thumb {
   background: hsl(var(--border));
   border-radius: 999px;
+}
+
+.efmsg-shell {
+  display: grid;
+  grid-template-columns: 350px minmax(0, 1fr);
+  gap: 0.75rem;
+  min-height: calc(100vh - 170px);
+  max-height: calc(100vh - 170px);
+}
+
+.efmsg-shell.is-large {
+  grid-template-columns: 330px minmax(0, 1fr) 320px;
+}
+
+.efmsg-pane {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  color: hsl(var(--foreground));
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.efmsg-icon-btn {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.efmsg-icon-btn:hover {
+  background: linear-gradient(135deg, hsla(var(--primary), 0.16), hsla(var(--ring), 0.16));
+  color: hsl(var(--primary));
+}
+
+.efmsg-mensajes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1rem 0.75rem;
+}
+
+.efmsg-mensajes-header h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.efmsg-mensajes-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.efmsg-search {
+  margin: 0 1rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  background: hsl(var(--secondary));
+  border: 1px solid hsl(var(--input));
+  padding: 0.6rem 0.85rem;
+}
+
+.efmsg-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+}
+
+.efmsg-search input::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.efmsg-mensajes-list {
+  overflow-y: auto;
+  padding: 0 0.5rem 0.6rem;
+}
+
+.efmsg-mensajes-list::-webkit-scrollbar,
+.efmsg-thread-body::-webkit-scrollbar,
+.efmsg-info-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.efmsg-mensajes-list::-webkit-scrollbar-thumb,
+.efmsg-thread-body::-webkit-scrollbar-thumb,
+.efmsg-info-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: hsl(var(--border));
+}
+
+.efmsg-mensaje-item {
+  width: 100%;
+  border: 0;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 0.7rem;
+  align-items: start;
+  border-radius: 12px;
+  padding: 0.75rem;
+  cursor: pointer;
+}
+
+.efmsg-mensaje-item:hover {
+  background: hsl(var(--secondary));
+}
+
+.efmsg-mensaje-item.is-active {
+  background: linear-gradient(135deg, hsla(var(--primary), 0.14), hsla(var(--ring), 0.1));
+  border: 1px solid hsla(var(--primary), 0.25);
+}
+
+.efmsg-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--ring)));
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.efmsg-avatar.tiny {
+  width: 28px;
+  height: 28px;
+  font-size: 0.72rem;
+}
+
+.efmsg-avatar.large {
+  width: 84px;
+  height: 84px;
+  font-size: 1.3rem;
+}
+
+.efmsg-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
+
+.efmsg-mensaje-main {
+  min-width: 0;
+}
+
+.efmsg-mensaje-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.efmsg-mensaje-name {
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.efmsg-mensaje-time {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+}
+
+.efmsg-mensaje-preview {
+  margin-top: 0.2rem;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.efmsg-mensaje-context {
+  margin-top: 0.1rem;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.efmsg-badge {
+  min-width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  padding: 0 0.3rem;
+}
+
+.efmsg-thread-header {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.efmsg-thread-left {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.efmsg-thread-left h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.efmsg-thread-left p {
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.efmsg-thread-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.efmsg-thread-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.efmsg-bubble-wrap {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45rem;
+  max-width: 86%;
+}
+
+.efmsg-bubble-wrap.is-mine {
+  margin-left: auto;
+  max-width: 78%;
+  justify-content: flex-end;
+}
+
+.efmsg-bubble {
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+  border-radius: 16px;
+  padding: 0.55rem 0.75rem;
+}
+
+.efmsg-bubble.is-mine {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--ring)));
+  color: hsl(var(--primary-foreground));
+}
+
+.efmsg-bubble p {
+  white-space: pre-wrap;
+  line-height: 1.35;
+}
+
+.efmsg-bubble small {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.7rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.efmsg-bubble.is-mine small {
+  color: hsla(0, 0%, 100%, 0.78);
+}
+
+.efmsg-bubble-meta {
+  margin-top: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.efmsg-bubble-meta small {
+  margin-top: 0;
+  display: inline;
+  line-height: 1;
+}
+
+.efmsg-bubble-meta.is-mine {
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.efmsg-read-status {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  line-height: 1;
+  color: hsla(0, 0%, 100%, 0.72);
+  letter-spacing: -0.02em;
+}
+
+.efmsg-read-status.is-read {
+  color: hsla(0, 0%, 100%, 0.95);
+}
+
+.efmsg-thread-composer {
+  border-top: 1px solid hsl(var(--border));
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.efmsg-thread-composer input {
+  border: 0;
+  outline: 0;
+  border-radius: 999px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+  flex: 1;
+  padding: 0.65rem 0.9rem;
+}
+
+.efmsg-thread-composer input:focus {
+  box-shadow: 0 0 0 2px hsla(var(--primary), 0.22);
+}
+
+.efmsg-thread-composer input::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.efmsg-thread-composer button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--ring)));
+  color: hsl(var(--primary-foreground));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.efmsg-thread-composer button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.efmsg-info-pane {
+  border-left: 1px solid hsl(var(--border));
+}
+
+.efmsg-info-header {
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.efmsg-info-title {
+  font-weight: 600;
+}
+
+.efmsg-info-body {
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.efmsg-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.45rem;
+}
+
+.efmsg-profile h4 {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.efmsg-profile p {
+  color: hsl(var(--muted-foreground));
+}
+
+.efmsg-section {
+  background: hsl(var(--secondary));
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  padding: 0.8rem;
+}
+
+.efmsg-section h5 {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.efmsg-section p {
+  color: hsl(var(--foreground));
+  margin-bottom: 0.25rem;
+}
+
+.efmsg-muted {
+  color: hsl(var(--muted-foreground));
+}
+
+.efmsg-participant {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.35rem;
+}
+
+.efmsg-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #22c55e;
+}
+
+.efmsg-participant small {
+  color: hsl(var(--muted-foreground));
+  text-transform: lowercase;
+}
+
+.efmsg-empty,
+.efmsg-error {
+  margin: 1rem;
+  padding: 0.8rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+.efmsg-empty {
+  background: hsl(var(--secondary));
+  color: hsl(var(--muted-foreground));
+}
+
+.efmsg-error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+}
+
+.efmsg-empty-thread {
+  margin: auto;
+  color: hsl(var(--muted-foreground));
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.efmsg-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.efmsg-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 9, 15, 0.62);
+}
+
+.efmsg-modal-card {
+  position: relative;
+  width: min(580px, 95vw);
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.efmsg-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.efmsg-modal-head h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.efmsg-modal-form {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.efmsg-modal-form label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: hsl(var(--foreground));
+}
+
+.efmsg-modal-form input {
+  border-radius: 10px;
+  border: 1px solid hsl(var(--input));
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+  padding: 0.6rem 0.7rem;
+  outline: 0;
+}
+
+.efmsg-modal-form input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.efmsg-modal-form > button {
+  border: 0;
+  border-radius: 10px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  padding: 0.55rem 0.8rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.efmsg-selector-group {
+  position: relative;
+}
+
+.efmsg-selector-group > span {
+  font-size: 0.85rem;
+  color: hsl(var(--foreground));
+}
+
+.efmsg-selector-popover {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--card));
+  max-height: 210px;
+  overflow-y: auto;
+  padding: 0.35rem;
+  display: grid;
+  gap: 0.25rem;
+  box-shadow: 0 14px 30px rgba(20, 20, 20, 0.14);
+}
+
+.efmsg-selector-empty {
+  margin: 0;
+  padding: 0.45rem 0.5rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.84rem;
+}
+
+.efmsg-selector-help {
+  margin: -0.15rem 0 0;
+  font-size: 0.82rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.efmsg-selector-item {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: hsl(var(--foreground));
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  display: grid;
+  gap: 0.2rem;
+  cursor: pointer;
+}
+
+.efmsg-selector-item:hover {
+  background: hsl(var(--secondary));
+}
+
+.efmsg-selector-item.is-active {
+  border-color: hsl(var(--primary));
+  background: hsla(var(--primary), 0.1);
+}
+
+.efmsg-selector-main {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.efmsg-selector-item small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.efmsg-info-drawer {
+  display: none;
+}
+
+.efmsg-info-drawer.is-open {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+}
+
+.efmsg-info-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.efmsg-info-sheet {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: min(360px, 92vw);
+  height: 100%;
+  padding: 0.8rem;
+}
+
+.efmsg-info-sheet .efmsg-info-pane {
+  height: 100%;
+}
+
+@media (max-width: 1279px) {
+  .efmsg-shell {
+    grid-template-columns: 330px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1023px) {
+  .efmsg-shell {
+    display: block;
+    min-height: calc(100vh - 165px);
+    max-height: calc(100vh - 165px);
+  }
+
+  .efmsg-shell .efmsg-mensajes-pane,
+  .efmsg-shell .efmsg-thread-pane,
+  .efmsg-shell .efmsg-info-pane {
+    height: 100%;
+    display: none;
+  }
+
+  .efmsg-shell.is-list .efmsg-mensajes-pane,
+  .efmsg-shell.is-mensaje .efmsg-thread-pane,
+  .efmsg-shell.is-info .efmsg-info-pane {
+    display: flex;
+  }
+
+  .efmsg-thread-header {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .efmsg-mensajes-header h2 {
+    font-size: 1.8rem;
+  }
+
+  .efmsg-thread-actions {
+    gap: 0.35rem;
+  }
+
+  .efmsg-icon-btn {
+    width: 34px;
+    height: 34px;
+  }
 }

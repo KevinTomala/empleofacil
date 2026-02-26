@@ -14,6 +14,7 @@ router.post('/', authRequired, requireRole(['candidato']), createPostulacionHand
 router.get('/mias', authRequired, requireRole(['candidato']), listMyPostulacionesHandler);
 router.get('/mias/resumen', authRequired, requireRole(['candidato']), getMyPostulacionesResumenHandler);
 router.get('/mias/:postulacionId', authRequired, requireRole(['candidato']), getMyPostulacionDetailHandler);
-router.get('/empresa', authRequired, requireRole(['empresa', 'administrador', 'superadmin']), listEmpresaPostulacionesHandler);
+router.get('/empresa', authRequired, requireRole(['candidato', 'empresa', 'administrador', 'superadmin']), listEmpresaPostulacionesHandler);
+router.get('/contratante', authRequired, requireRole(['candidato', 'empresa', 'administrador', 'superadmin']), listEmpresaPostulacionesHandler);
 
 module.exports = router;

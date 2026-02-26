@@ -572,7 +572,9 @@ CREATE TABLE integracion_ademy_empresas_empleofacil (
 -- -------------------------------------------------------------
 CREATE TABLE vacantes_publicadas (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  empresa_id BIGINT NOT NULL,
+  empresa_id BIGINT NULL,
+  contratante_tipo ENUM('empresa','persona') NOT NULL DEFAULT 'empresa',
+  contratante_candidato_id BIGINT NULL,
   publicado_por BIGINT NULL,
   titulo VARCHAR(180) NOT NULL,
   area VARCHAR(120) NULL,
@@ -580,6 +582,8 @@ CREATE TABLE vacantes_publicadas (
   ciudad VARCHAR(100) NULL,
   modalidad ENUM('presencial','remoto','hibrido') DEFAULT 'presencial',
   tipo_contrato ENUM('tiempo_completo','medio_tiempo','por_horas','temporal','indefinido','otro') DEFAULT 'tiempo_completo',
+  pago_monto DECIMAL(10,2) NULL,
+  pago_periodo ENUM('dia','mes') NULL,
   descripcion TEXT NULL,
   requisitos TEXT NULL,
   estado ENUM('borrador','activa','pausada','cerrada') DEFAULT 'borrador',
@@ -590,8 +594,11 @@ CREATE TABLE vacantes_publicadas (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at DATETIME NULL,
   CONSTRAINT fk_vacantes_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+  CONSTRAINT fk_vacantes_contratante_candidato FOREIGN KEY (contratante_candidato_id) REFERENCES candidatos(id) ON DELETE SET NULL,
   CONSTRAINT fk_vacantes_publicado_por FOREIGN KEY (publicado_por) REFERENCES usuarios(id) ON DELETE SET NULL,
   INDEX idx_vacantes_empresa_estado (empresa_id, estado),
+  INDEX idx_vacantes_contratante_tipo (contratante_tipo),
+  INDEX idx_vacantes_contratante_candidato (contratante_candidato_id),
   INDEX idx_vacantes_estado_publicacion (estado, fecha_publicacion),
   INDEX idx_vacantes_busqueda (titulo, area, provincia, ciudad)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -600,7 +607,9 @@ CREATE TABLE postulaciones (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   vacante_id BIGINT NOT NULL,
   candidato_id BIGINT NOT NULL,
-  empresa_id BIGINT NOT NULL,
+  empresa_id BIGINT NULL,
+  contratante_tipo ENUM('empresa','persona') NOT NULL DEFAULT 'empresa',
+  contratante_candidato_id BIGINT NULL,
   estado_proceso ENUM('nuevo','en_revision','contactado','entrevista','seleccionado','descartado','finalizado','rechazado') DEFAULT 'nuevo',
   fecha_postulacion DATETIME DEFAULT CURRENT_TIMESTAMP,
   ultima_actividad DATETIME NULL,
@@ -612,10 +621,64 @@ CREATE TABLE postulaciones (
   CONSTRAINT fk_postulaciones_vacante FOREIGN KEY (vacante_id) REFERENCES vacantes_publicadas(id) ON DELETE CASCADE,
   CONSTRAINT fk_postulaciones_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
   CONSTRAINT fk_postulaciones_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+  CONSTRAINT fk_postulaciones_contratante_candidato FOREIGN KEY (contratante_candidato_id) REFERENCES candidatos(id) ON DELETE SET NULL,
   UNIQUE KEY uq_postulacion_vacante_candidato (vacante_id, candidato_id),
   INDEX idx_postulaciones_empresa_estado (empresa_id, estado_proceso),
+  INDEX idx_postulaciones_contratante_tipo (contratante_tipo),
+  INDEX idx_postulaciones_contratante_candidato (contratante_candidato_id),
   INDEX idx_postulaciones_candidato_fecha (candidato_id, fecha_postulacion),
   INDEX idx_postulaciones_vacante_fecha (vacante_id, fecha_postulacion)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE mensajes_conversaciones (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tipo ENUM('vacante','directa','soporte') NOT NULL DEFAULT 'vacante',
+  direct_key VARCHAR(80) NULL,
+  vacante_id BIGINT NULL,
+  candidato_id BIGINT NULL,
+  creada_por_usuario_id BIGINT NULL,
+  estado ENUM('activa','archivada','cerrada') NOT NULL DEFAULT 'activa',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_mensajes_conversaciones_vacante FOREIGN KEY (vacante_id) REFERENCES vacantes_publicadas(id) ON DELETE SET NULL,
+  CONSTRAINT fk_mensajes_conversaciones_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE SET NULL,
+  CONSTRAINT fk_mensajes_conversaciones_creada_por FOREIGN KEY (creada_por_usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+  UNIQUE KEY uq_mensajes_conversaciones_direct_key (direct_key),
+  UNIQUE KEY uq_mensajes_conversaciones_vacante_candidato (vacante_id, candidato_id),
+  INDEX idx_mensajes_conversaciones_tipo (tipo),
+  INDEX idx_mensajes_conversaciones_updated_at (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE mensajes (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  conversacion_id BIGINT NOT NULL,
+  remitente_usuario_id BIGINT NULL,
+  cuerpo TEXT NOT NULL,
+  tipo ENUM('texto','sistema') NOT NULL DEFAULT 'texto',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  edited_at DATETIME NULL,
+  deleted_at DATETIME NULL,
+  CONSTRAINT fk_mensajes_conversacion FOREIGN KEY (conversacion_id) REFERENCES mensajes_conversaciones(id) ON DELETE CASCADE,
+  CONSTRAINT fk_mensajes_remitente FOREIGN KEY (remitente_usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+  INDEX idx_mensajes_conversacion_created (conversacion_id, created_at),
+  INDEX idx_mensajes_conversacion_id (conversacion_id, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE mensajes_conversacion_participantes (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  conversacion_id BIGINT NOT NULL,
+  usuario_id BIGINT NOT NULL,
+  rol_contexto ENUM('candidato','contratante','admin','invitado') NOT NULL DEFAULT 'invitado',
+  activo TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  ultimo_leido_mensaje_id BIGINT NULL,
+  ultimo_leido_at DATETIME NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_mensajes_participante_conversacion FOREIGN KEY (conversacion_id) REFERENCES mensajes_conversaciones(id) ON DELETE CASCADE,
+  CONSTRAINT fk_mensajes_participante_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_mensajes_participante (conversacion_id, usuario_id),
+  INDEX idx_mensajes_participante_usuario (usuario_id),
+  INDEX idx_mensajes_participante_ultimo (usuario_id, ultimo_leido_mensaje_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -------------------------------------------------------------

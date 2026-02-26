@@ -5,6 +5,22 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Menu, X, Briefcase } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { getMyPerfil } from '../services/perfilCandidato.api'
+import { getMyCompanyPerfil } from '../services/companyPerfil.api'
+
+function toAssetUrl(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw
+  const normalized = raw.replace(/\\/g, '/')
+  const uploadsIdx = normalized.toLowerCase().indexOf('/uploads/')
+  const uploadsPath = uploadsIdx >= 0
+    ? normalized.slice(uploadsIdx)
+    : normalized.toLowerCase().startsWith('uploads/')
+      ? `/${normalized}`
+      : normalized
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+  return uploadsPath.startsWith('/') ? `${apiBase}${uploadsPath}` : `${apiBase}/${uploadsPath}`
+}
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -20,32 +36,28 @@ export default function Header() {
     let active = true
 
     async function loadPhoto() {
-      if (role !== 'candidato') {
-        if (active) {
-          setProfilePhotoUrl('')
-          setPhotoError(false)
-        }
-        return
-      }
-
       try {
-        const perfil = await getMyPerfil()
-        if (!active) return
-        const documentos = Array.isArray(perfil?.documentos) ? perfil.documentos : []
-        const foto = documentos.find((doc) => doc?.tipo_documento === 'foto' && doc?.ruta_archivo)
-        if (!foto?.ruta_archivo) {
-          setProfilePhotoUrl('')
+        if (role === 'candidato') {
+          const perfil = await getMyPerfil()
+          if (!active) return
+          const documentos = Array.isArray(perfil?.documentos) ? perfil.documentos : []
+          const foto = documentos.find((doc) => doc?.tipo_documento === 'foto' && doc?.ruta_archivo)
+          setProfilePhotoUrl(foto?.ruta_archivo ? toAssetUrl(foto.ruta_archivo) : '')
           setPhotoError(false)
           return
         }
 
-        const rawPath = String(foto.ruta_archivo)
-        if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
-          setProfilePhotoUrl(rawPath)
-        } else {
-          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-          setProfilePhotoUrl(rawPath.startsWith('/') ? `${apiBase}${rawPath}` : `${apiBase}/${rawPath}`)
+        if (role === 'empresa') {
+          const perfilEmpresa = await getMyCompanyPerfil()
+          if (!active) return
+          const logo = String(perfilEmpresa?.perfil?.logo_url || '').trim()
+          setProfilePhotoUrl(logo ? toAssetUrl(logo) : '')
+          setPhotoError(false)
+          return
         }
+
+        if (!active) return
+        setProfilePhotoUrl('')
         setPhotoError(false)
       } catch {
         if (!active) return
@@ -73,6 +85,7 @@ export default function Header() {
     if (role === 'superadmin' || role === 'administrador') {
       return [
         { href: '/app/admin', label: 'Resumen' },
+        { href: '/app/admin/mensajes', label: 'Mensajes' },
         { href: '/app/admin/roles', label: 'Roles' },
         { href: '/app/admin/cuentas', label: 'Cuentas' },
         { href: '/app/admin/solicitudes', label: 'Solicitudes' },
@@ -100,7 +113,9 @@ export default function Header() {
         { href: '/app/candidate/empresas', label: 'Empresas' },
         { href: '/app/candidate/personas', label: 'Personas' },
         { href: '/app/candidate/vacantes', label: 'Vacantes' },
+        { href: '/app/candidate/publicaciones', label: 'Publicar' },
         { href: '/app/candidate/postulaciones', label: 'Postulaciones' },
+        { href: '/app/candidate/mensajes', label: 'Mensajes' },
         { href: '/app/candidate/perfil', label: 'Perfil' },
       ]
       if (hasCompanyAccess) {
@@ -110,8 +125,8 @@ export default function Header() {
     }
 
     return [
-      { href: '/#beneficios-empresas', label: 'Para Empresas' },
       { href: '/#beneficios-candidatos', label: 'Para Candidatos' },
+      { href: '/#beneficios-empresas', label: 'Para Empresas' },
       { href: '/#como-funciona', label: 'Como Funciona' },
       { href: '/#contacto', label: 'Contacto' },
     ]

@@ -1,12 +1,45 @@
-import { useState } from 'react'
-import { Mail, Phone, MapPin, Send } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Mail, MessageCircle, MapPin, Send } from 'lucide-react'
 import FormDropdown from './FormDropdown'
 
 export default function Contacto() {
   const [tipo, setTipo] = useState('')
+  const [isRevealVisible, setIsRevealVisible] = useState(false)
+  const sectionRef = useRef(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (media.matches) {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const node = sectionRef.current
+    if (!node || !('IntersectionObserver' in window)) {
+      setIsRevealVisible(true)
+      return undefined
+    }
+
+    const observer = new window.IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          setIsRevealVisible(true)
+          observer.disconnect()
+        }
+      })
+    }, { threshold: 0.18, rootMargin: '0px 0px -8% 0px' })
+
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
 
   return (
-    <section id="contacto" className="py-20 bg-secondary">
+    <section ref={sectionRef} id="contacto" className={`py-20 bg-white company-vertical-reveal ${isRevealVisible ? 'is-visible' : ''}`}>
       <div className="page-container">
         <div className="grid lg:grid-cols-2 gap-12">
           {/* Left - Info */}
@@ -15,7 +48,7 @@ export default function Contacto() {
               Contacto
             </span>
             <h2 className="font-heading text-3xl sm:text-4xl font-bold text-foreground mb-4 text-balance">
-              Tienes preguntas? Estamos para ayudarte
+              ¿Tienes preguntas? Estamos para ayudarte
             </h2>
             <p className="text-foreground/70 text-lg mb-8">
               Ya sea que tengas dudas sobre la plataforma, necesites soporte o quieras conocer
@@ -36,12 +69,12 @@ export default function Contacto() {
 
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
-                  <Phone className="w-6 h-6 text-primary" />
+                  <MessageCircle className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-foreground mb-1">Telefono</h3>
-                  <p className="text-foreground/70">+593 4 123 4567</p>
-                  <p className="text-foreground/70">WhatsApp: +593 99 123 4567</p>
+                  <h3 className="font-semibold text-foreground mb-1">WhatsApp</h3>
+                  <p className="text-foreground/70">+593 996659937</p>
+                  <p className="text-foreground/70">WhatsApp: +593 996659937</p>
                 </div>
               </div>
 
@@ -51,8 +84,8 @@ export default function Contacto() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-foreground mb-1">Ubicacion</h3>
-                  <p className="text-foreground/70">Guayaquil, Ecuador</p>
-                  <p className="text-foreground/70">Lunes a Viernes: 9:00 - 18:00</p>
+                  <p className="text-foreground/70">Santa Elena, Ecuador</p>
+                  <p className="text-foreground/70">Lunes a Viernes: 08:00 - 17:00</p>
                 </div>
               </div>
             </div>
@@ -114,7 +147,7 @@ export default function Contacto() {
                   id="mensaje"
                   rows={4}
                   className="w-full px-4 py-3 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors resize-none"
-                  placeholder="En que podemos ayudarte?"
+                  placeholder="¿En que podemos ayudarte?"
                 />
               </div>
 

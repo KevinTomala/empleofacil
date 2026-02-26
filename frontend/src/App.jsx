@@ -111,6 +111,22 @@ function App() {
             }
           />
           <Route
+            path="/app/candidate/publicaciones"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <CompanyVacantes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/candidate/mensajes"
+            element={
+              <ProtectedRoute roles={['candidato', 'superadmin']}>
+                <CompanyMensajes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/app/candidate/perfil"
             element={
               <ProtectedRoute roles={['candidato']}>
@@ -278,6 +294,14 @@ function App() {
             element={
               <ProtectedRoute roles={['administrador', 'superadmin']}>
                 <AdminAuditoria />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/admin/mensajes"
+            element={
+              <ProtectedRoute roles={['administrador', 'superadmin']}>
+                <CompanyMensajes />
               </ProtectedRoute>
             }
           />
