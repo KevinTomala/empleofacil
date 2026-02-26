@@ -1,5 +1,7 @@
 const db = require('../db');
-const { toPositiveIntOrNull, normalizePosted } = require('./vacantes.service');
+const { toPositiveIntOrNull, normalizePosted, ensureVacantesSchema } = require('./vacantes.service');
+
+let ensuredPostulacionesSchema = false;
 
 function toPage(value, fallback = 1) {
   const parsed = Number(value);
@@ -22,8 +24,80 @@ function toTextOrNull(value) {
 function normalizeEstadoProceso(value) {
   const estado = toTextOrNull(value);
   if (!estado) return null;
-  if (!['nuevo', 'en_revision', 'entrevista', 'oferta', 'rechazado'].includes(estado)) return null;
+  if (!['nuevo', 'en_revision', 'contactado', 'entrevista', 'oferta', 'seleccionado', 'descartado', 'finalizado', 'rechazado'].includes(estado)) return null;
   return estado;
+}
+
+async function hasColumn(tableName, columnName) {
+  const [rows] = await db.query(
+    `SELECT COUNT(*) AS total
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = ?
+       AND COLUMN_NAME = ?`,
+    [tableName, columnName]
+  );
+  return Number(rows[0]?.total || 0) > 0;
+}
+
+async function isNullableColumn(tableName, columnName) {
+  const [rows] = await db.query(
+    `SELECT IS_NULLABLE AS is_nullable
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = ?
+       AND COLUMN_NAME = ?
+     LIMIT 1`,
+    [tableName, columnName]
+  );
+  if (!rows.length) return false;
+  return String(rows[0]?.is_nullable || '').toUpperCase() === 'YES';
+}
+
+async function ensurePostulacionesSchema() {
+  if (ensuredPostulacionesSchema) return;
+  await ensureVacantesSchema();
+
+  if (!(await hasColumn('postulaciones', 'contratante_tipo'))) {
+    await db.query(
+      "ALTER TABLE postulaciones ADD COLUMN contratante_tipo ENUM('empresa','persona') NOT NULL DEFAULT 'empresa' AFTER empresa_id"
+    );
+  }
+
+  if (!(await hasColumn('postulaciones', 'contratante_candidato_id'))) {
+    await db.query(
+      'ALTER TABLE postulaciones ADD COLUMN contratante_candidato_id BIGINT NULL AFTER contratante_tipo'
+    );
+  }
+
+  if (!(await isNullableColumn('postulaciones', 'empresa_id'))) {
+    await db.query('ALTER TABLE postulaciones MODIFY COLUMN empresa_id BIGINT NULL');
+  }
+
+  try {
+    await db.query(
+      'ALTER TABLE postulaciones ADD CONSTRAINT fk_postulaciones_contratante_candidato FOREIGN KEY (contratante_candidato_id) REFERENCES candidatos(id) ON DELETE SET NULL'
+    );
+  } catch (error) {
+    const code = String(error.code || '');
+    if (code !== 'ER_DUP_KEYNAME' && code !== 'ER_CANT_CREATE_TABLE' && code !== 'ER_FK_DUP_NAME') {
+      throw error;
+    }
+  }
+
+  try {
+    await db.query('CREATE INDEX idx_postulaciones_contratante_tipo ON postulaciones (contratante_tipo)');
+  } catch (error) {
+    if (String(error.code || '') !== 'ER_DUP_KEYNAME') throw error;
+  }
+
+  try {
+    await db.query('CREATE INDEX idx_postulaciones_contratante_candidato ON postulaciones (contratante_candidato_id)');
+  } catch (error) {
+    if (String(error.code || '') !== 'ER_DUP_KEYNAME') throw error;
+  }
+
+  ensuredPostulacionesSchema = true;
 }
 
 function buildPostedCondition(posted, fieldName = 'p.fecha_postulacion') {
@@ -45,7 +119,7 @@ function buildCandidatoWhereClause({ candidatoId, q = null, estado = null, poste
 
   if (term) {
     const like = `%${term}%`;
-    where.push('(v.titulo LIKE ? OR e.nombre LIKE ? OR v.provincia LIKE ? OR v.ciudad LIKE ?)');
+    where.push('(v.titulo LIKE ? OR COALESCE(e.nombre, TRIM(CONCAT_WS(\' \', cp.nombres, cp.apellidos)), \'\') LIKE ? OR v.provincia LIKE ? OR v.ciudad LIKE ?)');
     params.push(like, like, like, like);
   }
 
@@ -73,8 +147,9 @@ async function findCandidatoIdByUserId(userId) {
 }
 
 async function findVacanteForApply(vacanteId) {
+  await ensurePostulacionesSchema();
   const [rows] = await db.query(
-    `SELECT id, empresa_id, estado, deleted_at
+    `SELECT id, empresa_id, contratante_tipo, contratante_candidato_id, estado, deleted_at
      FROM vacantes_publicadas
      WHERE id = ?
      LIMIT 1`,
@@ -84,6 +159,7 @@ async function findVacanteForApply(vacanteId) {
 }
 
 async function existsPostulacion(vacanteId, candidatoId) {
+  await ensurePostulacionesSchema();
   const [rows] = await db.query(
     `SELECT id
      FROM postulaciones
@@ -96,19 +172,29 @@ async function existsPostulacion(vacanteId, candidatoId) {
   return Boolean(rows.length);
 }
 
-async function createPostulacion({ vacanteId, candidatoId, empresaId, origen = 'portal_empleo' }) {
+async function createPostulacion({
+  vacanteId,
+  candidatoId,
+  empresaId = null,
+  contratanteTipo = 'empresa',
+  contratanteCandidatoId = null,
+  origen = 'portal_empleo'
+}) {
+  await ensurePostulacionesSchema();
   const [result] = await db.query(
     `INSERT INTO postulaciones (
       vacante_id,
       candidato_id,
       empresa_id,
+      contratante_tipo,
+      contratante_candidato_id,
       estado_proceso,
       fecha_postulacion,
       ultima_actividad,
       origen,
       activo
-    ) VALUES (?, ?, ?, 'nuevo', NOW(), NOW(), ?, 1)`,
-    [vacanteId, candidatoId, empresaId, origen]
+    ) VALUES (?, ?, ?, ?, ?, 'nuevo', NOW(), NOW(), ?, 1)`,
+    [vacanteId, candidatoId, empresaId, contratanteTipo, contratanteCandidatoId, origen]
   );
   return { id: result.insertId };
 }
@@ -121,6 +207,7 @@ async function listPostulacionesByCandidato({
   estado = null,
   posted = null
 }) {
+  await ensurePostulacionesSchema();
   const safePage = toPage(page);
   const safePageSize = toPageSize(pageSize);
   const offset = (safePage - 1) * safePageSize;
@@ -135,6 +222,9 @@ async function listPostulacionesByCandidato({
      LEFT JOIN empresas e
        ON e.id = p.empresa_id
       AND e.deleted_at IS NULL
+     LEFT JOIN candidatos cp
+       ON cp.id = p.contratante_candidato_id
+      AND cp.deleted_at IS NULL
      ${whereSql}`,
     params
   );
@@ -144,6 +234,8 @@ async function listPostulacionesByCandidato({
       p.id,
       p.vacante_id,
       p.empresa_id,
+      p.contratante_tipo,
+      p.contratante_candidato_id,
       p.estado_proceso,
       p.fecha_postulacion,
       p.ultima_actividad,
@@ -151,7 +243,8 @@ async function listPostulacionesByCandidato({
       v.titulo AS vacante_titulo,
       v.provincia,
       v.ciudad,
-      e.nombre AS empresa_nombre
+      COALESCE(e.nombre, TRIM(CONCAT_WS(' ', cp.nombres, cp.apellidos))) AS contratante_nombre,
+      COALESCE(e.nombre, TRIM(CONCAT_WS(' ', cp.nombres, cp.apellidos))) AS empresa_nombre
      FROM postulaciones p
      INNER JOIN vacantes_publicadas v
        ON v.id = p.vacante_id
@@ -159,6 +252,9 @@ async function listPostulacionesByCandidato({
      LEFT JOIN empresas e
        ON e.id = p.empresa_id
       AND e.deleted_at IS NULL
+     LEFT JOIN candidatos cp
+       ON cp.id = p.contratante_candidato_id
+      AND cp.deleted_at IS NULL
      ${whereSql}
      ORDER BY p.fecha_postulacion DESC
      LIMIT ? OFFSET ?`,
@@ -174,6 +270,7 @@ async function listPostulacionesByCandidato({
 }
 
 async function getPostulacionesResumenByCandidato({ candidatoId, q = null, posted = null }) {
+  await ensurePostulacionesSchema();
   const { whereSql, params } = buildCandidatoWhereClause({ candidatoId, q, posted });
 
   const [rows] = await db.query(
@@ -185,6 +282,9 @@ async function getPostulacionesResumenByCandidato({ candidatoId, q = null, poste
      LEFT JOIN empresas e
        ON e.id = p.empresa_id
       AND e.deleted_at IS NULL
+     LEFT JOIN candidatos cp
+       ON cp.id = p.contratante_candidato_id
+      AND cp.deleted_at IS NULL
      ${whereSql}
      GROUP BY p.estado_proceso`,
     params
@@ -193,8 +293,12 @@ async function getPostulacionesResumenByCandidato({ candidatoId, q = null, poste
   const byEstado = {
     nuevo: 0,
     en_revision: 0,
+    contactado: 0,
     entrevista: 0,
     oferta: 0,
+    seleccionado: 0,
+    descartado: 0,
+    finalizado: 0,
     rechazado: 0
   };
 
@@ -204,8 +308,8 @@ async function getPostulacionesResumenByCandidato({ candidatoId, q = null, poste
   });
 
   const total = Object.values(byEstado).reduce((sum, value) => sum + value, 0);
-  const enProceso = byEstado.nuevo + byEstado.en_revision;
-  const activos = enProceso + byEstado.entrevista + byEstado.oferta;
+  const enProceso = byEstado.nuevo + byEstado.en_revision + byEstado.contactado;
+  const activos = enProceso + byEstado.entrevista + byEstado.oferta + byEstado.seleccionado;
 
   return {
     total,
@@ -216,11 +320,14 @@ async function getPostulacionesResumenByCandidato({ candidatoId, q = null, poste
 }
 
 async function getPostulacionDetailByCandidato({ candidatoId, postulacionId }) {
+  await ensurePostulacionesSchema();
   const [rows] = await db.query(
     `SELECT
       p.id,
       p.vacante_id,
       p.empresa_id,
+      p.contratante_tipo,
+      p.contratante_candidato_id,
       p.estado_proceso,
       p.fecha_postulacion,
       p.ultima_actividad,
@@ -238,7 +345,7 @@ async function getPostulacionDetailByCandidato({ candidatoId, postulacionId }) {
       v.fecha_publicacion AS vacante_fecha_publicacion,
       v.fecha_cierre AS vacante_fecha_cierre,
       e.id AS empresa_detalle_id,
-      e.nombre AS empresa_nombre
+      COALESCE(e.nombre, TRIM(CONCAT_WS(' ', cp.nombres, cp.apellidos))) AS contratante_nombre
      FROM postulaciones p
      INNER JOIN vacantes_publicadas v
        ON v.id = p.vacante_id
@@ -246,6 +353,9 @@ async function getPostulacionDetailByCandidato({ candidatoId, postulacionId }) {
      LEFT JOIN empresas e
        ON e.id = p.empresa_id
       AND e.deleted_at IS NULL
+     LEFT JOIN candidatos cp
+       ON cp.id = p.contratante_candidato_id
+      AND cp.deleted_at IS NULL
      WHERE p.id = ?
        AND p.candidato_id = ?
        AND p.deleted_at IS NULL
@@ -260,6 +370,8 @@ async function getPostulacionDetailByCandidato({ candidatoId, postulacionId }) {
     id: row.id,
     vacante_id: row.vacante_id,
     empresa_id: row.empresa_id,
+    contratante_tipo: row.contratante_tipo,
+    contratante_candidato_id: row.contratante_candidato_id,
     estado_proceso: row.estado_proceso,
     fecha_postulacion: row.fecha_postulacion,
     ultima_actividad: row.ultima_actividad,
@@ -280,26 +392,51 @@ async function getPostulacionDetailByCandidato({ candidatoId, postulacionId }) {
     },
     empresa: {
       id: row.empresa_detalle_id,
-      nombre: row.empresa_nombre
+      nombre: row.contratante_nombre
+    },
+    contratante: {
+      tipo: row.contratante_tipo,
+      empresa_id: row.empresa_detalle_id,
+      candidato_id: row.contratante_candidato_id,
+      nombre: row.contratante_nombre
     }
   };
 }
 
-async function listPostulacionesByEmpresa({
-  empresaId,
+async function listPostulacionesByContratante({
+  ownerScope,
   page = 1,
   pageSize = 20,
   vacanteId = null,
   q = null
 }) {
+  await ensurePostulacionesSchema();
   const safePage = toPage(page);
   const safePageSize = toPageSize(pageSize);
   const offset = (safePage - 1) * safePageSize;
   const safeVacanteId = toPositiveIntOrNull(vacanteId);
   const term = toTextOrNull(q);
 
-  const where = ['p.empresa_id = ?', 'p.deleted_at IS NULL'];
-  const params = [empresaId];
+  const where = ['p.deleted_at IS NULL'];
+  const params = [];
+
+  if (ownerScope?.type === 'empresa' && ownerScope?.empresaId) {
+    where.push("p.contratante_tipo = 'empresa'");
+    where.push('p.empresa_id = ?');
+    params.push(ownerScope.empresaId);
+  } else if (ownerScope?.type === 'persona' && ownerScope?.candidatoId) {
+    where.push("p.contratante_tipo = 'persona'");
+    where.push('p.contratante_candidato_id = ?');
+    params.push(ownerScope.candidatoId);
+  } else {
+    return {
+      items: [],
+      page: safePage,
+      page_size: safePageSize,
+      total: 0
+    };
+  }
+
   if (safeVacanteId) {
     where.push('p.vacante_id = ?');
     params.push(safeVacanteId);
@@ -333,6 +470,8 @@ async function listPostulacionesByEmpresa({
       p.vacante_id,
       p.candidato_id,
       p.empresa_id,
+      p.contratante_tipo,
+      p.contratante_candidato_id,
       p.estado_proceso,
       p.fecha_postulacion,
       p.ultima_actividad,
@@ -378,5 +517,6 @@ module.exports = {
   listPostulacionesByCandidato,
   getPostulacionesResumenByCandidato,
   getPostulacionDetailByCandidato,
-  listPostulacionesByEmpresa
+  listPostulacionesByContratante,
+  listPostulacionesByEmpresa: listPostulacionesByContratante
 };

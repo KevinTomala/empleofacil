@@ -1,5 +1,6 @@
 const {
   toPositiveIntOrNull,
+  normalizeContratanteTipo,
   normalizeEstado,
   normalizeModalidad,
   normalizeTipoContrato,
@@ -19,20 +20,55 @@ function isPlainObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
 }
 
-async function resolveEmpresaScope(req, { allowAdminParam = false } = {}) {
+function resolveAdminOwnerType(req) {
+  const explicit = normalizeContratanteTipo(req.query?.contratante_tipo || req.body?.contratante_tipo || req.params?.contratanteTipo);
+  if (explicit) return explicit;
+  const candidatoId = toPositiveIntOrNull(req.query?.candidato_id || req.body?.candidato_id || req.params?.candidatoId);
+  return candidatoId ? 'persona' : 'empresa';
+}
+
+async function resolveOwnerScope(req, { allowAdminParam = false } = {}) {
   const rol = req.user?.rol;
   const userId = req.user?.id;
 
   if (rol === 'empresa') {
-    if (req.companyContext?.empresaId) return req.companyContext.empresaId;
-    return resolveEmpresaIdForUser(userId, { autoCreate: true });
+    if (req.companyContext?.empresaId) return { type: 'empresa', empresaId: req.companyContext.empresaId };
+    const empresaId = await resolveEmpresaIdForUser(userId, { autoCreate: true });
+    return empresaId ? { type: 'empresa', empresaId } : null;
+  }
+
+  if (rol === 'candidato') {
+    const candidatoId = await findCandidatoIdByUserId(userId);
+    return candidatoId ? { type: 'persona', candidatoId } : null;
   }
 
   if ((rol === 'administrador' || rol === 'superadmin') && allowAdminParam) {
-    return toPositiveIntOrNull(req.query?.empresa_id || req.body?.empresa_id || req.params?.empresaId);
+    const ownerType = resolveAdminOwnerType(req);
+    if (ownerType === 'persona') {
+      const candidatoId = toPositiveIntOrNull(req.query?.candidato_id || req.body?.candidato_id || req.params?.candidatoId);
+      return candidatoId ? { type: 'persona', candidatoId } : null;
+    }
+
+    const empresaId = toPositiveIntOrNull(req.query?.empresa_id || req.body?.empresa_id || req.params?.empresaId);
+    return empresaId ? { type: 'empresa', empresaId } : null;
   }
 
   return null;
+}
+
+function isVacanteOwnedByScope(vacante, ownerScope) {
+  if (!vacante || !ownerScope) return false;
+  const vacanteTipo = normalizeContratanteTipo(vacante.contratante_tipo) || (vacante.empresa_id ? 'empresa' : 'persona');
+
+  if (ownerScope.type === 'empresa') {
+    return vacanteTipo === 'empresa' && Number(vacante.empresa_id) === Number(ownerScope.empresaId);
+  }
+
+  if (ownerScope.type === 'persona') {
+    return vacanteTipo === 'persona' && Number(vacante.contratante_candidato_id) === Number(ownerScope.candidatoId);
+  }
+
+  return false;
 }
 
 function validateCreateVacantePayload(payload) {
@@ -188,8 +224,8 @@ async function listMyVacantes(req, res) {
   }
 
   try {
-    const empresaId = await resolveEmpresaScope(req, { allowAdminParam: true });
-    if (!empresaId) return res.status(403).json({ error: 'COMPANY_ACCESS_REQUIRED' });
+    const ownerScope = await resolveOwnerScope(req, { allowAdminParam: true });
+    if (!ownerScope) return res.status(403).json({ error: 'CONTRATANTE_ACCESS_REQUIRED' });
 
     const result = await listVacantes({
       page: req.query.page,
@@ -202,7 +238,7 @@ async function listMyVacantes(req, res) {
       tipoContrato: req.query.tipo_contrato,
       estado: req.query.estado,
       posted: req.query.posted
-    }, { ownEmpresaId: empresaId });
+    }, { ownerScope });
 
     return res.json(result);
   } catch (error) {
@@ -215,10 +251,10 @@ async function createVacanteHandler(req, res) {
   if (!payload) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
 
   try {
-    const empresaId = await resolveEmpresaScope(req, { allowAdminParam: true });
-    if (!empresaId) return res.status(403).json({ error: 'COMPANY_ACCESS_REQUIRED' });
+    const ownerScope = await resolveOwnerScope(req, { allowAdminParam: true });
+    if (!ownerScope) return res.status(403).json({ error: 'CONTRATANTE_ACCESS_REQUIRED' });
 
-    const created = await createVacante(empresaId, req.user?.id || null, payload);
+    const created = await createVacante(ownerScope, req.user?.id || null, payload);
     return res.status(201).json({ ok: true, id: created.id });
   } catch (error) {
     return res.status(500).json({ error: 'VACANTE_UPDATE_FAILED', details: String(error.message || error) });
@@ -233,12 +269,12 @@ async function updateVacanteHandler(req, res) {
   if (!patch) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
 
   try {
-    const empresaId = await resolveEmpresaScope(req, { allowAdminParam: true });
-    if (!empresaId) return res.status(403).json({ error: 'COMPANY_ACCESS_REQUIRED' });
+    const ownerScope = await resolveOwnerScope(req, { allowAdminParam: true });
+    if (!ownerScope) return res.status(403).json({ error: 'CONTRATANTE_ACCESS_REQUIRED' });
 
     const vacante = await findVacanteById(vacanteId);
     if (!vacante || vacante.deleted_at) return res.status(404).json({ error: 'VACANTE_NOT_FOUND' });
-    if (vacante.empresa_id !== empresaId) return res.status(403).json({ error: 'FORBIDDEN' });
+    if (!isVacanteOwnedByScope(vacante, ownerScope)) return res.status(403).json({ error: 'FORBIDDEN' });
 
     const affected = await updateVacante(vacanteId, patch);
     if (!affected) return res.status(404).json({ error: 'VACANTE_NOT_FOUND' });
@@ -255,12 +291,12 @@ async function updateVacanteEstadoHandler(req, res) {
   if (!estado) return res.status(400).json({ error: 'INVALID_PAYLOAD' });
 
   try {
-    const empresaId = await resolveEmpresaScope(req, { allowAdminParam: true });
-    if (!empresaId) return res.status(403).json({ error: 'COMPANY_ACCESS_REQUIRED' });
+    const ownerScope = await resolveOwnerScope(req, { allowAdminParam: true });
+    if (!ownerScope) return res.status(403).json({ error: 'CONTRATANTE_ACCESS_REQUIRED' });
 
     const vacante = await findVacanteById(vacanteId);
     if (!vacante || vacante.deleted_at) return res.status(404).json({ error: 'VACANTE_NOT_FOUND' });
-    if (vacante.empresa_id !== empresaId) return res.status(403).json({ error: 'FORBIDDEN' });
+    if (!isVacanteOwnedByScope(vacante, ownerScope)) return res.status(403).json({ error: 'FORBIDDEN' });
 
     const patch = { estado };
     if (estado === 'cerrada' && !vacante.fecha_cierre) {

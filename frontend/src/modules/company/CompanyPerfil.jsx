@@ -120,11 +120,18 @@ function toExternalUrl(value) {
 }
 
 function toAssetUrl(value) {
-  const text = String(value || '').trim()
-  if (!text) return ''
-  if (text.startsWith('http://') || text.startsWith('https://')) return text
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw
+  const normalized = raw.replace(/\\/g, '/')
+  const uploadsIdx = normalized.toLowerCase().indexOf('/uploads/')
+  const uploadsPath = uploadsIdx >= 0
+    ? normalized.slice(uploadsIdx)
+    : normalized.toLowerCase().startsWith('uploads/')
+      ? `/${normalized}`
+      : normalized
   const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-  return text.startsWith('/') ? `${apiBase}${text}` : `${apiBase}/${text}`
+  return uploadsPath.startsWith('/') ? `${apiBase}${uploadsPath}` : `${apiBase}/${uploadsPath}`
 }
 
 export default function CompanyPerfil() {

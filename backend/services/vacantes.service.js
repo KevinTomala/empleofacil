@@ -32,6 +32,13 @@ function normalizeEstado(value) {
   return estado;
 }
 
+function normalizeContratanteTipo(value) {
+  const tipo = toTextOrNull(value);
+  if (!tipo) return null;
+  if (!['empresa', 'persona'].includes(tipo)) return null;
+  return tipo;
+}
+
 function normalizeModalidad(value) {
   const modalidad = toTextOrNull(value);
   if (!modalidad) return null;
@@ -92,6 +99,20 @@ async function hasColumn(tableName, columnName) {
   return Number(rows[0]?.total || 0) > 0;
 }
 
+async function isNullableColumn(tableName, columnName) {
+  const [rows] = await db.query(
+    `SELECT IS_NULLABLE AS is_nullable
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = ?
+       AND COLUMN_NAME = ?
+     LIMIT 1`,
+    [tableName, columnName]
+  );
+  if (!rows.length) return false;
+  return String(rows[0]?.is_nullable || '').toUpperCase() === 'YES';
+}
+
 async function ensureVacantesSchema() {
   if (ensuredVacantesSchema) return;
 
@@ -101,6 +122,45 @@ async function ensureVacantesSchema() {
 
   if (!(await hasColumn('vacantes_publicadas', 'pago_periodo'))) {
     await db.query("ALTER TABLE vacantes_publicadas ADD COLUMN pago_periodo ENUM('dia','mes') NULL AFTER pago_monto");
+  }
+
+  if (!(await hasColumn('vacantes_publicadas', 'contratante_tipo'))) {
+    await db.query(
+      "ALTER TABLE vacantes_publicadas ADD COLUMN contratante_tipo ENUM('empresa','persona') NOT NULL DEFAULT 'empresa' AFTER empresa_id"
+    );
+  }
+
+  if (!(await hasColumn('vacantes_publicadas', 'contratante_candidato_id'))) {
+    await db.query(
+      'ALTER TABLE vacantes_publicadas ADD COLUMN contratante_candidato_id BIGINT NULL AFTER contratante_tipo'
+    );
+  }
+
+  if (!(await isNullableColumn('vacantes_publicadas', 'empresa_id'))) {
+    await db.query('ALTER TABLE vacantes_publicadas MODIFY COLUMN empresa_id BIGINT NULL');
+  }
+
+  try {
+    await db.query(
+      'ALTER TABLE vacantes_publicadas ADD CONSTRAINT fk_vacantes_contratante_candidato FOREIGN KEY (contratante_candidato_id) REFERENCES candidatos(id) ON DELETE SET NULL'
+    );
+  } catch (error) {
+    const code = String(error.code || '');
+    if (code !== 'ER_DUP_KEYNAME' && code !== 'ER_CANT_CREATE_TABLE' && code !== 'ER_FK_DUP_NAME') {
+      throw error;
+    }
+  }
+
+  try {
+    await db.query('CREATE INDEX idx_vacantes_contratante_tipo ON vacantes_publicadas (contratante_tipo)');
+  } catch (error) {
+    if (String(error.code || '') !== 'ER_DUP_KEYNAME') throw error;
+  }
+
+  try {
+    await db.query('CREATE INDEX idx_vacantes_contratante_candidato ON vacantes_publicadas (contratante_candidato_id)');
+  } catch (error) {
+    if (String(error.code || '') !== 'ER_DUP_KEYNAME') throw error;
   }
 
   ensuredVacantesSchema = true;
@@ -146,19 +206,28 @@ async function fetchEmpresaExperienciaStats(empresaIds = []) {
   }
 }
 
-function buildVacantesWhereClause(filters, { ownEmpresaId = null, onlyActive = false } = {}) {
-  const where = ['v.deleted_at IS NULL', 'v.activo = 1'];
+function buildVacantesWhereClause(filters, { ownerScope = null, onlyActive = false } = {}) {
+  const where = [
+    'v.deleted_at IS NULL',
+    'v.activo = 1',
+    "((v.contratante_tipo = 'empresa' AND e.id IS NOT NULL AND e.deleted_at IS NULL) OR (v.contratante_tipo = 'persona' AND cp.id IS NOT NULL AND cp.deleted_at IS NULL))"
+  ];
   const params = [];
 
-  if (ownEmpresaId) {
+  if (ownerScope?.type === 'empresa' && ownerScope?.empresaId) {
+    where.push("v.contratante_tipo = 'empresa'");
     where.push('v.empresa_id = ?');
-    params.push(ownEmpresaId);
+    params.push(ownerScope.empresaId);
+  } else if (ownerScope?.type === 'persona' && ownerScope?.candidatoId) {
+    where.push("v.contratante_tipo = 'persona'");
+    where.push('v.contratante_candidato_id = ?');
+    params.push(ownerScope.candidatoId);
   } else if (onlyActive) {
     where.push("v.estado = 'activa'");
   }
 
   if (filters.q) {
-    where.push('(v.titulo LIKE ? OR v.area LIKE ? OR v.provincia LIKE ? OR v.ciudad LIKE ? OR e.nombre LIKE ?)');
+    where.push('(v.titulo LIKE ? OR v.area LIKE ? OR v.provincia LIKE ? OR v.ciudad LIKE ? OR COALESCE(e.nombre, TRIM(CONCAT_WS(\' \', cp.nombres, cp.apellidos)), \'\') LIKE ?)');
     const like = `%${filters.q}%`;
     params.push(like, like, like, like, like);
   }
@@ -216,7 +285,7 @@ async function listVacantes({
   tipoContrato = null,
   estado = null,
   posted = null
-} = {}, { ownEmpresaId = null, onlyActive = false, candidatoId = null } = {}) {
+} = {}, { ownerScope = null, onlyActive = false, candidatoId = null } = {}) {
   await ensureVacantesSchema();
   const safePage = toPage(page);
   const safePageSize = toPageSize(pageSize);
@@ -233,14 +302,15 @@ async function listVacantes({
     posted: normalizePosted(posted)
   };
 
-  const { whereSql, params } = buildVacantesWhereClause(filters, { ownEmpresaId, onlyActive });
+  const { whereSql, params } = buildVacantesWhereClause(filters, { ownerScope, onlyActive });
 
   const [countRows] = await db.query(
     `SELECT COUNT(*) AS total
      FROM vacantes_publicadas v
-     INNER JOIN empresas e
+     LEFT JOIN empresas e
        ON e.id = v.empresa_id
-      AND e.deleted_at IS NULL
+     LEFT JOIN candidatos cp
+       ON cp.id = v.contratante_candidato_id
      ${whereSql}`,
     params
   );
@@ -249,8 +319,11 @@ async function listVacantes({
     `SELECT
       v.id,
       v.empresa_id,
+      v.contratante_tipo,
+      v.contratante_candidato_id,
       v.publicado_por,
-      e.nombre AS empresa_nombre,
+      COALESCE(e.nombre, TRIM(CONCAT_WS(' ', cp.nombres, cp.apellidos))) AS contratante_nombre,
+      COALESCE(e.nombre, TRIM(CONCAT_WS(' ', cp.nombres, cp.apellidos))) AS empresa_nombre,
       v.titulo,
       v.area,
       v.provincia,
@@ -268,9 +341,10 @@ async function listVacantes({
       v.updated_at
       ${candidatoId ? ', IF(p.id IS NOT NULL, 1, 0) AS postulado' : ''}
      FROM vacantes_publicadas v
-     INNER JOIN empresas e
+     LEFT JOIN empresas e
        ON e.id = v.empresa_id
-      AND e.deleted_at IS NULL
+     LEFT JOIN candidatos cp
+       ON cp.id = v.contratante_candidato_id
      ${candidatoId ? 'LEFT JOIN postulaciones p ON p.vacante_id = v.id AND p.candidato_id = ? AND p.deleted_at IS NULL' : ''}
      ${whereSql}
      ORDER BY v.created_at DESC
@@ -301,7 +375,7 @@ async function listVacantesCountByProvincia({ onlyActive = true } = {}) {
   const where = [
     'v.deleted_at IS NULL',
     'v.activo = 1',
-    'e.deleted_at IS NULL',
+    "((v.contratante_tipo = 'empresa' AND e.id IS NOT NULL AND e.deleted_at IS NULL) OR (v.contratante_tipo = 'persona' AND cp.id IS NOT NULL AND cp.deleted_at IS NULL))",
     'v.provincia IS NOT NULL',
     "TRIM(v.provincia) <> ''"
   ];
@@ -311,11 +385,13 @@ async function listVacantesCountByProvincia({ onlyActive = true } = {}) {
 
   const [rows] = await db.query(
     `SELECT
-      TRIM(v.provincia) AS provincia,
+     TRIM(v.provincia) AS provincia,
       COUNT(*) AS total
      FROM vacantes_publicadas v
-     INNER JOIN empresas e
+     LEFT JOIN empresas e
        ON e.id = v.empresa_id
+     LEFT JOIN candidatos cp
+       ON cp.id = v.contratante_candidato_id
      WHERE ${where.join(' AND ')}
      GROUP BY TRIM(v.provincia)
      ORDER BY TRIM(v.provincia) ASC`
@@ -327,14 +403,19 @@ async function listVacantesCountByProvincia({ onlyActive = true } = {}) {
   }));
 }
 
-async function createVacante(empresaId, publicadoPor, payload) {
+async function createVacante(ownerScope, publicadoPor, payload) {
   await ensureVacantesSchema();
+  const contratanteTipo = ownerScope?.type === 'persona' ? 'persona' : 'empresa';
+  const empresaId = contratanteTipo === 'empresa' ? ownerScope?.empresaId || null : null;
+  const contratanteCandidatoId = contratanteTipo === 'persona' ? ownerScope?.candidatoId || null : null;
   const pagoMonto = normalizePagoMonto(payload.pago_monto);
   const pagoPeriodo = normalizePagoPeriodo(payload.pago_periodo);
   const hasCompletePayment = pagoMonto !== null && pagoPeriodo !== null;
   const [result] = await db.query(
     `INSERT INTO vacantes_publicadas (
       empresa_id,
+      contratante_tipo,
+      contratante_candidato_id,
       publicado_por,
       titulo,
       area,
@@ -350,9 +431,11 @@ async function createVacante(empresaId, publicadoPor, payload) {
       fecha_publicacion,
       fecha_cierre,
       activo
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, 1)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, 1)`,
     [
       empresaId,
+      contratanteTipo,
+      contratanteCandidatoId,
       publicadoPor,
       payload.titulo,
       payload.area ?? null,
@@ -374,7 +457,7 @@ async function createVacante(empresaId, publicadoPor, payload) {
 async function findVacanteById(vacanteId) {
   await ensureVacantesSchema();
   const [rows] = await db.query(
-    `SELECT id, empresa_id, estado, deleted_at
+    `SELECT id, empresa_id, contratante_tipo, contratante_candidato_id, estado, fecha_cierre, deleted_at
      FROM vacantes_publicadas
      WHERE id = ?
      LIMIT 1`,
@@ -400,6 +483,7 @@ async function updateVacante(vacanteId, patch) {
 
 module.exports = {
   toPositiveIntOrNull,
+  normalizeContratanteTipo,
   normalizeEstado,
   normalizeModalidad,
   normalizeTipoContrato,
@@ -408,6 +492,7 @@ module.exports = {
   normalizePosted,
   listVacantes,
   listVacantesCountByProvincia,
+  ensureVacantesSchema,
   createVacante,
   findVacanteById,
   updateVacante

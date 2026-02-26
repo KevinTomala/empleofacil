@@ -10,20 +10,41 @@ const {
   listPostulacionesByCandidato,
   getPostulacionesResumenByCandidato,
   getPostulacionDetailByCandidato,
-  listPostulacionesByEmpresa
+  listPostulacionesByContratante
 } = require('../services/postulaciones.service');
+const { ensureConversationForVacanteCandidate } = require('../services/mensajes.service');
 
-async function resolveEmpresaScope(req, { allowAdminParam = false } = {}) {
+function resolveAdminOwnerType(req) {
+  const raw = String(req.query?.contratante_tipo || req.body?.contratante_tipo || '').trim().toLowerCase();
+  if (raw === 'empresa' || raw === 'persona') return raw;
+  const candidatoId = toPositiveIntOrNull(req.query?.candidato_id || req.body?.candidato_id || req.params?.candidatoId);
+  return candidatoId ? 'persona' : 'empresa';
+}
+
+async function resolveOwnerScope(req, { allowAdminParam = false } = {}) {
   const rol = req.user?.rol;
   const userId = req.user?.id;
 
   if (rol === 'empresa') {
-    if (req.companyContext?.empresaId) return req.companyContext.empresaId;
-    return resolveEmpresaIdForUser(userId, { autoCreate: true });
+    if (req.companyContext?.empresaId) return { type: 'empresa', empresaId: req.companyContext.empresaId };
+    const empresaId = await resolveEmpresaIdForUser(userId, { autoCreate: true });
+    return empresaId ? { type: 'empresa', empresaId } : null;
+  }
+
+  if (rol === 'candidato') {
+    const candidatoId = await findCandidatoIdByUserId(userId);
+    return candidatoId ? { type: 'persona', candidatoId } : null;
   }
 
   if ((rol === 'administrador' || rol === 'superadmin') && allowAdminParam) {
-    return toPositiveIntOrNull(req.query?.empresa_id || req.body?.empresa_id || req.params?.empresaId);
+    const ownerType = resolveAdminOwnerType(req);
+    if (ownerType === 'persona') {
+      const candidatoId = toPositiveIntOrNull(req.query?.candidato_id || req.body?.candidato_id || req.params?.candidatoId);
+      return candidatoId ? { type: 'persona', candidatoId } : null;
+    }
+
+    const empresaId = toPositiveIntOrNull(req.query?.empresa_id || req.body?.empresa_id || req.params?.empresaId);
+    return empresaId ? { type: 'empresa', empresaId } : null;
   }
 
   return null;
@@ -41,14 +62,30 @@ async function createPostulacionHandler(req, res) {
     if (!vacante || vacante.deleted_at) return res.status(404).json({ error: 'VACANTE_NOT_FOUND' });
     if (vacante.estado !== 'activa') return res.status(400).json({ error: 'VACANTE_NOT_ACTIVE' });
 
+    const contratanteTipo = String(vacante.contratante_tipo || (vacante.empresa_id ? 'empresa' : 'persona'));
+    if (contratanteTipo === 'persona' && Number(vacante.contratante_candidato_id) === Number(candidatoId)) {
+      return res.status(400).json({ error: 'CANNOT_APPLY_OWN_VACANTE' });
+    }
+
     const alreadyExists = await existsPostulacion(vacanteId, candidatoId);
     if (alreadyExists) return res.status(409).json({ error: 'POSTULACION_DUPLICADA' });
 
     const created = await createPostulacion({
       vacanteId,
       candidatoId,
-      empresaId: vacante.empresa_id
+      empresaId: vacante.empresa_id || null,
+      contratanteTipo,
+      contratanteCandidatoId: vacante.contratante_candidato_id || null
     });
+    try {
+      await ensureConversationForVacanteCandidate({
+        vacanteId,
+        candidatoId,
+        actorUserId: req.user?.id || null
+      });
+    } catch (_error) {
+      // La postulacion no debe fallar por un problema secundario de mensajeria.
+    }
     return res.status(201).json({ ok: true, id: created.id });
   } catch (error) {
     return res.status(500).json({ error: 'POSTULACION_CREATE_FAILED', details: String(error.message || error) });
@@ -124,11 +161,11 @@ async function getMyPostulacionDetailHandler(req, res) {
 
 async function listEmpresaPostulacionesHandler(req, res) {
   try {
-    const empresaId = await resolveEmpresaScope(req, { allowAdminParam: true });
-    if (!empresaId) return res.status(403).json({ error: 'COMPANY_ACCESS_REQUIRED' });
+    const ownerScope = await resolveOwnerScope(req, { allowAdminParam: true });
+    if (!ownerScope) return res.status(403).json({ error: 'CONTRATANTE_ACCESS_REQUIRED' });
 
-    const result = await listPostulacionesByEmpresa({
-      empresaId,
+    const result = await listPostulacionesByContratante({
+      ownerScope,
       page: req.query.page,
       pageSize: req.query.page_size,
       vacanteId: req.query.vacante_id,
