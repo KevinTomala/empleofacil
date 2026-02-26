@@ -478,18 +478,18 @@ export default function ProfileExperiencia() {
                     <p className="text-xs text-foreground/60">
                       Certificado laboral: {item.certificado_laboral ? 'Cargado' : 'Pendiente'}
                     </p>
+                  </div>
+                  <div className="flex items-center gap-2">
                     {item.certificado_laboral?.ruta_archivo && (
                       <a
                         href={buildFileUrl(item.certificado_laboral.ruta_archivo)}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-xs text-primary underline"
+                        className="px-3 py-1.5 text-xs border border-border rounded-lg inline-block"
                       >
                         Ver certificado
                       </a>
                     )}
-                  </div>
-                  <div className="flex items-center gap-2">
                     <button type="button" className="px-3 py-1.5 text-xs border border-border rounded-lg" onClick={() => handleEdit(item)}>
                       Editar
                     </button>

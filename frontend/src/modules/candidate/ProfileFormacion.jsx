@@ -11,6 +11,7 @@ import {
   deleteMyFormacion,
   getCentrosCapacitacion,
   getMyEducacionGeneralItems,
+  getMyFormacionCertificado,
   getMyFormacion,
   getPerfilErrorMessage,
   updateMyEducacionGeneralItem,
@@ -51,6 +52,21 @@ const filtroExternaOptions = [
   { value: 'ministerio', label: 'Ministerio (SETEC)' },
   { value: 'chofer_profesional', label: 'Chofer profesional' },
 ]
+
+const estadoCertificadoOptions = [
+  { value: 'pendiente', label: 'Pendiente' },
+  { value: 'aprobado', label: 'Aprobado' },
+  { value: 'rechazado', label: 'Rechazado' },
+  { value: 'vencido', label: 'Vencido' },
+]
+
+function buildFileUrl(path) {
+  if (!path) return ''
+  if (path.startsWith('http://') || path.startsWith('https://')) return path
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+  if (path.startsWith('/')) return `${apiBase}${path}`
+  return `${apiBase}/${path}`
+}
 
 function getInitialExternaForm() {
   return {
@@ -109,7 +125,11 @@ export default function ProfileFormacion() {
   const [editingExternaId, setEditingExternaId] = useState(null)
   const [externaForm, setExternaForm] = useState(getInitialExternaForm())
   const [externaFilter, setExternaFilter] = useState('all')
-  const [uploadingCertificadoId, setUploadingCertificadoId] = useState(null)
+  const [certTargetId, setCertTargetId] = useState(null)
+  const [certForm, setCertForm] = useState({ fecha_emision: '', descripcion: '', estado: 'pendiente' })
+  const [certFile, setCertFile] = useState(null)
+  const [certHasExisting, setCertHasExisting] = useState(false)
+  const [certSaving, setCertSaving] = useState(false)
 
   const externaItems = useMemo(
     () => formaciones.filter((item) => item.categoria_formacion === 'externa'),
@@ -321,48 +341,79 @@ export default function ProfileFormacion() {
       }
     }
 
-    const handleUploadCertificadoCurso = async (item, file) => {
-      if (!file) return;
+    const resetCertForm = () => {
+      setCertTargetId(null)
+      setCertForm({ fecha_emision: '', descripcion: '', estado: 'pendiente' })
+      setCertFile(null)
+      setCertHasExisting(false)
+    }
 
-      const formData = new FormData();
-      formData.append('archivo', file);
-      if (item?.fecha_emision) formData.append('fecha_emision', item.fecha_emision);
-      formData.append('descripcion', item?.nombre_programa || item?.titulo_obtenido || 'Certificado de curso');
+    const handleOpenCertificadoCurso = async (item) => {
+      try {
+        setCertTargetId(item.id)
+        setCertFile(null)
+        const response = await getMyFormacionCertificado(item.id)
+        const cert = response?.item
+        setCertHasExisting(Boolean(cert))
+        setCertForm({
+          fecha_emision: cert?.fecha_emision || '',
+          descripcion: cert?.descripcion || '',
+          estado: cert?.estado || 'pendiente'
+        })
+      } catch (error) {
+        setCertHasExisting(false)
+        setCertForm({ fecha_emision: '', descripcion: '', estado: 'pendiente' })
+        showToast({ type: 'error', message: getPerfilErrorMessage(error, 'No se pudo cargar el certificado de curso.') })
+      }
+    }
+
+    const handleSaveCertificadoCurso = async () => {
+      if (!certTargetId) return
+      if (!certHasExisting && !certFile) {
+        showToast({ type: 'warning', message: 'Selecciona un archivo para crear el certificado.' })
+        return
+      }
+
+      const payload = new FormData()
+      if (certFile) payload.append('archivo', certFile)
+      if (certForm.fecha_emision) payload.append('fecha_emision', certForm.fecha_emision)
+      if (certForm.descripcion.trim()) payload.append('descripcion', certForm.descripcion.trim())
+      if (certForm.estado) payload.append('estado', certForm.estado)
 
       try {
-        setUploadingCertificadoId(item.id);
-        if (item?.certificado_curso?.id) {
-          await updateMyFormacionCertificado(item.id, formData);
+        setCertSaving(true)
+        if (certHasExisting) {
+          await updateMyFormacionCertificado(certTargetId, payload)
         } else {
-          await createMyFormacionCertificado(item.id, formData);
+          await createMyFormacionCertificado(certTargetId, payload)
         }
-        await loadData();
-        showToast({ type: 'success', message: 'Certificado de curso guardado.' });
+        await loadData()
+        setCertHasExisting(true)
+        setCertFile(null)
+        showToast({ type: 'success', message: 'Certificado de curso guardado.' })
       } catch (error) {
-        showToast({
-          type: 'error',
-          message: getPerfilErrorMessage(error, 'No se pudo subir el certificado de curso.'),
-        });
+        showToast({ type: 'error', message: getPerfilErrorMessage(error, 'No se pudo guardar el certificado de curso.') })
       } finally {
-        setUploadingCertificadoId(null);
+        setCertSaving(false)
       }
-    };
+    }
 
-    const handleDeleteCertificadoCurso = async (item) => {
+    const handleDeleteCertificadoCurso = async () => {
+      if (!certTargetId) return
       try {
-        setUploadingCertificadoId(item.id);
-        await deleteMyFormacionCertificado(item.id);
-        await loadData();
-        showToast({ type: 'success', message: 'Certificado de curso eliminado.' });
+        setCertSaving(true)
+        await deleteMyFormacionCertificado(certTargetId)
+        await loadData()
+        setCertHasExisting(false)
+        setCertFile(null)
+        setCertForm({ fecha_emision: '', descripcion: '', estado: 'pendiente' })
+        showToast({ type: 'success', message: 'Certificado de curso eliminado.' })
       } catch (error) {
-        showToast({
-          type: 'error',
-          message: getPerfilErrorMessage(error, 'No se pudo eliminar el certificado de curso.'),
-        });
+        showToast({ type: 'error', message: getPerfilErrorMessage(error, 'No se pudo eliminar el certificado de curso.') })
       } finally {
-        setUploadingCertificadoId(null);
+        setCertSaving(false)
       }
-    };
+    }
 
     return (
       <ProfileWizardLayout
@@ -592,39 +643,22 @@ export default function ProfileFormacion() {
                           </p>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap justify-end">
-                          <label className="px-3 py-1.5 text-xs border border-border rounded-lg cursor-pointer">
-                            {item?.certificado_curso?.id ? 'Reemplazar certificado' : 'Subir certificado'}
-                            <input
-                              type="file"
-                              accept="application/pdf,image/jpeg,image/png,image/webp"
-                              className="hidden"
-                              disabled={uploadingCertificadoId === item.id}
-                              onChange={(event) => {
-                                const file = event.target.files?.[0];
-                                event.target.value = '';
-                                handleUploadCertificadoCurso(item, file);
-                              }}
-                            />
-                          </label>
+                          <button
+                            type="button"
+                            className="px-3 py-1.5 text-xs border border-border rounded-lg"
+                            onClick={() => handleOpenCertificadoCurso(item)}
+                          >
+                            Certificado
+                          </button>
                           {item?.certificado_curso?.ruta_archivo && (
                             <a
-                              href={item.certificado_curso.ruta_archivo}
+                              href={buildFileUrl(item.certificado_curso.ruta_archivo)}
                               target="_blank"
                               rel="noreferrer"
                               className="px-3 py-1.5 text-xs border border-border rounded-lg"
                             >
                               Ver certificado
                             </a>
-                          )}
-                          {item?.certificado_curso?.id && (
-                            <button
-                              type="button"
-                              className="px-3 py-1.5 text-xs border border-rose-300 text-rose-700 rounded-lg"
-                              onClick={() => handleDeleteCertificadoCurso(item)}
-                              disabled={uploadingCertificadoId === item.id}
-                            >
-                              Eliminar certificado
-                            </button>
                           )}
                           <button type="button" className="px-3 py-1.5 text-xs border border-border rounded-lg" onClick={() => handleEditExterna(item)}>
                             Editar
@@ -638,6 +672,76 @@ export default function ProfileFormacion() {
                   </div>
                 )}
               </section>
+
+              {certTargetId && (
+                <section className="bg-white border border-border rounded-2xl p-6 space-y-3">
+                  <h2 className="font-semibold text-base">Certificado de curso</h2>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="space-y-1 text-sm font-medium text-foreground/80">
+                      Archivo (PDF o imagen)
+                      <input
+                        className="ef-control"
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.webp"
+                        onChange={(event) => setCertFile(event.target.files?.[0] || null)}
+                      />
+                    </label>
+                    <label className="space-y-1 text-sm font-medium text-foreground/80">
+                      Estado
+                      <FormDropdown
+                        value={certForm.estado}
+                        options={estadoCertificadoOptions}
+                        onChange={(value) => setCertForm((prev) => ({ ...prev, estado: value }))}
+                      />
+                    </label>
+                    <label className="space-y-1 text-sm font-medium text-foreground/80">
+                      Fecha emision
+                      <input
+                        className="ef-control"
+                        type="date"
+                        value={certForm.fecha_emision}
+                        onChange={(event) => setCertForm((prev) => ({ ...prev, fecha_emision: event.target.value }))}
+                      />
+                    </label>
+                    <label className="space-y-1 text-sm font-medium text-foreground/80 sm:col-span-2">
+                      Descripcion
+                      <textarea
+                        className="ef-control min-h-20"
+                        value={certForm.descripcion}
+                        onChange={(event) => setCertForm((prev) => ({ ...prev, descripcion: event.target.value }))}
+                      />
+                    </label>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+                    <button
+                      type="button"
+                      className="px-4 py-2 rounded-lg border border-border text-sm font-medium"
+                      onClick={resetCertForm}
+                      disabled={certSaving}
+                    >
+                      Cerrar
+                    </button>
+                    {certHasExisting && (
+                      <button
+                        type="button"
+                        className="px-4 py-2 rounded-lg border border-rose-300 text-rose-700 text-sm font-medium"
+                        onClick={handleDeleteCertificadoCurso}
+                        disabled={certSaving}
+                      >
+                        Eliminar certificado
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium"
+                      onClick={handleSaveCertificadoCurso}
+                      disabled={certSaving}
+                    >
+                      {certSaving ? 'Guardando...' : certHasExisting ? 'Actualizar certificado' : 'Subir certificado'}
+                    </button>
+                  </div>
+                </section>
+              )}
             </>
           )}
 

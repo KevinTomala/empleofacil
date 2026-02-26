@@ -1156,11 +1156,27 @@ async function listFormacion(candidatoId) {
         f.numero_registro,
         f.fecha_emision,
         f.fecha_vencimiento,
+        fc.id AS cert_id,
+        fc.nombre_archivo AS cert_nombre_archivo,
+        fc.nombre_original AS cert_nombre_original,
+        fc.ruta_archivo AS cert_ruta_archivo,
+        fc.tipo_mime AS cert_tipo_mime,
+        fc.tamanio_kb AS cert_tamanio_kb,
+        fc.fecha_emision AS cert_fecha_emision,
+        fc.descripcion AS cert_descripcion,
+        fc.estado AS cert_estado,
+        fc.estado_extraccion AS cert_estado_extraccion,
+        fc.datos_extraidos_json AS cert_datos_extraidos_json,
+        fc.created_at AS cert_created_at,
+        fc.updated_at AS cert_updated_at,
         f.created_at,
         f.updated_at
        FROM candidatos_formaciones f
        LEFT JOIN centros_capacitacion cc
          ON cc.id = f.centro_cliente_id
+       LEFT JOIN candidatos_formacion_certificados fc
+         ON fc.candidato_formacion_id = f.id
+        AND fc.deleted_at IS NULL
        WHERE f.candidato_id = ?
          AND f.deleted_at IS NULL
        ORDER BY f.created_at DESC`,
@@ -1186,6 +1202,19 @@ async function listFormacion(candidatoId) {
         f.numero_registro,
         f.fecha_emision,
         f.fecha_vencimiento,
+        NULL AS cert_id,
+        NULL AS cert_nombre_archivo,
+        NULL AS cert_nombre_original,
+        NULL AS cert_ruta_archivo,
+        NULL AS cert_tipo_mime,
+        NULL AS cert_tamanio_kb,
+        NULL AS cert_fecha_emision,
+        NULL AS cert_descripcion,
+        NULL AS cert_estado,
+        NULL AS cert_estado_extraccion,
+        NULL AS cert_datos_extraidos_json,
+        NULL AS cert_created_at,
+        NULL AS cert_updated_at,
         f.created_at,
         f.updated_at
        FROM candidatos_formaciones f
@@ -1214,6 +1243,23 @@ async function listFormacion(candidatoId) {
       numero_registro: row.numero_registro,
       fecha_emision: row.fecha_emision,
       fecha_vencimiento: row.fecha_vencimiento,
+      certificado_curso: row.cert_id
+        ? {
+          id: row.cert_id,
+          nombre_archivo: row.cert_nombre_archivo,
+          nombre_original: row.cert_nombre_original,
+          ruta_archivo: row.cert_ruta_archivo,
+          tipo_mime: row.cert_tipo_mime,
+          tamanio_kb: row.cert_tamanio_kb,
+          fecha_emision: row.cert_fecha_emision,
+          descripcion: row.cert_descripcion,
+          estado: row.cert_estado,
+          estado_extraccion: row.cert_estado_extraccion,
+          datos_extraidos_json: row.cert_datos_extraidos_json,
+          created_at: row.cert_created_at,
+          updated_at: row.cert_updated_at
+        }
+        : null,
       created_at: row.created_at,
       updated_at: row.updated_at
     };
