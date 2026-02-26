@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -23,6 +23,7 @@ import {
   markConversacionRead,
   sendMensajeToConversacion,
 } from '../../services/mensajes.api'
+import { connectMensajesSocket, joinConversation, leaveConversation, releaseMensajesSocket } from '../../services/socket'
 import { showToast } from '../../utils/showToast'
 import './company.css'
 
@@ -178,7 +179,7 @@ function ConversationInfoPanel({ selected, detail, role, onBack, isMobileInfo })
 
 export default function CompanyMensajes() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const { user } = useAuth()
+  const { user, token } = useAuth()
   const role = user?.rol || ''
   const currentUserId = Number(user?.id || 0)
 
@@ -209,6 +210,11 @@ export default function CompanyMensajes() {
   const [vacanteListOpen, setVacanteListOpen] = useState(false)
   const [postulanteListOpen, setPostulanteListOpen] = useState(false)
   const [targetUserInput, setTargetUserInput] = useState('')
+  const [unreadTotal, setUnreadTotal] = useState(0)
+
+  const joinedConversationRef = useRef(null)
+  const selectedIdRef = useRef(null)
+  const currentUserIdRef = useRef(0)
 
   const isMobile = viewport === 'mobile'
   const isLarge = viewport === 'large'
@@ -237,6 +243,14 @@ export default function CompanyMensajes() {
   }, [conversationDetail, currentUserId])
 
   useEffect(() => {
+    selectedIdRef.current = selectedId
+  }, [selectedId])
+
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId
+  }, [currentUserId])
+
+  useEffect(() => {
     function syncViewport() {
       if (window.innerWidth >= 1280) setViewport('large')
       else if (window.innerWidth >= 1024) setViewport('medium')
@@ -262,6 +276,7 @@ export default function CompanyMensajes() {
       const data = await listMensajesConversaciones({ page: 1, page_size: 80 })
       const nextItems = Array.isArray(data?.items) ? data.items : []
       setItems(nextItems)
+      setUnreadTotal(nextItems.reduce((acc, item) => acc + Number(item?.unread_count || 0), 0))
       setError('')
       if (!selectedId && nextItems.length && !isMobile) {
         setSelectedId(nextItems[0].id)
@@ -270,6 +285,7 @@ export default function CompanyMensajes() {
       }
     } catch (err) {
       setItems([])
+      setUnreadTotal(0)
       setSelectedId(null)
       setError(getMensajesErrorMessage(err, 'No se pudo cargar la bandeja.'))
     } finally {
@@ -331,6 +347,25 @@ export default function CompanyMensajes() {
     next.delete('conv')
     setSearchParams(next, { replace: true })
   }, [items, isMobile, searchParams, setSearchParams])
+
+  useEffect(() => {
+    const nextSelectedId = Number(selectedId || 0)
+    const prevSelectedId = Number(joinedConversationRef.current || 0)
+
+    if (prevSelectedId > 0 && prevSelectedId !== nextSelectedId) {
+      leaveConversation(prevSelectedId)
+    }
+
+    if (nextSelectedId > 0 && nextSelectedId !== prevSelectedId) {
+      joinConversation(nextSelectedId)
+      joinedConversationRef.current = nextSelectedId
+      return
+    }
+
+    if (nextSelectedId <= 0) {
+      joinedConversationRef.current = null
+    }
+  }, [selectedId])
 
   const fetchVacantesActivas = useCallback(async () => {
     try {
@@ -421,6 +456,125 @@ export default function CompanyMensajes() {
     return postulantesVacante.filter((item) => formatPostulanteLabel(item).toLowerCase().includes(term))
   }, [postulantesVacante, postulanteSearch])
 
+  const upsertConversationInList = useCallback((conversacion) => {
+    const safeConversation = conversacion && typeof conversacion === 'object' ? conversacion : null
+    const conversationId = Number(safeConversation?.id || 0)
+    if (!conversationId) return
+
+    setItems((prev) => {
+      const current = Array.isArray(prev) ? prev : []
+      const idx = current.findIndex((item) => Number(item?.id) === conversationId)
+      if (idx < 0) return current
+
+      const merged = { ...current[idx], ...safeConversation }
+      const next = [...current]
+      next.splice(idx, 1)
+      next.unshift(merged)
+      return next
+    })
+  }, [])
+
+  const mergeIncomingMessage = useCallback((incomingMessage) => {
+    const mensaje = incomingMessage && typeof incomingMessage === 'object' ? incomingMessage : null
+    const messageId = Number(mensaje?.id || 0)
+    const conversationId = Number(mensaje?.conversacion_id || 0)
+    if (!conversationId) return
+
+    if (Number(selectedIdRef.current) === conversationId) {
+      setMessages((prev) => {
+        const current = Array.isArray(prev) ? prev : []
+        if (messageId > 0 && current.some((item) => Number(item?.id) === messageId)) return current
+
+        const mine = currentUserIdRef.current > 0 && Number(mensaje?.remitente_usuario_id || 0) === currentUserIdRef.current
+        const pendingIdx = mine
+          ? current.findIndex((item) => item?.pending === true && String(item?.cuerpo || '') === String(mensaje?.cuerpo || ''))
+          : -1
+
+        if (pendingIdx >= 0) {
+          const next = [...current]
+          next[pendingIdx] = mensaje
+          return next
+        }
+
+        return [...current, mensaje]
+      })
+    }
+  }, [])
+
+  useEffect(() => {
+    const safeToken = String(token || '').trim()
+    if (!safeToken || currentUserId <= 0) return undefined
+
+    const socket = connectMensajesSocket(safeToken)
+    if (!socket) return undefined
+
+    const handleNew = async (payload = {}) => {
+      const mensaje = payload?.mensaje || null
+      const messageId = Number(mensaje?.id || 0)
+      const conversationId = Number(mensaje?.conversacion_id || 0)
+      if (!conversationId) return
+
+      mergeIncomingMessage(mensaje)
+
+      const isIncomingForActive = Number(selectedIdRef.current) === conversationId
+      const isMine = Number(mensaje?.remitente_usuario_id || 0) === Number(currentUserIdRef.current || 0)
+      if (isIncomingForActive && !isMine && messageId > 0) {
+        try {
+          await markConversacionRead(conversationId, messageId)
+        } catch (_err) {
+          // Fallback no bloqueante, la sync final queda por fetch/realtime.
+        }
+      }
+    }
+
+    const handleConversationUpdate = (payload = {}) => {
+      const conversation = payload?.conversacion || null
+      if (!conversation) return
+      upsertConversationInList(conversation)
+    }
+
+    const handleRead = (payload = {}) => {
+      const conversationId = Number(payload?.conversacion_id || 0)
+      const userId = Number(payload?.usuario_id || 0)
+      const lastReadId = Number(payload?.ultimo_leido_mensaje_id || 0) || null
+      if (!conversationId || !userId) return
+
+      setConversationDetail((prev) => {
+        if (!prev || Number(prev?.id) !== conversationId) return prev
+        const participants = Array.isArray(prev.participantes) ? prev.participantes : []
+        return {
+          ...prev,
+          participantes: participants.map((person) => (
+            Number(person?.usuario_id || 0) === userId
+              ? {
+                ...person,
+                ultimo_leido_mensaje_id: lastReadId,
+                ultimo_leido_at: new Date().toISOString()
+              }
+              : person
+          ))
+        }
+      })
+    }
+
+    const handleUnreadSummary = (payload = {}) => {
+      setUnreadTotal(Number(payload?.unread_total || 0))
+    }
+
+    socket.on('mensajes:new', handleNew)
+    socket.on('mensajes:conversacion_actualizada', handleConversationUpdate)
+    socket.on('mensajes:read', handleRead)
+    socket.on('mensajes:unread_resumen', handleUnreadSummary)
+
+    return () => {
+      socket.off('mensajes:new', handleNew)
+      socket.off('mensajes:conversacion_actualizada', handleConversationUpdate)
+      socket.off('mensajes:read', handleRead)
+      socket.off('mensajes:unread_resumen', handleUnreadSummary)
+      releaseMensajesSocket()
+    }
+  }, [token, currentUserId, mergeIncomingMessage, upsertConversationInList])
+
   const selectConversation = (conversationId) => {
     setSelectedId(conversationId)
     if (isMobile) {
@@ -450,34 +604,58 @@ export default function CompanyMensajes() {
     const text = composer.trim()
     if (!text || !selectedId || sending) return
 
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const optimisticMessage = {
+      id: tempId,
+      conversacion_id: Number(selectedId),
+      remitente_usuario_id: currentUserId || null,
+      cuerpo: text,
+      tipo: 'texto',
+      created_at: new Date().toISOString(),
+      edited_at: null,
+      remitente_nombre: user?.nombre_completo || 'Tu',
+      pending: true
+    }
+
+    setMessages((prev) => [...(Array.isArray(prev) ? prev : []), optimisticMessage])
+    setItems((prev) => {
+      const updated = (Array.isArray(prev) ? prev : []).map((item) => (
+        Number(item.id) === Number(selectedId)
+          ? {
+            ...item,
+            last_message_body: text,
+            last_message_at: optimisticMessage.created_at,
+            last_message_sender_id: currentUserId || null,
+            last_message_sender_nombre: user?.nombre_completo || item?.last_message_sender_nombre || 'Tu',
+          }
+          : item
+      ))
+      const idx = updated.findIndex((item) => Number(item?.id) === Number(selectedId))
+      if (idx <= 0) return updated
+      const [head] = updated.splice(idx, 1)
+      return [head, ...updated]
+    })
+    setComposer('')
+
     try {
       setSending(true)
       const response = await sendMensajeToConversacion(selectedId, text)
       const mensaje = response?.mensaje || null
       if (mensaje) {
-        setMessages((prev) => [...prev, mensaje])
-        setItems((prev) => {
-          const updated = prev.map((item) => (
-            Number(item.id) === Number(selectedId)
-              ? {
-                ...item,
-                last_message_body: mensaje.cuerpo,
-                last_message_at: mensaje.created_at,
-                last_message_sender_id: mensaje.remitente_usuario_id,
-                last_message_sender_nombre: mensaje.remitente_nombre,
-              }
-              : item
-          ))
-          const idx = updated.findIndex((item) => Number(item.id) === Number(selectedId))
-          if (idx <= 0) return updated
-          const [head] = updated.splice(idx, 1)
-          return [head, ...updated]
+        mergeIncomingMessage(mensaje)
+        upsertConversationInList({
+          id: Number(selectedId),
+          last_message_body: mensaje.cuerpo,
+          last_message_at: mensaje.created_at,
+          last_message_sender_id: mensaje.remitente_usuario_id,
+          last_message_sender_nombre: mensaje.remitente_nombre,
+          updated_at: mensaje.created_at
         })
       } else {
         await fetchMessagesAndDetail(selectedId)
       }
-      setComposer('')
     } catch (err) {
+      setMessages((prev) => (Array.isArray(prev) ? prev : []).filter((item) => item?.id !== tempId))
       showToast({ type: 'error', message: getMensajesErrorMessage(err, 'No se pudo enviar el mensaje.') })
     } finally {
       setSending(false)
@@ -549,7 +727,7 @@ export default function CompanyMensajes() {
         <section className={`efmsg-shell ${isMobile ? `is-mobile is-${mobileView}` : isLarge ? 'is-large' : 'is-medium'}`}>
           <aside className="efmsg-pane efmsg-mensajes-pane">
             <div className="efmsg-mensajes-header">
-              <h2>Mensajes</h2>
+              <h2>{`Mensajes${unreadTotal > 0 ? ` (${unreadTotal})` : ''}`}</h2>
               <div className="efmsg-mensajes-actions">
                 <button type="button" className="efmsg-icon-btn" onClick={() => setShowComposerModal(true)} aria-label="Nueva conversacion">
                   <SquarePen className="w-5 h-5" />

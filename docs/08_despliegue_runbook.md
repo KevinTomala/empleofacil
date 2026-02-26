@@ -29,6 +29,18 @@ curl http://localhost:3000/healthz
 3. Frontend:
 - Abrir `http://localhost:3001`.
 
+## Socket.IO (mensajeria realtime)
+- Backend expone Socket.IO en el mismo puerto HTTP (`BACKEND_PORT`, default `3000`).
+- Frontend debe configurar:
+  - `VITE_WS_URL=ws://localhost:3000`
+  - si no existe, usa `VITE_API_URL`.
+- Handshake obligatorio con JWT:
+  - `auth.token` (recomendado) o `Authorization: Bearer <token>`.
+- Si falla la conexion:
+  1. validar `JWT_SECRET` consistente en backend;
+  2. validar `FRONTEND_URL` para CORS;
+  3. revisar logs `docker compose logs -f backend` buscando `AUTH_REQUIRED` o `INVALID_TOKEN`.
+
 ## Migraciones BD (alineacion con `init.sql`)
 1. Validar estructura minima:
 ```sql

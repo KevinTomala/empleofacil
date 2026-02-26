@@ -3,6 +3,7 @@ const {
   createOrGetVacanteConversation,
   createOrGetDirectConversation,
   listConversationsForUser,
+  getConversationListItemForUser,
   getConversationByIdForUser,
   listMessagesByConversation,
   sendMessageToConversation,
@@ -11,6 +12,7 @@ const {
   backfillVacanteSeedMessagesForUser
 } = require('../services/mensajes.service');
 const { findCandidatoIdByUserId } = require('../services/postulaciones.service');
+const { getIO } = require('../realtime/socket');
 
 function mapMensajesError(error) {
   const code = String(error?.code || '');
@@ -28,6 +30,18 @@ function mapMensajesError(error) {
   if (code === 'POSTULACION_REQUIRED' || code === 'CANDIDATO_USER_NOT_FOUND') return { status: 409, error: code };
 
   return { status: 500, error: 'MESSAGES_FAILED' };
+}
+
+async function emitConversationSummaryByUser(io, conversationId, userId) {
+  const summary = await getConversationListItemForUser({ conversationId, userId });
+  if (summary) {
+    io.to(`user:${userId}`).emit('mensajes:conversacion_actualizada', {
+      conversacion: summary
+    });
+  }
+
+  const unreadSummary = await getUnreadSummaryByUser({ userId });
+  io.to(`user:${userId}`).emit('mensajes:unread_resumen', unreadSummary);
 }
 
 async function listConversationsHandler(req, res) {
@@ -170,6 +184,28 @@ async function sendMessageHandler(req, res) {
       userRole: req.user?.rol,
       body: req.body?.cuerpo
     });
+
+    const io = getIO();
+    if (io && mensaje) {
+      io.to(`conversacion:${conversacionId}`).emit('mensajes:new', { mensaje });
+
+      const detail = await getConversationByIdForUser({
+        conversationId: conversacionId,
+        userId: req.user?.id,
+        isAdmin: req.user?.rol === 'administrador' || req.user?.rol === 'superadmin'
+      });
+
+      const participantIds = Array.from(
+        new Set(
+          (Array.isArray(detail?.participantes) ? detail.participantes : [])
+            .map((item) => Number(item?.usuario_id || 0))
+            .filter((id) => Number.isInteger(id) && id > 0)
+        )
+      );
+
+      await Promise.all(participantIds.map((userId) => emitConversationSummaryByUser(io, conversacionId, userId)));
+    }
+
     return res.status(201).json({ ok: true, mensaje });
   } catch (error) {
     const mapped = mapMensajesError(error);
@@ -191,6 +227,19 @@ async function markReadHandler(req, res) {
       userRole: req.user?.rol,
       messageId: req.body?.mensaje_id
     });
+
+    const io = getIO();
+    if (io) {
+      io.to(`conversacion:${conversacionId}`).emit('mensajes:read', {
+        conversacion_id: conversacionId,
+        usuario_id: Number(req.user?.id || 0),
+        ultimo_leido_mensaje_id: Number(result?.ultimo_leido_mensaje_id || 0) || null
+      });
+
+      const unreadSummary = await getUnreadSummaryByUser({ userId: req.user?.id });
+      io.to(`user:${req.user?.id}`).emit('mensajes:unread_resumen', unreadSummary);
+    }
+
     return res.json(result);
   } catch (error) {
     const mapped = mapMensajesError(error);

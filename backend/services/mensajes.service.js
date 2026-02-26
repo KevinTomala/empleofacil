@@ -591,6 +591,131 @@ async function listConversationsForUser({
   };
 }
 
+async function getConversationListItemForUser({ conversationId, userId } = {}) {
+  await ensureMensajesSchema();
+  const safeConversationId = toPositiveIntOrNull(conversationId);
+  const safeUserId = toPositiveIntOrNull(userId);
+  if (!safeConversationId || !safeUserId) throw createServiceError('INVALID_PAYLOAD');
+
+  const [rows] = await db.query(
+    `SELECT
+      c.id,
+      c.tipo,
+      c.vacante_id,
+      c.candidato_id,
+      c.estado,
+      c.updated_at,
+      v.titulo AS vacante_titulo,
+      COALESCE(e.nombre, TRIM(CONCAT_WS(' ', cp_owner.nombres, cp_owner.apellidos))) AS contratante_nombre,
+      TRIM(CONCAT_WS(' ', cp_candidato.nombres, cp_candidato.apellidos)) AS candidato_nombre,
+      ep.logo_url AS contratante_logo_url,
+      f_owner.foto_url AS contratante_foto_url,
+      f_candidato.foto_url AS candidato_foto_url,
+      lm.id AS last_message_id,
+      lm.cuerpo AS last_message_body,
+      lm.created_at AS last_message_at,
+      lm.remitente_usuario_id AS last_message_sender_id,
+      u_sender.nombre_completo AS last_message_sender_nombre,
+      (
+        SELECT COUNT(*)
+        FROM mensajes m2
+        WHERE m2.conversacion_id = c.id
+          AND m2.deleted_at IS NULL
+          AND m2.id > COALESCE(me.ultimo_leido_mensaje_id, 0)
+          AND (m2.remitente_usuario_id IS NULL OR m2.remitente_usuario_id <> ?)
+      ) AS unread_count,
+      (
+        SELECT mp2.usuario_id
+        FROM mensajes_conversacion_participantes mp2
+        WHERE mp2.conversacion_id = c.id
+          AND mp2.usuario_id <> ?
+          AND mp2.activo = 1
+        ORDER BY mp2.id ASC
+        LIMIT 1
+      ) AS counterpart_user_id,
+      (
+        SELECT u2.nombre_completo
+        FROM mensajes_conversacion_participantes mp2
+        INNER JOIN usuarios u2
+          ON u2.id = mp2.usuario_id
+        WHERE mp2.conversacion_id = c.id
+          AND mp2.usuario_id <> ?
+          AND mp2.activo = 1
+        ORDER BY mp2.id ASC
+        LIMIT 1
+      ) AS counterpart_nombre,
+      (
+        SELECT COALESCE(
+          f_counter.foto_url,
+          (
+            SELECT ep3.logo_url
+            FROM empresas_usuarios eu3
+            INNER JOIN empresas_perfil ep3
+              ON ep3.empresa_id = eu3.empresa_id
+            WHERE eu3.usuario_id = mp2.usuario_id
+              AND eu3.estado = 'activo'
+              AND COALESCE(TRIM(ep3.logo_url), '') <> ''
+            ORDER BY eu3.principal DESC, eu3.id ASC
+            LIMIT 1
+          )
+        )
+        FROM mensajes_conversacion_participantes mp2
+        INNER JOIN usuarios u2
+          ON u2.id = mp2.usuario_id
+        LEFT JOIN candidatos c2
+          ON c2.usuario_id = u2.id
+         AND c2.deleted_at IS NULL
+        LEFT JOIN ${LATEST_CANDIDATO_FOTO_SQL} f_counter
+          ON f_counter.candidato_id = c2.id
+        WHERE mp2.conversacion_id = c.id
+          AND mp2.usuario_id <> ?
+          AND mp2.activo = 1
+        ORDER BY mp2.id ASC
+        LIMIT 1
+      ) AS counterpart_avatar_url
+     FROM mensajes_conversaciones c
+     INNER JOIN mensajes_conversacion_participantes me
+       ON me.conversacion_id = c.id
+      AND me.usuario_id = ?
+      AND me.activo = 1
+     LEFT JOIN vacantes_publicadas v
+       ON v.id = c.vacante_id
+     LEFT JOIN empresas e
+       ON e.id = v.empresa_id
+     LEFT JOIN empresas_perfil ep
+       ON ep.empresa_id = e.id
+     LEFT JOIN candidatos cp_owner
+       ON cp_owner.id = v.contratante_candidato_id
+     LEFT JOIN candidatos cp_candidato
+       ON cp_candidato.id = c.candidato_id
+     LEFT JOIN ${LATEST_CANDIDATO_FOTO_SQL} f_owner
+       ON f_owner.candidato_id = v.contratante_candidato_id
+     LEFT JOIN ${LATEST_CANDIDATO_FOTO_SQL} f_candidato
+       ON f_candidato.candidato_id = c.candidato_id
+     LEFT JOIN mensajes lm
+       ON lm.id = (
+         SELECT m1.id
+         FROM mensajes m1
+         WHERE m1.conversacion_id = c.id
+           AND m1.deleted_at IS NULL
+         ORDER BY m1.id DESC
+         LIMIT 1
+       )
+     LEFT JOIN usuarios u_sender
+       ON u_sender.id = lm.remitente_usuario_id
+     WHERE c.id = ?
+     LIMIT 1`,
+    [safeUserId, safeUserId, safeUserId, safeUserId, safeUserId, safeConversationId]
+  );
+
+  const row = rows[0] || null;
+  if (!row) return null;
+  return {
+    ...row,
+    unread_count: Number(row?.unread_count || 0)
+  };
+}
+
 async function getConversationByIdForUser({ conversationId, userId, isAdmin = false } = {}) {
   await ensureConversationAccess({ conversationId, userId, isAdmin, autoJoinAdmin: isAdmin });
 
@@ -974,10 +1099,12 @@ module.exports = {
   createServiceError,
   toPositiveIntOrNull,
   ensureMensajesSchema,
+  ensureConversationAccess,
   ensureConversationForVacanteCandidate,
   createOrGetVacanteConversation,
   createOrGetDirectConversation,
   listConversationsForUser,
+  getConversationListItemForUser,
   getConversationByIdForUser,
   listMessagesByConversation,
   sendMessageToConversation,

@@ -545,6 +545,56 @@ Base: `/api/mensajes`
 }
 ```
 
+### Socket.IO `/` (mensajeria realtime)
+- Transporte: `websocket`.
+- URL: `VITE_WS_URL` (frontend) o `VITE_API_URL` como fallback.
+- Auth handshake:
+  - `auth.token = <JWT>`
+  - o header `Authorization: Bearer <JWT>`
+- Errores de conexion:
+  - `AUTH_REQUIRED`
+  - `INVALID_TOKEN`
+
+Eventos cliente -> servidor:
+- `mensajes:join_conversacion`
+```json
+{ "conversacion_id": 123 }
+```
+- `mensajes:leave_conversacion`
+```json
+{ "conversacion_id": 123 }
+```
+
+Eventos servidor -> cliente:
+- `mensajes:new`
+```json
+{ "mensaje": {} }
+```
+- `mensajes:conversacion_actualizada`
+```json
+{ "conversacion": {} }
+```
+- `mensajes:read`
+```json
+{
+  "conversacion_id": 123,
+  "usuario_id": 7,
+  "ultimo_leido_mensaje_id": 1001
+}
+```
+- `mensajes:unread_resumen`
+```json
+{ "unread_total": 4 }
+```
+- `mensajes:error`
+```json
+{ "error": "FORBIDDEN" }
+```
+
+Rooms usadas internamente:
+- Usuario: `user:<usuario_id>`
+- Conversacion: `conversacion:<conversacion_id>`
+
 ## Perfil de candidato
 
 Base: `/api/perfil`
