@@ -272,6 +272,8 @@ async function ensureConversationForVacanteCandidate({ vacanteId, candidatoId, a
 async function ensureVacanteSystemSeedMessage({ conversationId, vacante, candidato } = {}) {
   const safeConversationId = toPositiveIntOrNull(conversationId);
   if (!safeConversationId) return;
+  const senderUserId = toPositiveIntOrNull(candidato?.usuario_id);
+  if (!senderUserId) return;
 
   const [rows] = await db.query(
     `SELECT id
@@ -288,8 +290,8 @@ async function ensureVacanteSystemSeedMessage({ conversationId, vacante, candida
 
   await db.query(
     `INSERT INTO mensajes (conversacion_id, remitente_usuario_id, cuerpo, tipo)
-     VALUES (?, NULL, ?, 'sistema')`,
-    [safeConversationId, body]
+     VALUES (?, ?, ?, 'sistema')`,
+    [safeConversationId, senderUserId, body]
   );
 
   await db.query(
@@ -914,11 +916,31 @@ async function backfillVacanteSeedMessagesForUser({ userId, userRole, includeAll
 
   const scopeParams = canAll ? [] : [safeUserId];
 
+  await db.query(
+    `UPDATE mensajes m
+     INNER JOIN mensajes_conversaciones c
+       ON c.id = m.conversacion_id
+     ${scopeJoin}
+     INNER JOIN candidatos cp_seed
+       ON cp_seed.id = c.candidato_id
+      AND cp_seed.deleted_at IS NULL
+     SET m.remitente_usuario_id = cp_seed.usuario_id
+     WHERE c.tipo = 'vacante'
+       AND c.vacante_id IS NOT NULL
+       AND c.candidato_id IS NOT NULL
+       AND m.deleted_at IS NULL
+       AND m.remitente_usuario_id IS NULL
+       AND m.tipo = 'sistema'
+       AND m.cuerpo LIKE 'He postulado para "%'
+       AND cp_seed.usuario_id IS NOT NULL`,
+    scopeParams
+  );
+
   const [result] = await db.query(
     `INSERT INTO mensajes (conversacion_id, remitente_usuario_id, cuerpo, tipo)
      SELECT
        c.id,
-       NULL,
+       cp_seed.usuario_id,
        CONCAT(
          'He postulado para "',
          COALESCE(NULLIF(TRIM(v.titulo), ''), CONCAT('#', v.id)),
@@ -929,13 +951,17 @@ async function backfillVacanteSeedMessagesForUser({ userId, userRole, includeAll
      ${scopeJoin}
      INNER JOIN vacantes_publicadas v
        ON v.id = c.vacante_id
+     INNER JOIN candidatos cp_seed
+       ON cp_seed.id = c.candidato_id
+      AND cp_seed.deleted_at IS NULL
      LEFT JOIN mensajes m
        ON m.conversacion_id = c.id
       AND m.deleted_at IS NULL
      WHERE c.tipo = 'vacante'
        AND c.vacante_id IS NOT NULL
        AND c.candidato_id IS NOT NULL
-       AND m.id IS NULL`,
+       AND m.id IS NULL
+       AND cp_seed.usuario_id IS NOT NULL`,
     scopeParams
   );
 
