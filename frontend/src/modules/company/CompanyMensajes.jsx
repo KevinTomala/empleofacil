@@ -28,8 +28,8 @@ import './company.css'
 
 function buildConversationTitle(item, role) {
   if (!item) return 'Conversacion'
-  if (role === 'candidato') return item.contratante_nombre || item.counterpart_nombre || 'Contratante'
-  if (role === 'empresa') return item.candidato_nombre || item.counterpart_nombre || 'Candidato'
+  if (role === 'candidato') return item.counterpart_nombre || item.contratante_nombre || item.candidato_nombre || 'Contratante'
+  if (role === 'empresa') return item.counterpart_nombre || item.candidato_nombre || item.contratante_nombre || 'Candidato'
   return item.counterpart_nombre || item.candidato_nombre || item.contratante_nombre || 'Conversacion'
 }
 
@@ -74,15 +74,12 @@ function toAssetUrl(value) {
 
 function getConversationAvatarUrl(item, role) {
   if (!item) return ''
-  if (role === 'empresa') {
-    return String(item.candidato_foto_url || item.counterpart_avatar_url || '').trim()
-  }
-  if (role === 'candidato') {
-    return String(item.contratante_logo_url || item.contratante_foto_url || item.counterpart_avatar_url || '').trim()
+  if (role === 'empresa' || role === 'candidato') {
+    return String(item.counterpart_avatar_url || '').trim()
   }
   return String(
     item.counterpart_avatar_url
-      || item.candidato_foto_url
+    || item.candidato_foto_url
       || item.contratante_logo_url
       || item.contratante_foto_url
       || ''
@@ -658,9 +655,12 @@ export default function CompanyMensajes() {
                 const messageId = Number(message?.id || 0)
                 const readByCounterpart = mine && messageId > 0 && counterpartReadMaxId >= messageId
                 const senderUserId = Number(message?.remitente_usuario_id || 0)
+                const isSystemWithoutSender = senderUserId <= 0 && String(message?.tipo || '').toLowerCase() === 'sistema'
                 const sender = participantByUserId.get(senderUserId) || null
-                const senderAvatarUrl = sender?.avatar_url || getConversationAvatarUrl(selected, role)
-                const senderLabel = message.remitente_nombre || buildConversationTitle(selected, role)
+                const senderAvatarUrl = isSystemWithoutSender ? '' : String(sender?.avatar_url || '').trim()
+                const senderLabel = isSystemWithoutSender
+                  ? 'Sistema'
+                  : (message.remitente_nombre || buildConversationTitle(selected, role))
                 return (
                   <article key={message.id} className={`efmsg-bubble-wrap ${mine ? 'is-mine' : ''}`}>
                     {!mine ? <Avatar label={senderLabel} url={senderAvatarUrl} className="tiny" /> : null}
