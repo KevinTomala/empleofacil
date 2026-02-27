@@ -70,7 +70,7 @@ export default function CompanyHome() {
             <h2 className="font-heading text-xl font-semibold">Vacantes activas</h2>
             <button className="text-sm text-primary font-semibold">Ver candidatos</button>
           </div>
-          <div className="grid lg:grid-cols-3 gap-4">
+          <div className="grid lg:grid-cols-4 2xl:grid-cols-5 gap-4">
             {vacantes.map((item) => (
               <div key={item.title} className="company-card p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -106,7 +106,7 @@ export default function CompanyHome() {
         <section className="grid lg:grid-cols-[1.1fr_0.75fr] gap-6">
           <div className="space-y-4">
             <h2 className="font-heading text-xl font-semibold">Candidatos destacados</h2>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
               {candidatos.map((item) => (
                 <div key={item.name} className="company-card p-4 space-y-3">
                   <div>

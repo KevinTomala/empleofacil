@@ -556,7 +556,7 @@ export default function CompanyVacantes() {
               </form>
             </section>
 
-            <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5 gap-3">
               {loading && <div className="company-card p-4 text-sm text-foreground/70">Cargando vacantes...</div>}
               {!loading && error && <div className="company-card p-4 text-sm text-rose-700">{error}</div>}
               {!loading && !error && items.map((item) => (
@@ -700,7 +700,7 @@ export default function CompanyVacantes() {
                 </div>
               )}
               {!postuladosLoading && !postuladosError && postulados.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5 gap-3">
                   {postulados.map((item) => {
                     const name = `${item.nombres || ''} ${item.apellidos || ''}`.trim() || 'Candidato'
                     const photoKey = Number(item?.candidato_id || item?.id || 0)

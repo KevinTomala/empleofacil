@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FormDropdown from '../../components/FormDropdown'
 import './company.css'
-import { Briefcase, Crown, FileText, MessageCircleMore, Search, Users, X } from 'lucide-react'
+import { Crown, EllipsisVertical, FileText, MessageCircle, Search, User, X } from 'lucide-react'
 import Header from '../../components/Header'
 import VerifiedBadge from '../../components/VerifiedBadge'
 import { apiRequest } from '../../services/api'
@@ -10,6 +10,20 @@ import { useAuth } from '../../context/AuthContext'
 import { createMensajesVacanteConversation, getMensajesErrorMessage } from '../../services/mensajes.api'
 import { showToast } from '../../utils/showToast'
 import CandidatoPerfilProfesionalModal from './components/CandidatoPerfilProfesionalModal'
+
+function toAssetUrl(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  if (text.startsWith('http://') || text.startsWith('https://')) return text
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+  return text.startsWith('/') ? `${apiBase}${text}` : `${apiBase}/${text}`
+}
+
+function getInitials(value) {
+  const parts = String(value || '').trim().split(/\s+/).filter(Boolean).slice(0, 2)
+  if (!parts.length) return 'NA'
+  return parts.map((part) => part[0]?.toUpperCase() || '').join('')
+}
 
 export default function CompanyCandidatos() {
   const navigate = useNavigate()
@@ -21,6 +35,9 @@ export default function CompanyCandidatos() {
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
+  const [estadoLaboralFiltro, setEstadoLaboralFiltro] = useState('')
+  const [perfilFiltro, setPerfilFiltro] = useState('')
+  const [verificacionFiltro, setVerificacionFiltro] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [hasNext, setHasNext] = useState(false)
@@ -47,11 +64,23 @@ export default function CompanyCandidatos() {
   const [vacantePostulaciones, setVacantePostulaciones] = useState([])
   const [postulacionesLoading, setPostulacionesLoading] = useState(false)
   const [openingConversation, setOpeningConversation] = useState(false)
+  const [openCandidateActionsId, setOpenCandidateActionsId] = useState(null)
+  const [brokenPhotos, setBrokenPhotos] = useState({})
 
   useEffect(() => {
     const timeout = setTimeout(() => setDebouncedQuery(query.trim()), 350)
     return () => clearTimeout(timeout)
   }, [query])
+
+  useEffect(() => {
+    if (!openCandidateActionsId) return undefined
+    const onPointerDown = (event) => {
+      if (event.target?.closest?.('[data-candidato-actions]')) return
+      setOpenCandidateActionsId(null)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [openCandidateActionsId])
 
   useEffect(() => {
     let alive = true
@@ -70,6 +99,9 @@ export default function CompanyCandidatos() {
         params.set('page', String(page))
         params.set('page_size', String(pageSize))
         if (debouncedQuery) params.set('q', debouncedQuery)
+        if (estadoLaboralFiltro) params.set('estado_laboral', estadoLaboralFiltro)
+        if (perfilFiltro) params.set('perfil', perfilFiltro)
+        if (verificacionFiltro) params.set('verificacion', verificacionFiltro)
         const data = await apiRequest(`/api/candidatos?${params.toString()}`)
         if (!alive) return
         const items = Array.isArray(data?.items) ? data.items : []
@@ -91,7 +123,7 @@ export default function CompanyCandidatos() {
     return () => {
       alive = false
     }
-  }, [token, page, pageSize, debouncedQuery, refreshFlag])
+  }, [token, page, pageSize, debouncedQuery, refreshFlag, estadoLaboralFiltro, perfilFiltro, verificacionFiltro])
 
   useEffect(() => {
     let alive = true
@@ -180,9 +212,9 @@ export default function CompanyCandidatos() {
     () => candidatos.map((item) => ({
       id: item.id,
       name: `${item.nombres || ''} ${item.apellidos || ''}`.trim() || 'Candidato',
-      documento: item.documento_identidad || 'N/D',
-      nacionalidad: item.nacionalidad || 'N/D',
-      fechaNacimiento: item.fecha_nacimiento || 'N/D',
+      profileHeadline: String(item.titulo_academico || item.ultima_experiencia_cargo || '').trim() || 'Perfil profesional en desarrollo',
+      foto_url: item.foto_url || '',
+      estado_laboral: item.estado_laboral || 'desempleado',
       verificacion_cuenta_estado: item.verificacion_cuenta_estado || null,
       candidato_verificado: Number(item.candidato_verificado || 0) === 1
     })),
@@ -217,8 +249,20 @@ export default function CompanyCandidatos() {
     setProfileModalOpen(true)
   }
 
+  const handleDestacarCandidato = (candidato) => {
+    setOpenCandidateActionsId(null)
+    showToast({
+      type: 'info',
+      message: `La opcion Destacar para ${candidato?.name || 'este candidato'} estara disponible en una siguiente iteracion.`
+    })
+  }
+
   const clearSearch = () => {
     setQuery('')
+    setDebouncedQuery('')
+    setEstadoLaboralFiltro('')
+    setPerfilFiltro('')
+    setVerificacionFiltro('')
     setPage(1)
   }
 
@@ -325,9 +369,7 @@ export default function CompanyCandidatos() {
               {catalogError && <p className="mt-2 text-xs text-rose-600">{catalogError}</p>}
               {importStatus && <p className="mt-3 text-xs text-foreground/70">{importStatus}</p>}
             </div>
-          ) : (
-            <div className="company-card p-4 text-sm text-foreground/70">Tu cuenta puede consumir candidatos ya sincronizados.</div>
-          )}
+          ) : null}
         </section>
 
         <section className="space-y-4">
@@ -335,50 +377,170 @@ export default function CompanyCandidatos() {
             <div className="flex flex-col md:flex-row gap-3 md:items-end md:justify-between">
               <div className="flex-1">
                 <label className="block text-xs text-foreground/60 mb-1">Buscar candidato</label>
-                <label className="company-candidate-search"><Search className="w-4 h-4" /><input className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" type="search" placeholder="Nombre, apellido o documento" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1) }} /></label>
+                <label className="company-candidate-search"><Search className="w-4 h-4" /><input className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" type="search" placeholder="Nombre, formacion, experiencia o documento" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1) }} /></label>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-end flex-wrap gap-2">
+                <div>
+                  <label className="block text-xs text-foreground/60 mb-1">Estado laboral</label>
+                  <div style={{ width: '160px' }}>
+                    <FormDropdown
+                      value={estadoLaboralFiltro}
+                      options={[
+                        { value: '', label: 'Todos' },
+                        { value: 'empleado', label: 'Trabajando' },
+                        { value: 'desempleado', label: 'Desempleado' }
+                      ]}
+                      onChange={(val) => {
+                        setEstadoLaboralFiltro(String(val || ''))
+                        setPage(1)
+                      }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-foreground/60 mb-1">Perfil</label>
+                  <div style={{ width: '180px' }}>
+                    <FormDropdown
+                      value={perfilFiltro}
+                      options={[
+                        { value: '', label: 'Todos' },
+                        { value: 'con_formacion', label: 'Con formacion' },
+                        { value: 'con_experiencia', label: 'Con experiencia' },
+                        { value: 'sin_experiencia', label: 'Sin experiencia' }
+                      ]}
+                      onChange={(val) => {
+                        setPerfilFiltro(String(val || ''))
+                        setPage(1)
+                      }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-foreground/60 mb-1">Verificacion</label>
+                  <div style={{ width: '160px' }}>
+                    <FormDropdown
+                      value={verificacionFiltro}
+                      options={[
+                        { value: '', label: 'Todos' },
+                        { value: 'verificados', label: 'Verificados' },
+                        { value: 'no_verificados', label: 'No verificados' }
+                      ]}
+                      onChange={(val) => {
+                        setVerificacionFiltro(String(val || ''))
+                        setPage(1)
+                      }}
+                    />
+                  </div>
+                </div>
                 <div><label className="block text-xs text-foreground/60 mb-1">Tamano pagina</label><div style={{ width: '100px' }}><FormDropdown value={pageSize} options={[{ value: 20, label: '20' }, { value: 50, label: '50' }, { value: 100, label: '100' }]} onChange={(val) => { setPageSize(Number(val) || 20); setPage(1) }} /></div></div>
-                <button type="button" className="px-3 py-2 border border-border rounded-lg text-sm" onClick={clearSearch} disabled={!query && !debouncedQuery}>Limpiar</button>
+                <button
+                  type="button"
+                  className="px-3 py-2 border border-border rounded-lg text-sm"
+                  onClick={clearSearch}
+                  disabled={!query && !debouncedQuery && !estadoLaboralFiltro && !perfilFiltro && !verificacionFiltro}
+                >
+                  Limpiar
+                </button>
               </div>
             </div>
           </div>
 
-          <div className="company-list space-y-2">
-            {!token && <div className="company-card p-4 text-sm text-foreground/70">Inicia sesion para ver candidatos acreditados.</div>}
-            {token && loading && candidatosUi.length === 0 && <div className="company-card p-4 text-sm text-foreground/70">Cargando candidatos acreditados...</div>}
+          <div className="space-y-2">
+            {!token && <div className="company-card p-4 text-sm text-foreground/70">Inicia sesion para ver candidatos.</div>}
+            {token && loading && candidatosUi.length === 0 && <div className="company-card p-4 text-sm text-foreground/70">Cargando candidatos...</div>}
             {token && !loading && isFetching && <div className="company-card p-4 text-sm text-foreground/70">Actualizando resultados...</div>}
             {token && !loading && error && <div className="company-card p-4 text-sm text-rose-600">{error}</div>}
             {token && !loading && !error && candidatosUi.length === 0 && debouncedQuery && <div className="company-card p-4 text-sm text-foreground/70">No se encontraron candidatos para "{debouncedQuery}".</div>}
-            {token && !loading && !error && candidatosUi.length === 0 && !debouncedQuery && <div className="company-card p-4 text-sm text-foreground/70">No hay candidatos acreditados disponibles.</div>}
-            {token && candidatosUi.map((candidato) => (
-              <article key={candidato.id} className="company-card p-4 company-candidate-card">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-2 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap"><span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">Perfil protegido</span></div>
-                    <h3 className="font-heading text-base font-semibold truncate inline-flex items-center gap-1.5">
-                      <span>{candidato.name}</span>
-                      <VerifiedBadge entity={candidato} />
-                    </h3>
-                    <div className="company-candidate-meta">
-                      <p>Documento: {candidato.documento}</p>
-                      <p>Nacionalidad: {candidato.nacionalidad}</p>
-                      <p>Nacimiento: {candidato.fechaNacimiento}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs shrink-0">
-                    <button type="button" className="px-3 py-1.5 bg-primary text-white rounded-lg flex items-center gap-2" onClick={() => handleOpenPerfil(candidato)}><Users className="w-4 h-4" /> Perfil profesional</button>
-                    {!canImportAcreditados ? (
-                      <>
-                        <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2"><Briefcase className="w-4 h-4" /> Cambiar estado</button>
-                        <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2" onClick={() => handleOpenMessageModal(candidato)}><MessageCircleMore className="w-4 h-4" /> Enviar mensaje</button>
-                        <button type="button" className="px-3 py-1.5 border border-border rounded-lg flex items-center gap-2"><Crown className="w-4 h-4" /> Destacar</button>
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-              </article>
-            ))}
+            {token && !loading && !error && candidatosUi.length === 0 && !debouncedQuery && <div className="company-card p-4 text-sm text-foreground/70">No hay candidatos disponibles.</div>}
+            {token && !loading && !error && candidatosUi.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5 gap-3">
+                {candidatosUi.map((candidato) => {
+                  const photoKey = Number(candidato?.id || 0)
+                  const photoSrc = brokenPhotos[photoKey] ? '' : toAssetUrl(candidato?.foto_url)
+                  return (
+                    <article
+                      key={candidato.id}
+                      className={`company-card p-3 company-candidate-card relative overflow-visible ${
+                        openCandidateActionsId === candidato.id ? 'z-40' : 'z-0'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2 min-w-0 flex-1">
+                          {photoSrc ? (
+                            <img
+                              src={photoSrc}
+                              alt={candidato.name}
+                              className="w-10 h-10 rounded-full object-cover border border-border shrink-0"
+                              onError={() => setBrokenPhotos((prev) => ({ ...prev, [photoKey]: true }))}
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-slate-100 text-[#0D4D8F] text-xs font-bold inline-flex items-center justify-center border border-border shrink-0">
+                              {getInitials(candidato.name)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <h3 className="font-heading text-sm font-semibold truncate inline-flex items-center gap-1.5 max-w-full">
+                              <span className="truncate">{candidato.name}</span>
+                              <VerifiedBadge entity={candidato} />
+                            </h3>
+                            <p className="text-xs text-foreground/70 truncate mt-0.5">{candidato.profileHeadline}</p>
+                          </div>
+                        </div>
+                        <div className="relative" data-candidato-actions>
+                          <button
+                            data-candidato-actions
+                            type="button"
+                            className="w-9 h-9 border border-border rounded-xl text-foreground/70 inline-flex items-center justify-center shrink-0"
+                            onClick={() => setOpenCandidateActionsId((prev) => (prev === candidato.id ? null : candidato.id))}
+                            aria-label={`Acciones de ${candidato.name}`}
+                          >
+                            <EllipsisVertical className="w-4 h-4" />
+                          </button>
+                          {openCandidateActionsId === candidato.id ? (
+                            <div data-candidato-actions className="absolute right-0 mt-2 w-44 rounded-xl border border-border bg-white shadow-lg z-[60] overflow-hidden">
+                              <button
+                                data-candidato-actions
+                                type="button"
+                                className="w-full px-3 py-2.5 text-left text-sm hover:bg-secondary inline-flex items-center gap-2"
+                                onClick={() => {
+                                  setOpenCandidateActionsId(null)
+                                  handleOpenPerfil(candidato)
+                                }}
+                              >
+                                <User className="w-4 h-4" /> Ver perfil
+                              </button>
+                              {!canImportAcreditados ? (
+                                <button
+                                  data-candidato-actions
+                                  type="button"
+                                  className="w-full px-3 py-2.5 text-left text-sm hover:bg-secondary inline-flex items-center gap-2"
+                                  onClick={() => {
+                                    setOpenCandidateActionsId(null)
+                                    handleOpenMessageModal(candidato)
+                                  }}
+                                >
+                                  <MessageCircle className="w-4 h-4" /> Enviar mensaje
+                                </button>
+                              ) : null}
+                              {!canImportAcreditados ? (
+                                <button
+                                  data-candidato-actions
+                                  type="button"
+                                  className="w-full px-3 py-2.5 text-left text-sm hover:bg-secondary inline-flex items-center gap-2"
+                                  onClick={() => handleDestacarCandidato(candidato)}
+                                >
+                                  <Crown className="w-4 h-4" /> Destacar
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            ) : null}
           </div>
 
           {token && !error && (
