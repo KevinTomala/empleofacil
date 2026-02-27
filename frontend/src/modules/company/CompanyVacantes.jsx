@@ -8,12 +8,14 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
+  DollarSign,
   Download,
   Eye,
-  Ellipsis,
+  EllipsisVertical,
   FileText,
   ListFilter,
   MapPin,
+  MessageCircle,
   Monitor,
   Pencil,
   Plus,
@@ -25,6 +27,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import Header from '../../components/Header'
+import VerifiedBadge from '../../components/VerifiedBadge'
 import provinciasData from '../../assets/provincias.json'
 import { apiRequest } from '../../services/api'
 import { getMyCompanyPreferences } from '../../services/companyPerfil.api'
@@ -128,6 +131,14 @@ function formatEstadoProcesoLabel(value) {
     .join(' ')
 }
 
+function toAssetUrl(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  if (text.startsWith('http://') || text.startsWith('https://')) return text
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+  return text.startsWith('/') ? `${apiBase}${text}` : `${apiBase}/${text}`
+}
+
 export default function CompanyVacantes() {
   const navigate = useNavigate()
   const [viewMode, setViewMode] = useState('vacantes')
@@ -148,6 +159,7 @@ export default function CompanyVacantes() {
   const [saving, setSaving] = useState(false)
   const [preferenciasEmpresa, setPreferenciasEmpresa] = useState({ modalidades_permitidas: [] })
   const [openActionsVacanteId, setOpenActionsVacanteId] = useState(null)
+  const [openPostuladoActionsId, setOpenPostuladoActionsId] = useState(null)
 
   const [dropdownsOpen, setDropdownsOpen] = useState({
     provincia: false,
@@ -175,6 +187,7 @@ export default function CompanyVacantes() {
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [profileCandidate, setProfileCandidate] = useState(null)
   const [downloadingPostulacionId, setDownloadingPostulacionId] = useState(0)
+  const [brokenPostuladosPhotos, setBrokenPostuladosPhotos] = useState({})
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize])
   const postuladosTotalPages = useMemo(() => Math.max(1, Math.ceil(postuladosTotal / postuladosPageSize)), [postuladosTotal, postuladosPageSize])
@@ -317,6 +330,16 @@ export default function CompanyVacantes() {
   }, [openActionsVacanteId])
 
   useEffect(() => {
+    if (!openPostuladoActionsId) return undefined
+    const onPointerDown = (event) => {
+      if (event.target?.closest?.('[data-postulado-actions]')) return
+      setOpenPostuladoActionsId(null)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [openPostuladoActionsId])
+
+  useEffect(() => {
     let active = true
     async function fetchPreferenciasEmpresa() {
       try {
@@ -347,14 +370,16 @@ export default function CompanyVacantes() {
   const openPostulados = (vacante) => {
     setSelectedVacante(vacante)
     setViewMode('postulados')
+    setBrokenPostuladosPhotos({})
+    setOpenPostuladoActionsId(null)
     setPostuladosQuery('')
     setPostuladosPage(1)
     fetchPostuladosByVacante(vacante.id, '', 1, postuladosPageSize)
     fetchPostuladosKpis(vacante.id)
   }
 
-  const handleOpenPerfil = (id, name) => {
-    setProfileCandidate({ id, name })
+  const handleOpenPerfil = (candidate) => {
+    setProfileCandidate(candidate || null)
     setProfileModalOpen(true)
   }
 
@@ -480,6 +505,14 @@ export default function CompanyVacantes() {
       .join('')
   }
 
+  const getDisplayNameLines = (nombres, apellidos) => {
+    const nombresParts = String(nombres || '').trim().split(/\s+/).filter(Boolean)
+    const apellidosParts = String(apellidos || '').trim().split(/\s+/).filter(Boolean)
+    const firstLine = nombresParts.slice(0, 2).join(' ') || apellidosParts.slice(0, 2).join(' ') || 'Candidato'
+    const secondLine = apellidosParts.join(' ') || (nombresParts.length > 2 ? nombresParts.slice(2).join(' ') : '')
+    return { firstLine, secondLine }
+  }
+
   return (
     <div className="company-scope company-compact min-h-screen bg-secondary">
       <Header />
@@ -523,35 +556,34 @@ export default function CompanyVacantes() {
               </form>
             </section>
 
-            <section className="space-y-3">
+            <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
               {loading && <div className="company-card p-4 text-sm text-foreground/70">Cargando vacantes...</div>}
               {!loading && error && <div className="company-card p-4 text-sm text-rose-700">{error}</div>}
               {!loading && !error && items.map((item) => (
-                <article key={item.id} className="company-card p-4 sm:p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-1xl sm:text-1xl font-bold tracking-tight">{item.titulo}</h2>
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusClass(item.estado)}`}>{item.estado}</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-4 text-sm text-foreground/70">
-                        <span className="inline-flex items-center gap-1"><Building2 className="w-4 h-4" /> {asText(item.area)}</span>
-                        <span className="inline-flex items-center gap-1"><MapPin className="w-4 h-4" /> {asText(item.ciudad)}, {asText(item.provincia)}</span>
-                        <span className="inline-flex items-center gap-1"><Monitor className="w-4 h-4" /> {asText(item.modalidad)}</span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">{formatPagoVacante(item.pago_monto, item.pago_periodo)}</span>
-                        <span className="inline-flex items-center gap-1"><CalendarDays className="w-4 h-4" /> {formatDate(item.fecha_publicacion)}</span>
-                      </div>
+                <article key={item.id} className="company-card p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1 flex items-center gap-2">
+                      <h2 className="text-sm font-bold tracking-tight truncate">{item.titulo}</h2>
+                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusClass(item.estado)}`}>{item.estado}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white bg-[#0D4D8F]" type="button" onClick={() => openPostulados(item)}><Users className="w-4 h-4" /> {countByVacante[item.id] ?? 0} postulados</button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-semibold text-white bg-[#0D4D8F]"
+                        type="button"
+                        onClick={() => openPostulados(item)}
+                        aria-label={`Ver postulados de ${item.titulo}`}
+                      >
+                        <Users className="w-3.5 h-3.5" /> {countByVacante[item.id] ?? 0}
+                      </button>
                       <div className="relative" data-vacante-actions>
                         <button
                           data-vacante-actions
-                          className="w-10 h-10 border border-border rounded-xl text-foreground/70 inline-flex items-center justify-center"
+                          className="w-9 h-9 border border-border rounded-xl text-foreground/70 inline-flex items-center justify-center"
                           type="button"
                           onClick={() => setOpenActionsVacanteId((prev) => (prev === item.id ? null : item.id))}
+                          aria-label={`Acciones de ${item.titulo}`}
                         >
-                          <Ellipsis className="w-4 h-4" />
+                          <EllipsisVertical className="w-4 h-4" />
                         </button>
                         {openActionsVacanteId === item.id ? (
                           <div data-vacante-actions className="absolute right-0 mt-2 w-44 rounded-xl border border-border bg-white shadow-lg z-20 overflow-hidden">
@@ -587,6 +619,28 @@ export default function CompanyVacantes() {
                         ) : null}
                       </div>
                     </div>
+                  </div>
+                  <div className="pt-2 border-t border-border/70 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-foreground/70">
+                    <span className="inline-flex items-center gap-1 min-w-0">
+                      <Building2 className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{asText(item.area)}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 min-w-0">
+                      <MapPin className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{asText(item.ciudad)}, {asText(item.provincia)}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 min-w-0">
+                      <Monitor className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{asText(item.modalidad)}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 min-w-0">
+                      <DollarSign className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{formatPagoVacante(item.pago_monto, item.pago_periodo).replace('$', '')}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 min-w-0">
+                      <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{formatDate(item.fecha_publicacion)}</span>
+                    </span>
                   </div>
                 </article>
               ))}
@@ -645,44 +699,119 @@ export default function CompanyVacantes() {
                   {postuladosQuery.trim() ? 'No hay resultados para la busqueda actual.' : 'Esta vacante no tiene postulados aun.'}
                 </div>
               )}
-              {!postuladosLoading && !postuladosError && postulados.map((item) => {
-                const name = `${item.nombres || ''} ${item.apellidos || ''}`.trim() || 'Candidato'
-                return (
-                  <article key={item.id} className="company-card p-4 sm:p-5 space-y-2">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-full bg-slate-100 text-[#0D4D8F] font-bold inline-flex items-center justify-center">
-                          {getInitials(item.nombres, item.apellidos)}
-                        </div>
-                        <div className="space-y-2 text-sm text-foreground/75">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold text-foreground">{name}</h3>
-                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${estadoProcesoClass(item.estado_proceso)}`}>
-                              {formatEstadoProcesoLabel(item.estado_proceso)}
-                            </span>
+              {!postuladosLoading && !postuladosError && postulados.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {postulados.map((item) => {
+                    const name = `${item.nombres || ''} ${item.apellidos || ''}`.trim() || 'Candidato'
+                    const photoKey = Number(item?.candidato_id || item?.id || 0)
+                    const photoSrc = brokenPostuladosPhotos[photoKey] ? '' : toAssetUrl(item?.foto_url)
+                    const { firstLine, secondLine } = getDisplayNameLines(item.nombres, item.apellidos)
+                    return (
+                      <article key={item.id} className="company-card p-4 space-y-3">
+                        <div className="flex items-start gap-3">
+                          {photoSrc ? (
+                            <img
+                              src={photoSrc}
+                              alt={name}
+                              className="w-12 h-12 rounded-full object-cover border border-border"
+                              onError={() => setBrokenPostuladosPhotos((prev) => ({ ...prev, [photoKey]: true }))}
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-slate-100 text-[#0D4D8F] font-bold inline-flex items-center justify-center border border-border">
+                              {getInitials(item.nombres, item.apellidos)}
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1 space-y-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <h3 className="font-semibold text-foreground min-w-0">
+                                  {secondLine ? (
+                                    <>
+                                      <span className="block truncate">{firstLine}</span>
+                                      <span className="inline-flex items-center gap-1.5 min-w-0">
+                                        <span className="truncate">{secondLine}</span>
+                                        <VerifiedBadge entity={item} />
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 min-w-0">
+                                      <span className="truncate">{firstLine}</span>
+                                      <VerifiedBadge entity={item} />
+                                    </span>
+                                  )}
+                                </h3>
+                              </div>
+                              <div className="relative" data-postulado-actions>
+                                <button
+                                  data-postulado-actions
+                                  type="button"
+                                  className="w-9 h-9 border border-border rounded-xl text-foreground/70 inline-flex items-center justify-center shrink-0"
+                                  onClick={() => setOpenPostuladoActionsId((prev) => (prev === item.id ? null : item.id))}
+                                  aria-label={`Acciones de ${name}`}
+                                >
+                                  <EllipsisVertical className="w-4 h-4" />
+                                </button>
+                                {openPostuladoActionsId === item.id ? (
+                                  <div data-postulado-actions className="absolute right-0 mt-2 w-44 rounded-xl border border-border bg-white shadow-lg z-20 overflow-hidden">
+                                    <button
+                                      data-postulado-actions
+                                      type="button"
+                                      className="w-full px-3 py-2.5 text-left text-sm hover:bg-secondary inline-flex items-center gap-2"
+                                      onClick={() => {
+                                        setOpenPostuladoActionsId(null)
+                                        handleOpenPerfil({
+                                          id: item.candidato_id,
+                                          name,
+                                          candidato_verificado: Number(item.candidato_verificado || 0) === 1,
+                                          verificacion_cuenta_estado: item.candidato_verificacion_estado || null
+                                        })
+                                      }}
+                                    >
+                                      <User className="w-4 h-4" /> Ver perfil
+                                    </button>
+                                    <button
+                                      data-postulado-actions
+                                      type="button"
+                                      className="w-full px-3 py-2.5 text-left text-sm hover:bg-secondary inline-flex items-center gap-2 disabled:opacity-60"
+                                      onClick={() => {
+                                        setOpenPostuladoActionsId(null)
+                                        handleDownloadCurriculum(item, name)
+                                      }}
+                                      disabled={downloadingPostulacionId === Number(item.id)}
+                                    >
+                                      <Download className="w-4 h-4" /> {downloadingPostulacionId === Number(item.id) ? 'Descargando...' : 'Descargar CV'}
+                                    </button>
+                                    <button
+                                      data-postulado-actions
+                                      type="button"
+                                      className="w-full px-3 py-2.5 text-left text-sm hover:bg-secondary inline-flex items-center gap-2"
+                                      onClick={() => {
+                                        setOpenPostuladoActionsId(null)
+                                        handleOpenMensajes(item.candidato_id)
+                                      }}
+                                    >
+                                      <MessageCircle className="w-4 h-4" /> Mensaje
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div>
+                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${estadoProcesoClass(item.estado_proceso)}`}>
+                                {formatEstadoProcesoLabel(item.estado_proceso)}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground/70">
+                              <span className="inline-flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> {asText(item.documento_identidad)}</span>
+                              <span className="inline-flex items-center gap-1"><CalendarDays className="w-3.5 h-3.5" /> {formatDate(item.fecha_postulacion)}</span>
+                            </div>
                           </div>
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-foreground/70">
-                            <span className="inline-flex items-center gap-1"><FileText className="w-4 h-4" /> {asText(item.documento_identidad)}</span>
-                            <span className="inline-flex items-center gap-1"><CalendarDays className="w-4 h-4" /> {formatDate(item.fecha_postulacion)}</span>
-                          </div>
                         </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button type="button" className="inline-flex items-center gap-2 px-4 py-2 bg-[#0D4D8F] text-white rounded-xl text-sm font-semibold" onClick={() => handleOpenPerfil(item.candidato_id, name)}><User className="w-4 h-4" /> Ver perfil</button>
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-2 px-3 py-2 border border-border rounded-xl text-sm bg-white disabled:opacity-60"
-                          onClick={() => handleDownloadCurriculum(item, name)}
-                          disabled={downloadingPostulacionId === Number(item.id)}
-                        >
-                          <Download className="w-4 h-4" /> {downloadingPostulacionId === Number(item.id) ? 'Descargando...' : 'Descargar CV'}
-                        </button>
-                        <button type="button" className="inline-flex items-center gap-2 px-3 py-2 border border-border rounded-xl text-sm bg-white" onClick={() => handleOpenMensajes(item.candidato_id)}><Users className="w-4 h-4" /> Enviar mensaje</button>
-                      </div>
-                    </div>
-                  </article>
-                )
-              })}
+                      </article>
+                    )
+                  })}
+                </div>
+              ) : null}
             </section>
 
             <section className="company-card p-4 flex flex-wrap items-center justify-between gap-3 text-sm">

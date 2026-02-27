@@ -778,6 +778,7 @@ module.exports = {
   VALID_VERIFICACION_TIPOS,
   VALID_VERIFICACION_ESTADOS,
   VALID_VERIFICACION_NIVELES,
+  ensureVerificationSchema,
   selectVerificacionByScope,
   ensureVerificacionByScope,
   requestVerificacionByScope,

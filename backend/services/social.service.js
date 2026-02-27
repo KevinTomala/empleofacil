@@ -1,4 +1,5 @@
 const db = require('../db');
+const { ensureVerificationSchema } = require('./verificaciones.service');
 
 let ensuredCompanyFollowTable = false;
 let ensuredCandidateSocialConfigTable = false;
@@ -120,6 +121,8 @@ function mapCompanyRow(row) {
     instagram_url: row.instagram_url || null,
     facebook_url: row.facebook_url || null,
     logo_url: row.logo_url || null,
+    verificacion_cuenta_estado: row.verificacion_cuenta_estado || null,
+    empresa_verificada: String(row.verificacion_cuenta_estado || '').trim().toLowerCase() === 'aprobada',
     stats: {
       seguidores_total: Number(row.seguidores_total || 0),
       vacantes_activas: Number(row.vacantes_activas || 0),
@@ -155,6 +158,8 @@ function mapCandidatePublicRow(row) {
     foto_url: row?.foto_url ? String(row.foto_url).trim() : null,
     titular,
     ubicacion,
+    verificacion_cuenta_estado: row?.verificacion_cuenta_estado || null,
+    candidato_verificado: String(row?.verificacion_cuenta_estado || '').trim().toLowerCase() === 'aprobada',
     stats: {
       empresas_actuales: Number(row?.empresas_actuales || 0),
       empresas_totales: Number(row?.empresas_totales || 0),
@@ -280,6 +285,7 @@ async function listEmpresasPublic({
   soloSeguidas = false
 } = {}) {
   await ensureCompanyFollowTable();
+  await ensureVerificationSchema();
 
   const safePage = toPage(page, 1);
   const safePageSize = toPageSize(pageSize, 20, 100);
@@ -331,6 +337,7 @@ async function listEmpresasPublic({
        ep.instagram_url,
        ep.facebook_url,
        ep.logo_url,
+       vc.estado AS verificacion_cuenta_estado,
        COALESCE(fs.seguidores_total, 0) AS seguidores_total,
        COALESCE(vs.vacantes_activas, 0) AS vacantes_activas,
        COALESCE(xs.personas_total, 0) AS personas_total,
@@ -365,6 +372,9 @@ async function listEmpresasPublic({
        GROUP BY empresa_id
      ) xs
        ON xs.empresa_id = e.id
+     LEFT JOIN verificaciones_cuenta vc
+       ON vc.cuenta_tipo = 'empresa'
+      AND vc.empresa_id = e.id
      LEFT JOIN candidatos_empresas_seguidas myf
        ON myf.empresa_id = e.id
       AND myf.candidato_id = ?
@@ -387,6 +397,7 @@ async function listEmpresasPublic({
 
 async function getEmpresaPublicProfile(empresaId, candidatoId = null) {
   await ensureCompanyFollowTable();
+  await ensureVerificationSchema();
 
   const safeEmpresaId = toPositiveIntOrNull(empresaId);
   if (!safeEmpresaId) return null;
@@ -408,6 +419,7 @@ async function getEmpresaPublicProfile(empresaId, candidatoId = null) {
        ep.instagram_url,
        ep.facebook_url,
        ep.logo_url,
+       vc.estado AS verificacion_cuenta_estado,
        COALESCE(fs.seguidores_total, 0) AS seguidores_total,
        COALESCE(vs.vacantes_activas, 0) AS vacantes_activas,
        COALESCE(xs.personas_total, 0) AS personas_total,
@@ -442,6 +454,9 @@ async function getEmpresaPublicProfile(empresaId, candidatoId = null) {
        GROUP BY empresa_id
      ) xs
        ON xs.empresa_id = e.id
+     LEFT JOIN verificaciones_cuenta vc
+       ON vc.cuenta_tipo = 'empresa'
+      AND vc.empresa_id = e.id
      LEFT JOIN candidatos_empresas_seguidas myf
        ON myf.empresa_id = e.id
       AND myf.candidato_id = ?
@@ -532,6 +547,7 @@ async function listPublicCandidates({
 } = {}) {
   await ensureCandidateSocialConfigTable();
   await ensureCandidateFollowTable();
+  await ensureVerificationSchema();
 
   const safePage = toPage(page, 1);
   const safePageSize = toPageSize(pageSize, 20, 100);
@@ -610,6 +626,7 @@ async function listPublicCandidates({
        ex.empresas_totales,
        ex.empresas_actuales,
        ex.cargo_resumen,
+       vc.estado AS verificacion_cuenta_estado,
        COALESCE(idm.idiomas_total, 0) AS idiomas_total,
        COALESCE(fs.seguidores_total, 0) AS seguidores_total,
        f.foto_url,
@@ -644,6 +661,9 @@ async function listPublicCandidates({
        GROUP BY ce.candidato_id
      ) ex
        ON ex.candidato_id = c.id
+     LEFT JOIN verificaciones_cuenta vc
+       ON vc.cuenta_tipo = 'candidato'
+      AND vc.candidato_id = c.id
      LEFT JOIN (
        SELECT candidato_id, COUNT(*) AS idiomas_total
        FROM candidatos_idiomas

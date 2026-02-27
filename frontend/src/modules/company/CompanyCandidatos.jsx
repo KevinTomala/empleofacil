@@ -4,6 +4,7 @@ import FormDropdown from '../../components/FormDropdown'
 import './company.css'
 import { Briefcase, Crown, FileText, MessageCircleMore, Search, Users, X } from 'lucide-react'
 import Header from '../../components/Header'
+import VerifiedBadge from '../../components/VerifiedBadge'
 import { apiRequest } from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
 import { createMensajesVacanteConversation, getMensajesErrorMessage } from '../../services/mensajes.api'
@@ -181,7 +182,9 @@ export default function CompanyCandidatos() {
       name: `${item.nombres || ''} ${item.apellidos || ''}`.trim() || 'Candidato',
       documento: item.documento_identidad || 'N/D',
       nacionalidad: item.nacionalidad || 'N/D',
-      fechaNacimiento: item.fecha_nacimiento || 'N/D'
+      fechaNacimiento: item.fecha_nacimiento || 'N/D',
+      verificacion_cuenta_estado: item.verificacion_cuenta_estado || null,
+      candidato_verificado: Number(item.candidato_verificado || 0) === 1
     })),
     [candidatos]
   )
@@ -353,7 +356,10 @@ export default function CompanyCandidatos() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-2 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap"><span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">Perfil protegido</span></div>
-                    <h3 className="font-heading text-base font-semibold truncate">{candidato.name}</h3>
+                    <h3 className="font-heading text-base font-semibold truncate inline-flex items-center gap-1.5">
+                      <span>{candidato.name}</span>
+                      <VerifiedBadge entity={candidato} />
+                    </h3>
                     <div className="company-candidate-meta">
                       <p>Documento: {candidato.documento}</p>
                       <p>Nacionalidad: {candidato.nacionalidad}</p>
@@ -407,7 +413,10 @@ export default function CompanyCandidatos() {
               <button type="button" className="efmsg-icon-btn" onClick={closeMessageModal} aria-label="Cerrar modal"><X className="w-4 h-4" /></button>
             </div>
             <div className="company-candidate-message-context">
-              <p className="text-sm font-semibold">{messageTarget?.name || 'Candidato'}</p>
+              <p className="text-sm font-semibold inline-flex items-center gap-1.5">
+                <span>{messageTarget?.name || 'Candidato'}</span>
+                <VerifiedBadge entity={messageTarget} />
+              </p>
               <p className="text-xs text-foreground/70">El contacto se gestiona dentro del sistema. Selecciona una vacante donde este candidato haya postulado.</p>
             </div>
             <div className="efmsg-modal-form">

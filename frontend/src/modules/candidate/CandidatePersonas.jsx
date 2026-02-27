@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Header from '../../components/Header'
+import VerifiedBadge from '../../components/VerifiedBadge'
 import { useAuth } from '../../context/AuthContext'
 import {
   followSocialCandidate,
@@ -147,7 +148,10 @@ export default function CandidatePersonas() {
                           {item?.iniciales || 'NA'}
                         </span>
                       )}
-                      <h2 className="candidate-person-card__name">{item.nombre}</h2>
+                      <h2 className="candidate-person-card__name inline-flex items-center gap-1.5">
+                        <span>{item.nombre}</span>
+                        <VerifiedBadge entity={item} />
+                      </h2>
                       <p className="candidate-person-card__title">{item.titular || 'Perfil profesional en desarrollo'}</p>
                       {item.ubicacion ? <p className="candidate-person-card__meta">{item.ubicacion}</p> : null}
                     </div>

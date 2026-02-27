@@ -1,6 +1,8 @@
 const db = require('../db');
+const { ensureVerificationSchema } = require('../services/verificaciones.service');
 
 async function listCandidatos(req, res) {
+  await ensureVerificationSchema();
   const page = Math.max(Number(req.query.page || 1), 1);
   const pageSize = Math.min(Math.max(Number(req.query.page_size || 20), 1), 100);
   const offset = (page - 1) * pageSize;
@@ -22,8 +24,22 @@ async function listCandidatos(req, res) {
   }
 
   const [rows] = await db.query(
-    `SELECT e.id, e.nombres, e.apellidos, e.documento_identidad, e.nacionalidad, e.fecha_nacimiento
+    `SELECT
+      e.id,
+      e.nombres,
+      e.apellidos,
+      e.documento_identidad,
+      e.nacionalidad,
+      e.fecha_nacimiento,
+      vc.estado AS verificacion_cuenta_estado,
+      CASE
+        WHEN vc.estado = 'aprobada' THEN 1
+        ELSE 0
+      END AS candidato_verificado
      FROM candidatos e
+     LEFT JOIN verificaciones_cuenta vc
+       ON vc.cuenta_tipo = 'candidato'
+      AND vc.candidato_id = e.id
      ${where}
      ORDER BY e.created_at DESC
      LIMIT ? OFFSET ?`,

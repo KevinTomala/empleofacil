@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { getPerfilById, getPerfilErrorMessage } from '../../../services/perfilCandidato.api'
+import VerifiedBadge from '../../../components/VerifiedBadge'
 
 function renderValue(value, fallback = 'N/D') {
   if (value === null || value === undefined || String(value).trim() === '') return fallback
@@ -121,7 +122,10 @@ export default function CandidatoPerfilProfesionalModal({
         <div className="company-profile-head">
           <div>
             <h3>Perfil profesional</h3>
-            <p>{candidate?.name || 'Candidato'}</p>
+            <p className="inline-flex items-center gap-1.5">
+              <span>{candidate?.name || 'Candidato'}</span>
+              <VerifiedBadge entity={candidate} />
+            </p>
           </div>
           <button type="button" className="efmsg-icon-btn" onClick={onClose} aria-label="Cerrar modal">
             <X className="w-4 h-4" />
@@ -136,7 +140,10 @@ export default function CandidatoPerfilProfesionalModal({
             <article className="company-profile-resume">
               <header className="company-resume-header">
                 <p className="company-resume-kicker">Curriculum resumido</p>
-                <h4>{candidate?.name || 'Candidato'}</h4>
+                <h4 className="inline-flex items-center gap-1.5">
+                  <span>{candidate?.name || 'Candidato'}</span>
+                  <VerifiedBadge entity={candidate} />
+                </h4>
                 <p className="company-resume-summary">{resumenProfesional}</p>
               </header>
 

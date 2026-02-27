@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
 import Header from '../../components/Header'
 import FormDropdown from '../../components/FormDropdown'
+import VerifiedBadge from '../../components/VerifiedBadge'
 import { apiRequest } from '../../services/api'
 import { getPerfilById, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
 import { downloadPostulacionCurriculumPdf, getPostulacionesErrorMessage } from '../../services/postulaciones.api'
@@ -35,6 +36,7 @@ export default function CompanyPostulaciones() {
   const [drawerError, setDrawerError] = useState('')
   const [drawerPerfil, setDrawerPerfil] = useState(null)
   const [drawerCandidatoName, setDrawerCandidatoName] = useState('')
+  const [drawerCandidatoEntity, setDrawerCandidatoEntity] = useState(null)
   const [downloadingPostulacionId, setDownloadingPostulacionId] = useState(0)
 
   const totalPages = useMemo(() => {
@@ -120,12 +122,13 @@ export default function CompanyPostulaciones() {
     setPage(1)
   }
 
-  const handleOpenPerfil = async (candidatoId, candidatoName) => {
+  const handleOpenPerfil = async (candidatoId, candidatoName, candidatoEntity = null) => {
     setDrawerOpen(true)
     setDrawerLoading(true)
     setDrawerError('')
     setDrawerPerfil(null)
     setDrawerCandidatoName(candidatoName)
+    setDrawerCandidatoEntity(candidatoEntity)
     try {
       const perfil = await getPerfilById(candidatoId)
       setDrawerPerfil(perfil)
@@ -251,7 +254,10 @@ export default function CompanyPostulaciones() {
                     <div key={item.id} className="border border-border rounded-lg p-3 bg-background">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-1 text-xs text-foreground/70">
-                          <p className="text-sm font-semibold text-foreground">{candidatoName}</p>
+                          <p className="text-sm font-semibold text-foreground inline-flex items-center gap-1.5">
+                            <span>{candidatoName}</span>
+                            <VerifiedBadge entity={item} />
+                          </p>
                           <p>Documento: {withFallback(item.documento_identidad)}</p>
                           <p>Email: {withFallback(item.email)}</p>
                           <p>Telefono: {withFallback(item.telefono_celular)}</p>
@@ -262,7 +268,7 @@ export default function CompanyPostulaciones() {
                           <button
                             type="button"
                             className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs"
-                            onClick={() => handleOpenPerfil(item.candidato_id, candidatoName)}
+                            onClick={() => handleOpenPerfil(item.candidato_id, candidatoName, item)}
                           >
                             Ver perfil
                           </button>
@@ -326,10 +332,14 @@ export default function CompanyPostulaciones() {
       <CandidatoPerfilDrawer
         open={drawerOpen}
         candidatoName={drawerCandidatoName}
+        candidatoEntity={drawerCandidatoEntity}
         loading={drawerLoading}
         error={drawerError}
         perfil={drawerPerfil}
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => {
+          setDrawerOpen(false)
+          setDrawerCandidatoEntity(null)
+        }}
       />
     </div>
   )

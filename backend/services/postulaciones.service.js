@@ -1,5 +1,6 @@
 const db = require('../db');
 const { toPositiveIntOrNull, normalizePosted, ensureVacantesSchema } = require('./vacantes.service');
+const { ensureVerificationSchema } = require('./verificaciones.service');
 
 let ensuredPostulacionesSchema = false;
 
@@ -70,6 +71,7 @@ async function isNullableColumn(tableName, columnName) {
 async function ensurePostulacionesSchema() {
   if (ensuredPostulacionesSchema) return;
   await ensureVacantesSchema();
+  await ensureVerificationSchema();
 
   if (!(await hasColumn('postulaciones', 'contratante_tipo'))) {
     await db.query(
@@ -442,6 +444,11 @@ async function listPostulacionesByCandidato({
       v.titulo AS vacante_titulo,
       v.provincia,
       v.ciudad,
+      COALESCE(vc_empresa.estado, vc_candidato.estado) AS empresa_verificacion_estado,
+      CASE
+        WHEN COALESCE(vc_empresa.estado, vc_candidato.estado) = 'aprobada' THEN 1
+        ELSE 0
+      END AS empresa_verificada,
       COALESCE(e.nombre, TRIM(CONCAT_WS(' ', cp.nombres, cp.apellidos))) AS contratante_nombre,
       COALESCE(e.nombre, TRIM(CONCAT_WS(' ', cp.nombres, cp.apellidos))) AS empresa_nombre
      FROM postulaciones p
@@ -454,6 +461,12 @@ async function listPostulacionesByCandidato({
      LEFT JOIN candidatos cp
        ON cp.id = p.contratante_candidato_id
       AND cp.deleted_at IS NULL
+     LEFT JOIN verificaciones_cuenta vc_empresa
+       ON vc_empresa.cuenta_tipo = 'empresa'
+      AND vc_empresa.empresa_id = p.empresa_id
+     LEFT JOIN verificaciones_cuenta vc_candidato
+       ON vc_candidato.cuenta_tipo = 'candidato'
+      AND vc_candidato.candidato_id = p.contratante_candidato_id
      ${whereSql}
      ORDER BY p.fecha_postulacion DESC
      LIMIT ? OFFSET ?`,
@@ -544,6 +557,7 @@ async function getPostulacionDetailByCandidato({ candidatoId, postulacionId }) {
       v.fecha_publicacion AS vacante_fecha_publicacion,
       v.fecha_cierre AS vacante_fecha_cierre,
       e.id AS empresa_detalle_id,
+      COALESCE(vc_empresa.estado, vc_candidato.estado) AS empresa_verificacion_estado,
       COALESCE(e.nombre, TRIM(CONCAT_WS(' ', cp.nombres, cp.apellidos))) AS contratante_nombre
      FROM postulaciones p
      INNER JOIN vacantes_publicadas v
@@ -555,6 +569,12 @@ async function getPostulacionDetailByCandidato({ candidatoId, postulacionId }) {
      LEFT JOIN candidatos cp
        ON cp.id = p.contratante_candidato_id
       AND cp.deleted_at IS NULL
+     LEFT JOIN verificaciones_cuenta vc_empresa
+       ON vc_empresa.cuenta_tipo = 'empresa'
+      AND vc_empresa.empresa_id = p.empresa_id
+     LEFT JOIN verificaciones_cuenta vc_candidato
+       ON vc_candidato.cuenta_tipo = 'candidato'
+      AND vc_candidato.candidato_id = p.contratante_candidato_id
      WHERE p.id = ?
        AND p.candidato_id = ?
        AND p.deleted_at IS NULL
@@ -591,13 +611,17 @@ async function getPostulacionDetailByCandidato({ candidatoId, postulacionId }) {
     },
     empresa: {
       id: row.empresa_detalle_id,
-      nombre: row.contratante_nombre
+      nombre: row.contratante_nombre,
+      verificacion_cuenta_estado: row.empresa_verificacion_estado || null,
+      verificada: String(row.empresa_verificacion_estado || '').trim().toLowerCase() === 'aprobada'
     },
     contratante: {
       tipo: row.contratante_tipo,
       empresa_id: row.empresa_detalle_id,
       candidato_id: row.contratante_candidato_id,
-      nombre: row.contratante_nombre
+      nombre: row.contratante_nombre,
+      verificacion_cuenta_estado: row.empresa_verificacion_estado || null,
+      verificado: String(row.empresa_verificacion_estado || '').trim().toLowerCase() === 'aprobada'
     }
   };
 }
@@ -679,6 +703,12 @@ async function listPostulacionesByContratante({
       c.nombres,
       c.apellidos,
       c.documento_identidad,
+      f.foto_url,
+      vc_candidato.estado AS candidato_verificacion_estado,
+      CASE
+        WHEN vc_candidato.estado = 'aprobada' THEN 1
+        ELSE 0
+      END AS candidato_verificado,
       cc.email,
       cc.telefono_celular
      FROM postulaciones p
@@ -688,6 +718,23 @@ async function listPostulacionesByContratante({
      INNER JOIN candidatos c
        ON c.id = p.candidato_id
       AND c.deleted_at IS NULL
+     LEFT JOIN verificaciones_cuenta vc_candidato
+       ON vc_candidato.cuenta_tipo = 'candidato'
+      AND vc_candidato.candidato_id = c.id
+     LEFT JOIN (
+       SELECT d1.candidato_id, d1.ruta_archivo AS foto_url
+       FROM candidatos_documentos d1
+       INNER JOIN (
+         SELECT candidato_id, MAX(id) AS max_id
+         FROM candidatos_documentos
+         WHERE deleted_at IS NULL
+           AND tipo_documento = 'foto'
+           AND COALESCE(TRIM(ruta_archivo), '') <> ''
+         GROUP BY candidato_id
+       ) d2
+         ON d2.max_id = d1.id
+     ) f
+       ON f.candidato_id = c.id
      LEFT JOIN candidatos_contacto cc
        ON cc.candidato_id = c.id
       AND cc.deleted_at IS NULL

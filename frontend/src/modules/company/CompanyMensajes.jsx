@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react'
 import Header from '../../components/Header'
+import VerifiedBadge from '../../components/VerifiedBadge'
 import { useAuth } from '../../context/AuthContext'
 import { apiRequest } from '../../services/api'
 import {
@@ -124,6 +125,16 @@ function formatPostulanteLabel(item) {
   return email ? `${nombre} - ${email}` : nombre
 }
 
+function ConversationName({ item, role, className = '' }) {
+  const title = buildConversationTitle(item, role)
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${className}`.trim()}>
+      <span>{title}</span>
+      <VerifiedBadge entity={item} />
+    </span>
+  )
+}
+
 function ConversationInfoPanel({ selected, detail, role, onBack, isMobileInfo }) {
   const title = buildConversationTitle(selected, role)
   const participants = Array.isArray(detail?.participantes) ? detail.participantes : []
@@ -146,7 +157,7 @@ function ConversationInfoPanel({ selected, detail, role, onBack, isMobileInfo })
         <div className="efmsg-info-body">
           <div className="efmsg-profile">
             <Avatar label={title} url={avatarUrl} className="large" />
-            <h4>{title}</h4>
+            <h4><ConversationName item={selected} role={role} /></h4>
             <p>{selected?.vacante_titulo ? `Vacante: ${selected.vacante_titulo}` : 'Conversacion directa'}</p>
           </div>
 
@@ -765,7 +776,9 @@ export default function CompanyMensajes() {
                     />
                     <div className="efmsg-mensaje-main">
                       <div className="efmsg-mensaje-row">
-                        <p className="efmsg-mensaje-name">{buildConversationTitle(item, role)}</p>
+                        <p className="efmsg-mensaje-name">
+                          <ConversationName item={item} role={role} />
+                        </p>
                         <span className="efmsg-mensaje-time">{formatWhen(item.last_message_at || item.updated_at)}</span>
                       </div>
                       <p className="efmsg-mensaje-preview">{item.last_message_body || 'Sin mensajes'}</p>
@@ -795,7 +808,7 @@ export default function CompanyMensajes() {
                   url={getConversationAvatarUrl(selected, role)}
                 />
                 <div>
-                  <h3>{selected ? buildConversationTitle(selected, role) : 'Selecciona un mensaje'}</h3>
+                  <h3>{selected ? <ConversationName item={selected} role={role} /> : 'Selecciona un mensaje'}</h3>
                   <p>{selected?.vacante_titulo ? `Vacante: ${selected.vacante_titulo}` : 'Conversacion directa'}</p>
                 </div>
               </div>

@@ -16,6 +16,7 @@ import {
   Users,
 } from 'lucide-react'
 import Header from '../../components/Header'
+import VerifiedBadge from '../../components/VerifiedBadge'
 import { useAuth } from '../../context/AuthContext'
 import { showToast } from '../../utils/showToast'
 import {
@@ -883,10 +884,13 @@ export default function CompanyPerfil() {
                 ) : (
                   <>
                     <div className="grid sm:grid-cols-2 gap-4 text-sm">
-                      <div className="border border-border rounded-xl p-4">
-                        <p className="text-foreground/60">Nombre</p>
-                        <p className="font-semibold">{formatDisplay(perfilData?.empresa?.nombre)}</p>
-                      </div>
+                        <div className="border border-border rounded-xl p-4">
+                          <p className="text-foreground/60">Nombre</p>
+                          <p className="font-semibold inline-flex items-center gap-1.5">
+                            <span>{formatDisplay(perfilData?.empresa?.nombre)}</span>
+                            <VerifiedBadge entity={perfilData?.verificacion} />
+                          </p>
+                        </div>
                       <div className="border border-border rounded-xl p-4">
                         <p className="text-foreground/60">Industria</p>
                         <p className="font-semibold">{formatDisplay(perfilData?.perfil?.industria)}</p>

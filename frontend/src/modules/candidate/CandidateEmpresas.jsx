@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Header from '../../components/Header'
+import VerifiedBadge from '../../components/VerifiedBadge'
 import { useAuth } from '../../context/AuthContext'
 import {
   followSocialCompany,
@@ -156,7 +157,10 @@ export default function CandidateEmpresas() {
               <article key={item.id} className="bg-white border border-border rounded-xl p-5 space-y-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h2 className="font-heading text-xl font-semibold">{item.nombre}</h2>
+                    <h2 className="font-heading text-xl font-semibold inline-flex items-center gap-1.5">
+                      <span>{item.nombre}</span>
+                      <VerifiedBadge entity={item} />
+                    </h2>
                     <p className="text-sm text-foreground/70">
                       {[item.industria, item.ubicacion_principal].filter(Boolean).join(' - ') || 'Perfil en construccion'}
                     </p>
