@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import FormDropdown from '../../components/FormDropdown'
 import Header from '../../components/Header'
+import VerifiedBadge from '../../components/VerifiedBadge'
 import provinciasData from '../../assets/provincias.json'
 import { apiRequest } from '../../services/api'
 import { showToast } from '../../utils/showToast'
@@ -794,7 +795,10 @@ export default function CandidateVacantes() {
                         {formatModalidadLabel(item.modalidad)}
                       </span>
                       <h2 className="font-semibold text-lg text-foreground leading-tight mb-1">{item.titulo}</h2>
-                      <p className="text-sm font-medium text-foreground/70">{item.empresa_nombre || 'Empresa'}</p>
+                      <p className="text-sm font-medium text-foreground/70 inline-flex items-center gap-1.5">
+                        <span>{item.empresa_nombre || 'Empresa'}</span>
+                        <VerifiedBadge entity={item} />
+                      </p>
                     </div>
                     <span className={`inline-flex text-[11px] font-semibold tracking-wide px-2 py-1 rounded-full whitespace-nowrap ${hasPagoVacante(item.pago_monto)
                       ? 'bg-emerald-100 text-emerald-700'
@@ -925,7 +929,10 @@ export default function CandidateVacantes() {
                   ) : null}
                 </div>
                 <h2 className="font-heading font-bold text-xl text-foreground leading-tight">{selectedVacante.titulo}</h2>
-                <p className="text-sm font-medium text-foreground/70 mt-0.5">{selectedVacante.empresa_nombre || 'Empresa'}</p>
+                <p className="text-sm font-medium text-foreground/70 mt-0.5 inline-flex items-center gap-1.5">
+                  <span>{selectedVacante.empresa_nombre || 'Empresa'}</span>
+                  <VerifiedBadge entity={selectedVacante} />
+                </p>
               </div>
               <button
                 type="button"

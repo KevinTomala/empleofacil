@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Header from '../../components/Header'
 import FormDropdown from '../../components/FormDropdown'
+import VerifiedBadge from '../../components/VerifiedBadge'
 import { apiRequest } from '../../services/api'
 import './candidate.css'
 
@@ -83,7 +84,10 @@ function DetailBody({ detail, loadingDetail, errorDetail }) {
           {vacante.tipo_contrato ? <span className="candidate-detail-chip">{String(vacante.tipo_contrato).replace(/_/g, ' ')}</span> : null}
         </div>
         <h3 className="font-heading text-xl font-bold leading-tight">{vacante.titulo || 'Vacante'}</h3>
-        <p className="text-sm font-medium text-foreground/70">{empresa.nombre || 'Empresa'}</p>
+        <p className="text-sm font-medium text-foreground/70 inline-flex items-center gap-1.5">
+          <span>{empresa.nombre || 'Empresa'}</span>
+          <VerifiedBadge entity={empresa} />
+        </p>
       </header>
 
       <section className="candidate-detail-meta">
@@ -355,7 +359,10 @@ export default function CandidatePostulaciones() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-0.5">
                         <h2 className="text-base font-semibold leading-tight">{item.vacante_titulo || 'Vacante'}</h2>
-                        <p className="text-sm text-foreground/70 font-medium">{item.empresa_nombre || 'Empresa'}</p>
+                        <p className="text-sm text-foreground/70 font-medium inline-flex items-center gap-1.5">
+                          <span>{item.empresa_nombre || 'Empresa'}</span>
+                          <VerifiedBadge entity={item} />
+                        </p>
                       </div>
                       <StatusBadge estado={item.estado_proceso} />
                     </div>

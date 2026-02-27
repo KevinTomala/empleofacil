@@ -1,4 +1,6 @@
-﻿const db = require('../db');
+const db = require('../db');
+
+const { ensureVerificationSchema } = require('./verificaciones.service');
 
 let ensuredMensajesSchema = false;
 
@@ -46,6 +48,8 @@ const LATEST_CANDIDATO_FOTO_SQL = `(
 
 async function ensureMensajesSchema() {
   if (ensuredMensajesSchema) return;
+
+  await ensureVerificationSchema();
 
   await db.query(
     `CREATE TABLE IF NOT EXISTS mensajes_conversaciones (
@@ -1112,4 +1116,5 @@ module.exports = {
   getUnreadSummaryByUser,
   backfillVacanteSeedMessagesForUser
 };
+
 

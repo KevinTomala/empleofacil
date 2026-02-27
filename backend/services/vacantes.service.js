@@ -1,4 +1,5 @@
 const db = require('../db');
+const { ensureVerificationSchema } = require('./verificaciones.service');
 let ensuredVacantesSchema = false;
 
 function toTextOrNull(value) {
@@ -287,6 +288,7 @@ async function listVacantes({
   posted = null
 } = {}, { ownerScope = null, onlyActive = false, candidatoId = null } = {}) {
   await ensureVacantesSchema();
+  await ensureVerificationSchema();
   const safePage = toPage(page);
   const safePageSize = toPageSize(pageSize);
   const offset = (safePage - 1) * safePageSize;
@@ -324,6 +326,11 @@ async function listVacantes({
       v.publicado_por,
       COALESCE(e.nombre, TRIM(CONCAT_WS(' ', cp.nombres, cp.apellidos))) AS contratante_nombre,
       COALESCE(e.nombre, TRIM(CONCAT_WS(' ', cp.nombres, cp.apellidos))) AS empresa_nombre,
+      COALESCE(v_empresa.estado, v_candidato.estado) AS contratante_verificacion_estado,
+      CASE
+        WHEN COALESCE(v_empresa.estado, v_candidato.estado) = 'aprobada' THEN 1
+        ELSE 0
+      END AS contratante_verificado,
       v.titulo,
       v.area,
       v.provincia,
@@ -345,6 +352,12 @@ async function listVacantes({
        ON e.id = v.empresa_id
      LEFT JOIN candidatos cp
        ON cp.id = v.contratante_candidato_id
+     LEFT JOIN verificaciones_cuenta v_empresa
+       ON v_empresa.cuenta_tipo = 'empresa'
+      AND v_empresa.empresa_id = v.empresa_id
+     LEFT JOIN verificaciones_cuenta v_candidato
+       ON v_candidato.cuenta_tipo = 'candidato'
+      AND v_candidato.candidato_id = v.contratante_candidato_id
      ${candidatoId ? 'LEFT JOIN postulaciones p ON p.vacante_id = v.id AND p.candidato_id = ? AND p.deleted_at IS NULL' : ''}
      ${whereSql}
      ORDER BY v.created_at DESC

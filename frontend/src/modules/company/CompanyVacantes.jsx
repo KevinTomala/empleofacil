@@ -25,6 +25,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import Header from '../../components/Header'
+import VerifiedBadge from '../../components/VerifiedBadge'
 import provinciasData from '../../assets/provincias.json'
 import { apiRequest } from '../../services/api'
 import { getMyCompanyPreferences } from '../../services/companyPerfil.api'
@@ -353,8 +354,8 @@ export default function CompanyVacantes() {
     fetchPostuladosKpis(vacante.id)
   }
 
-  const handleOpenPerfil = (id, name) => {
-    setProfileCandidate({ id, name })
+  const handleOpenPerfil = (candidate) => {
+    setProfileCandidate(candidate || null)
     setProfileModalOpen(true)
   }
 
@@ -656,7 +657,10 @@ export default function CompanyVacantes() {
                         </div>
                         <div className="space-y-2 text-sm text-foreground/75">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold text-foreground">{name}</h3>
+                            <h3 className="font-semibold text-foreground inline-flex items-center gap-1.5">
+                              <span>{name}</span>
+                              <VerifiedBadge entity={item} />
+                            </h3>
                             <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${estadoProcesoClass(item.estado_proceso)}`}>
                               {formatEstadoProcesoLabel(item.estado_proceso)}
                             </span>
@@ -668,7 +672,18 @@ export default function CompanyVacantes() {
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <button type="button" className="inline-flex items-center gap-2 px-4 py-2 bg-[#0D4D8F] text-white rounded-xl text-sm font-semibold" onClick={() => handleOpenPerfil(item.candidato_id, name)}><User className="w-4 h-4" /> Ver perfil</button>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-[#0D4D8F] text-white rounded-xl text-sm font-semibold"
+                          onClick={() => handleOpenPerfil({
+                            id: item.candidato_id,
+                            name,
+                            candidato_verificado: Number(item.candidato_verificado || 0) === 1,
+                            verificacion_cuenta_estado: item.candidato_verificacion_estado || null
+                          })}
+                        >
+                          <User className="w-4 h-4" /> Ver perfil
+                        </button>
                         <button
                           type="button"
                           className="inline-flex items-center gap-2 px-3 py-2 border border-border rounded-xl text-sm bg-white disabled:opacity-60"

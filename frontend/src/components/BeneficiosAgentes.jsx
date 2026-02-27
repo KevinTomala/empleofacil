@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { ArrowRight } from 'lucide-react'
 import { Briefcase, TrendingUp, Bell, Award, Calendar, Clock3, MapPin } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { apiRequest } from '../services/api'
+import VerifiedBadge from './VerifiedBadge'
 
 const beneficios = [
   {
@@ -209,7 +211,8 @@ export default function BeneficiosAgentes() {
                 to="/register"
                 className="inline-flex items-center gap-2 px-8 py-4 bg-accent text-white font-medium rounded-lg hover:bg-accent/90 transition-colors"
               >
-                Registrarme como Candidato
+                Postular ahora
+                <ArrowRight className="w-5 h-5" />
               </Link>
             </div>
           </div>
@@ -242,7 +245,10 @@ export default function BeneficiosAgentes() {
                           {formatModalidadLabel(vacante.modalidad)}
                         </span>
                         <h4 className="font-semibold text-foreground leading-tight">{vacante.titulo}</h4>
-                        <p className="text-sm text-foreground/70">{vacante.empresa_nombre || 'Empresa'}</p>
+                        <p className="text-sm text-foreground/70 inline-flex items-center gap-1.5">
+                          <span>{vacante.empresa_nombre || 'Empresa'}</span>
+                          <VerifiedBadge entity={vacante} />
+                        </p>
                       </div>
                       <span className="text-xs font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 whitespace-nowrap">
                         {formatPagoVacante(vacante.pago_monto, vacante.pago_periodo)}

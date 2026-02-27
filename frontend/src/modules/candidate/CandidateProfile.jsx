@@ -2,6 +2,7 @@ import { AlertCircle, CheckCircle2, Download, Eye, Lock } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Header from '../../components/Header'
+import VerifiedBadge from '../../components/VerifiedBadge'
 import { getMyCandidateSocialConfig, getSocialErrorMessage, updateMyCandidateSocialConfig } from '../../services/social.api'
 import { showToast } from '../../utils/showToast'
 import { getMyHojaVida, getMyHojaVidaPdf, getMyPerfil, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
@@ -348,7 +349,10 @@ export default function CandidateProfile() {
                 </span>
               )}
               <div>
-                <h1 className="font-heading text-xl font-semibold">{candidatoNombre}</h1>
+                <h1 className="font-heading text-xl font-semibold inline-flex items-center gap-1.5">
+                  <span>{candidatoNombre}</span>
+                  <VerifiedBadge entity={perfil} />
+                </h1>
                 <p className="text-sm text-foreground/70">Perfil total {progressGeneral}% completo</p>
               </div>
             </div>

@@ -1,3 +1,5 @@
+import VerifiedBadge from '../../../components/VerifiedBadge'
+
 function renderValue(value) {
   if (value === null || value === undefined || value === '') return 'N/D'
   if (value === 1 || value === true) return 'Si'
@@ -158,6 +160,7 @@ function DocumentosSection({ items }) {
 export default function CandidatoPerfilDrawer({
   open,
   candidatoName,
+  candidatoEntity = null,
   loading,
   error,
   perfil,
@@ -174,7 +177,10 @@ export default function CandidatoPerfilDrawer({
         <div className="sticky top-0 bg-background border-b border-border p-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold">Perfil de candidato</h2>
-            <p className="text-xs text-foreground/60">{candidatoName || 'Candidato'}</p>
+            <p className="text-xs text-foreground/60 inline-flex items-center gap-1.5">
+              <span>{candidatoName || 'Candidato'}</span>
+              <VerifiedBadge entity={candidatoEntity} />
+            </p>
           </div>
           <button
             type="button"

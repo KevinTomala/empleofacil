@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import VerifiedBadge from '../../components/VerifiedBadge'
 import { getPublicPerfilById, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
 import './publicProfile.css'
 
@@ -111,7 +112,10 @@ export default function PublicCandidateProfile() {
       <section className="public-profile-hero">
         <div className="public-profile-hero-content">
           <p className="public-profile-kicker">Perfil profesional publico</p>
-          <h1>{loading ? 'Cargando perfil...' : nombreCompleto}</h1>
+          <h1 className="inline-flex items-center gap-1.5">
+            <span>{loading ? 'Cargando perfil...' : nombreCompleto}</span>
+            {!loading ? <VerifiedBadge entity={perfil} /> : null}
+          </h1>
           {!loading && !error && perfil ? (
             <p className="public-profile-summary">{resumenProfesional}</p>
           ) : null}
