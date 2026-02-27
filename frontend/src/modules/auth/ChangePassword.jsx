@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
-import { Briefcase, Lock, ShieldCheck } from 'lucide-react'
+import { Lock, ShieldCheck } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import Header from '../../components/Header'
 import { useAuth } from '../../context/AuthContext'
 import { changeMyPassword, getAuthErrorMessage } from '../../services/auth.api'
 import { showToast } from '../../utils/showToast'
 import './auth.css'
+
+const BRAND_LOGO_SRC = '/branding/logo.png'
 
 function getFallbackPathByRole(role, hasCompanyAccess) {
   if (role === 'empresa' || hasCompanyAccess) return '/app/company'
@@ -101,7 +103,7 @@ export default function ChangePassword() {
         <section className="auth-hero">
           <div className="auth-logo">
             <span className="auth-logo-badge">
-              <Briefcase size={22} />
+              <img src={BRAND_LOGO_SRC} alt="Logo de EmpleoFacil" className="auth-logo-image" />
             </span>
             EmpleoFacil
           </div>

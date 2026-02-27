@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X, Briefcase } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { getMyPerfil } from '../services/perfilCandidato.api'
 import { getMyCompanyPerfil } from '../services/companyPerfil.api'
+
+const BRAND_LOGO_SRC = '/branding/logo.png'
 
 function toAssetUrl(value) {
   const raw = String(value || '').trim()
@@ -152,6 +154,7 @@ export default function Header() {
       { href: '/#beneficios-candidatos', label: 'Para Candidatos' },
       { href: '/#beneficios-empresas', label: 'Para Empresas' },
       { href: '/#como-funciona', label: 'Como Funciona' },
+      { href: '/#nosotros', label: 'Nosotros' },
       { href: '/#contacto', label: 'Contacto' },
     ]
   }, [role, hasCompanyAccess])
@@ -190,9 +193,11 @@ export default function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to={homeLink} className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <Briefcase className="w-6 h-6 text-white" />
-            </div>
+            <img
+              src={BRAND_LOGO_SRC}
+              alt="Logo de EmpleoFacil"
+              className="w-10 h-10 rounded-lg object-contain"
+            />
             <span className="font-heading font-bold text-xl text-foreground">
               EmpleoFácil
             </span>

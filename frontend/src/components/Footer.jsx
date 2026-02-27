@@ -1,4 +1,4 @@
-import { Briefcase } from 'lucide-react'
+const BRAND_LOGO_SRC = '/branding/logoblanco.png'
 
 const links = {
   plataforma: [
@@ -28,9 +28,11 @@ export default function Footer() {
           {/* Brand */}
           <div className="lg:col-span-2 text-left">
             <a href="/" className="inline-flex items-center gap-3 mb-6">
-              <div className="w-11 h-11 bg-primary rounded-xl flex items-center justify-center shrink-0">
-                <Briefcase className="w-6 h-6 text-white" />
-              </div>
+              <img
+                src={BRAND_LOGO_SRC}
+                alt="Logo de EmpleoFacil"
+                className="w-11 h-11 rounded-xl object-contain shrink-0"
+              />
               <span className="font-heading font-bold text-xl">EmpleoFácil</span>
             </a>
 
