@@ -7,6 +7,7 @@ const { getAbsoluteUploadPathFromPublic } = require('../utils/uploadPaths');
 
 const MAX_CERTIFICADOS_ADJUNTOS = 5;
 const HOJA_VIDA_HTML_TIMEOUT_MS = Number(process.env.HOJA_VIDA_HTML_TIMEOUT_MS || 90000);
+const WATERMARK_BRANDING_PATH = path.resolve(__dirname, '..', 'utils', 'branding', 'marca_agua.png');
 
 // --- Helpers -----------------------------------------------------------------
 
@@ -114,6 +115,13 @@ function buildDataUrlFromFile(filePath, tipoMime = null) {
   } catch (_error) {
     return null;
   }
+}
+
+function resolveWatermarkSource() {
+  const dataUrl = buildDataUrlFromFile(WATERMARK_BRANDING_PATH, 'image/png');
+  if (dataUrl) return dataUrl;
+  console.warn('[hoja_vida] watermark source not found', { path: WATERMARK_BRANDING_PATH });
+  return null;
 }
 
 // Función para resolver foto específicamente para Puppeteer/PDF
@@ -509,6 +517,7 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId, options = {}) {
   // Construir foto data URL para preview HTML
   const fotoDoc = (documentosRows || []).find((d) => d.tipo_documento === 'foto' && d.ruta_archivo);
   const fotoSrcForPreview = fotoDoc ? resolveFotoSourceForPdf(fotoDoc.ruta_archivo, fotoDoc.tipo_mime) || resolveFotoSource(fotoDoc.ruta_archivo, fotoDoc.tipo_mime) : null;
+  const watermarkSrc = resolveWatermarkSource();
 
   // Construir HTML para previsualización
   const perfil = {
@@ -534,6 +543,7 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId, options = {}) {
     experiencias,
     formaciones,
     fotoSrc: fotoSrcForPreview,
+    watermarkSrc,
     anexosAdjuntos,
     anexosResumen,
     anexosWarnings: []
@@ -691,6 +701,7 @@ function buildHtml({
   experiencias,
   formaciones,
   fotoSrc,
+  watermarkSrc = null,
   anexosAdjuntos = [],
   anexosResumen = null,
   anexosWarnings = []
@@ -720,7 +731,12 @@ function buildHtml({
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
+    html, body {
+      overflow-x: hidden;
+    }
+
     body {
+      position: relative;
       font-family: Arial, Helvetica, sans-serif;
       color: #1a1a2e;
       font-size: 11px;
@@ -736,6 +752,24 @@ function buildHtml({
       padding-bottom: 14px;
       border-bottom: 2.5px solid #1a1a2e;
       margin-bottom: 14px;
+    }
+    .cv-watermark-layer {
+      position: absolute;
+      inset: 0;
+      transform: rotate(-24deg) scale(1.12);
+      transform-origin: center;
+      opacity: 0.12;
+      z-index: 0;
+      pointer-events: none;
+      background-repeat: repeat;
+      background-size: 120px auto;
+      background-position: center;
+    }
+    .cv-header,
+    .section,
+    .footer {
+      position: relative;
+      z-index: 1;
     }
     .photo-box {
       width: 90px; height: 112px;
@@ -860,6 +894,7 @@ function buildHtml({
   </style>
 </head>
 <body>
+  ${watermarkSrc ? `<div class="cv-watermark-layer" style="background-image:url('${escapeHtml(watermarkSrc)}');"></div>` : ''}
 
   <!-- ENCABEZADO -->
   <div class="cv-header">
@@ -1044,6 +1079,7 @@ async function generarHojaVidaPdfPorEstudianteId(estudianteId, options = {}) {
   const fotoDoc = (documentos || []).find((d) => d.tipo_documento === 'foto' && d.ruta_archivo);
   // Para PDF necesitamos base64
   const fotoSrc = fotoDoc ? resolveFotoSourceForPdf(fotoDoc.ruta_archivo, fotoDoc.tipo_mime) : null;
+  const watermarkSrc = resolveWatermarkSource();
 
   // -- Puppeteer --
   const linuxCandidates = ['/usr/bin/chromium-browser', '/usr/bin/chromium'];
@@ -1102,6 +1138,7 @@ async function generarHojaVidaPdfPorEstudianteId(estudianteId, options = {}) {
       experiencias,
       formaciones,
       fotoSrc,
+      watermarkSrc,
       anexosAdjuntos: anexosAdjuntosTop,
       anexosResumen: finalResumen,
       anexosWarnings: attachmentWarnings
