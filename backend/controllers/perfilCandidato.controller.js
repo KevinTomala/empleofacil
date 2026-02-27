@@ -727,6 +727,16 @@ async function resolveMyCandidatoId(req) {
   return findCandidatoIdByUserId(userId);
 }
 
+async function canExposeContacto(req) {
+  const role = String(req.user?.rol || '').trim();
+  if (role === 'administrador' || role === 'superadmin') return true;
+  if (role !== 'candidato') return false;
+
+  const ownCandidatoId = await resolveMyCandidatoId(req);
+  if (!ownCandidatoId) return false;
+  return Number(ownCandidatoId) === Number(req.candidatoId);
+}
+
 async function withResolvedCandidate(req, res, mode, action, callback) {
   try {
     let candidatoId;
@@ -765,6 +775,9 @@ async function getPerfil(req, res) {
   const perfil = await getPerfilByCandidatoId(req.candidatoId);
   if (!perfil) {
     return res.status(404).json({ error: 'CANDIDATO_NOT_FOUND' });
+  }
+  if (!(await canExposeContacto(req))) {
+    perfil.contacto = null;
   }
   return res.json(perfil);
 }

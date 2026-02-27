@@ -1,10 +1,12 @@
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
 const db = require('./db');
 const { startAdemySyncJob } = require('./jobs/ademySync.job');
 const { UPLOADS_ROOT, ensureDirSync } = require('./utils/uploadPaths');
+const { initSocket } = require('./realtime/socket');
 
 const authRoutes = require('./routes/auth.routes');
 const integracionesRoutes = require('./routes/integraciones.routes');
@@ -83,7 +85,9 @@ const PORT = process.env.BACKEND_PORT || 3000;
 
 db.waitForConnection()
   .then(() => {
-    app.listen(PORT, () => {
+    const server = http.createServer(app);
+    initSocket(server);
+    server.listen(PORT, () => {
       console.log(`Backend EmpleoFacil listo en puerto ${PORT}`);
       startAdemySyncJob();
     });

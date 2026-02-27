@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Download } from 'lucide-react'
 import Header from '../../components/Header'
 import FormDropdown from '../../components/FormDropdown'
 import { apiRequest } from '../../services/api'
 import { getPerfilById, getPerfilErrorMessage } from '../../services/perfilCandidato.api'
+import { downloadPostulacionCurriculumPdf, getPostulacionesErrorMessage } from '../../services/postulaciones.api'
+import { showToast } from '../../utils/showToast'
 import CandidatoPerfilDrawer from './components/CandidatoPerfilDrawer'
 import './company.css'
 
@@ -32,6 +35,7 @@ export default function CompanyPostulaciones() {
   const [drawerError, setDrawerError] = useState('')
   const [drawerPerfil, setDrawerPerfil] = useState(null)
   const [drawerCandidatoName, setDrawerCandidatoName] = useState('')
+  const [downloadingPostulacionId, setDownloadingPostulacionId] = useState(0)
 
   const totalPages = useMemo(() => {
     const pages = Math.ceil(total / pageSize)
@@ -132,6 +136,35 @@ export default function CompanyPostulaciones() {
     }
   }
 
+  const handleDownloadCurriculum = async (item, candidatoName) => {
+    const postulacionId = Number(item?.id || 0)
+    if (!Number.isInteger(postulacionId) || postulacionId <= 0) {
+      showToast({ type: 'error', message: 'La postulacion seleccionada no es valida.' })
+      return
+    }
+
+    try {
+      setDownloadingPostulacionId(postulacionId)
+      const safeName = String(candidatoName || 'candidato').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')
+      const { blob, fileName } = await downloadPostulacionCurriculumPdf({
+        postulacionId,
+        defaultFileName: `CV_${safeName || postulacionId}.pdf`
+      })
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = fileName || `curriculum_postulacion_${postulacionId}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(objectUrl)
+    } catch (err) {
+      showToast({ type: 'error', message: getPostulacionesErrorMessage(err, 'No se pudo descargar el curriculum.') })
+    } finally {
+      setDownloadingPostulacionId(0)
+    }
+  }
+
   return (
     <div className="company-scope company-compact min-h-screen bg-secondary">
       <Header />
@@ -225,13 +258,24 @@ export default function CompanyPostulaciones() {
                           <p>Postulado: {formatDateShort(item.fecha_postulacion)}</p>
                           <p>Estado proceso: {withFallback(item.estado_proceso)}</p>
                         </div>
-                        <button
-                          type="button"
-                          className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs"
-                          onClick={() => handleOpenPerfil(item.candidato_id, candidatoName)}
-                        >
-                          Ver perfil
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs"
+                            onClick={() => handleOpenPerfil(item.candidato_id, candidatoName)}
+                          >
+                            Ver perfil
+                          </button>
+                          <button
+                            type="button"
+                            className="px-3 py-1.5 border border-border rounded-lg text-xs inline-flex items-center gap-1.5"
+                            onClick={() => handleDownloadCurriculum(item, candidatoName)}
+                            disabled={downloadingPostulacionId === Number(item.id)}
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            {downloadingPostulacionId === Number(item.id) ? 'Descargando...' : 'Descargar CV'}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )

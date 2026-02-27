@@ -119,6 +119,19 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
 - `GET /api/postulaciones/mias/:id` debe devolver `200` para postulacion propia y `404 POSTULACION_NOT_FOUND` para ajena/inexistente.
 - `GET /api/postulaciones/empresa` debe devolver solo postulaciones de vacantes de su empresa.
 
+### 9) Mensajeria realtime Socket.IO (backend)
+- Conexion Socket.IO sin token debe fallar con `AUTH_REQUIRED`.
+- Conexion Socket.IO con token invalido debe fallar con `INVALID_TOKEN`.
+- Conexion Socket.IO con token valido debe entrar a room `user:<id>`.
+- `mensajes:join_conversacion` con conversacion ajena debe responder/emitir `FORBIDDEN`.
+- `POST /api/mensajes/conversaciones/:id/mensajes` debe emitir:
+  - `mensajes:new` en room `conversacion:<id>`,
+  - `mensajes:conversacion_actualizada` por cada participante,
+  - `mensajes:unread_resumen` por cada participante.
+- `POST /api/mensajes/conversaciones/:id/leer` debe emitir:
+  - `mensajes:read` en room `conversacion:<id>`,
+  - `mensajes:unread_resumen` para el usuario que marco lectura.
+
 ## Checklist de regresion rapida
 - Login funciona por email.
 - Login funciona por documento de candidato.
@@ -215,7 +228,7 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
   - debe mostrarse por secciones legibles.
   - no debe usar dump generico por `Object.entries` + `JSON.stringify`.
 
-### 9) Vacantes + postulaciones MVP (frontend)
+### 10) Vacantes + postulaciones MVP (frontend)
 - `/app/company/vacantes`:
   - carga vacantes reales de `/api/vacantes/mias`,
   - crea vacante y la muestra en listado,
@@ -244,6 +257,19 @@ Actualmente no hay suite automatizada de tests en backend ni frontend. Este docu
   - se mantiene como vista legacy de transicion (no flujo principal).
 - Validacion final:
   - `npm run build` en frontend termina sin errores.
+
+### 11) Mensajeria realtime Socket.IO (frontend)
+- Abrir la misma conversacion con dos usuarios en paralelo.
+- Enviar mensaje desde usuario A:
+  - usuario B debe recibirlo sin recargar,
+  - la lista lateral en ambos debe mover la conversacion al top.
+- Si usuario B tiene la conversacion cerrada, el badge de no leidos debe incrementarse.
+- Si usuario B abre/lee conversacion, deben actualizarse checks de lectura en usuario A.
+- Envio optimista:
+  - al enviar debe aparecer mensaje pendiente de inmediato;
+  - al confirmar backend/socket no debe duplicarse.
+- Reconexion:
+  - al reconectar socket, el chat activo debe seguir recibiendo mensajes.
 
 ## Recomendacion de automatizacion
 1. Backend: incorporar `jest` + `supertest` para rutas criticas (`auth`, `candidatos`, `hoja-vida`, `integraciones`).
