@@ -35,6 +35,11 @@ export default function CompanyCandidatos() {
   const [importing, setImporting] = useState(false)
   const [importStatus, setImportStatus] = useState('')
   const [refreshFlag, setRefreshFlag] = useState(0)
+  const [areaFilter, setAreaFilter] = useState('')
+  const [debouncedAreaFilter, setDebouncedAreaFilter] = useState('')
+  const [perfilFilter, setPerfilFilter] = useState('')
+  const [debouncedPerfilFilter, setDebouncedPerfilFilter] = useState('')
+  const [experienciaFilter, setExperienciaFilter] = useState('all')
 
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [profileCandidato, setProfileCandidato] = useState(null)
@@ -54,6 +59,16 @@ export default function CompanyCandidatos() {
   }, [query])
 
   useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedAreaFilter(areaFilter.trim()), 350)
+    return () => clearTimeout(timeout)
+  }, [areaFilter])
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedPerfilFilter(perfilFilter.trim()), 350)
+    return () => clearTimeout(timeout)
+  }, [perfilFilter])
+
+  useEffect(() => {
     let alive = true
     async function load() {
       if (!token) {
@@ -64,12 +79,15 @@ export default function CompanyCandidatos() {
         return
       }
       try {
-        setLoading(candidatos.length === 0 || page === 1)
+        setLoading(page === 1)
         setIsFetching(true)
         const params = new URLSearchParams()
         params.set('page', String(page))
         params.set('page_size', String(pageSize))
         if (debouncedQuery) params.set('q', debouncedQuery)
+        if (debouncedAreaFilter) params.set('area', debouncedAreaFilter)
+        if (debouncedPerfilFilter) params.set('perfil', debouncedPerfilFilter)
+        if (experienciaFilter !== 'all') params.set('experiencia', experienciaFilter)
         const data = await apiRequest(`/api/candidatos?${params.toString()}`)
         if (!alive) return
         const items = Array.isArray(data?.items) ? data.items : []
@@ -91,7 +109,7 @@ export default function CompanyCandidatos() {
     return () => {
       alive = false
     }
-  }, [token, page, pageSize, debouncedQuery, refreshFlag])
+  }, [token, page, pageSize, debouncedQuery, debouncedAreaFilter, debouncedPerfilFilter, experienciaFilter, refreshFlag])
 
   useEffect(() => {
     let alive = true
@@ -183,10 +201,19 @@ export default function CompanyCandidatos() {
       documento: item.documento_identidad || 'N/D',
       nacionalidad: item.nacionalidad || 'N/D',
       fechaNacimiento: item.fecha_nacimiento || 'N/D',
+      edad: item.fecha_nacimiento ? Math.max(0, new Date().getFullYear() - new Date(item.fecha_nacimiento).getFullYear()) : null,
+      areaFormacion: item.area_formacion || 'N/D',
+      formacionPrincipal: item.formacion_principal || 'N/D',
+      cargoReciente: item.cargo_reciente || 'N/D',
+      totalExperiencia: Number(item.total_experiencia || 0),
       verificacion_cuenta_estado: item.verificacion_cuenta_estado || null,
       candidato_verificado: Number(item.candidato_verificado || 0) === 1
     })),
     [candidatos]
+  )
+
+  const hasActiveFilters = Boolean(
+    debouncedQuery || debouncedAreaFilter || debouncedPerfilFilter || experienciaFilter !== 'all'
   )
 
   const selectedVacante = useMemo(() => vacantes.find((item) => String(item.id) === String(vacanteId)) || null, [vacantes, vacanteId])
@@ -219,6 +246,9 @@ export default function CompanyCandidatos() {
 
   const clearSearch = () => {
     setQuery('')
+    setAreaFilter('')
+    setPerfilFilter('')
+    setExperienciaFilter('all')
     setPage(1)
   }
 
@@ -332,16 +362,49 @@ export default function CompanyCandidatos() {
 
         <section className="space-y-4">
           <div className="company-card p-4">
-            <div className="flex flex-col md:flex-row gap-3 md:items-end md:justify-between">
-              <div className="flex-1">
-                <label className="block text-xs text-foreground/60 mb-1">Buscar candidato</label>
-                <label className="company-candidate-search"><Search className="w-4 h-4" /><input className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" type="search" placeholder="Nombre, apellido o documento" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1) }} /></label>
+            <div className="company-candidate-toolbar">
+              <div className="company-candidate-toolbar-search">
+                <label className="block text-xs text-foreground/60 mb-1">Busqueda general</label>
+                <label className="company-candidate-search">
+                  <Search className="w-4 h-4" />
+                  <input className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" type="search" placeholder="Nombre, apellido o documento" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1) }} />
+                </label>
               </div>
-              <div className="flex items-center gap-2">
-                <div><label className="block text-xs text-foreground/60 mb-1">Tamano pagina</label><div style={{ width: '100px' }}><FormDropdown value={pageSize} options={[{ value: 20, label: '20' }, { value: 50, label: '50' }, { value: 100, label: '100' }]} onChange={(val) => { setPageSize(Number(val) || 20); setPage(1) }} /></div></div>
-                <button type="button" className="px-3 py-2 border border-border rounded-lg text-sm" onClick={clearSearch} disabled={!query && !debouncedQuery}>Limpiar</button>
+              <div className="company-candidate-toolbar-actions">
+                <div>
+                  <label className="block text-xs text-foreground/60 mb-1">Tamano pagina</label>
+                  <div style={{ width: '110px' }}>
+                    <FormDropdown value={pageSize} options={[{ value: 20, label: '20' }, { value: 50, label: '50' }, { value: 100, label: '100' }]} onChange={(val) => { setPageSize(Number(val) || 20); setPage(1) }} />
+                  </div>
+                </div>
+                <button type="button" className="px-3 py-2 border border-border rounded-lg text-sm" onClick={clearSearch} disabled={!query && !debouncedQuery && !areaFilter && !perfilFilter && experienciaFilter === 'all'}>Limpiar filtros</button>
               </div>
             </div>
+            <div className="company-candidate-filters">
+              <div>
+                <label className="block text-xs text-foreground/60 mb-1">Area</label>
+                <input className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" type="search" placeholder="Seguridad, ventas, logistica..." value={areaFilter} onChange={(event) => { setAreaFilter(event.target.value); setPage(1) }} />
+              </div>
+              <div>
+                <label className="block text-xs text-foreground/60 mb-1">Titulo o cargo</label>
+                <input className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" type="search" placeholder="Soldador, auxiliar, supervisor..." value={perfilFilter} onChange={(event) => { setPerfilFilter(event.target.value); setPage(1) }} />
+              </div>
+              <div>
+                <label className="block text-xs text-foreground/60 mb-1">Experiencia</label>
+                <FormDropdown
+                  value={experienciaFilter}
+                  options={[
+                    { value: 'all', label: 'Todos' },
+                    { value: 'con', label: 'Con experiencia' },
+                    { value: 'sin', label: 'Sin experiencia' }
+                  ]}
+                  onChange={(value) => { setExperienciaFilter(String(value || 'all')); setPage(1) }}
+                />
+              </div>
+            </div>
+            <p className="company-candidate-filter-summary text-xs text-foreground/60">
+              {hasActiveFilters ? 'Filtros activos aplicados en backend.' : 'Aplica uno o dos filtros para segmentar mejor perfiles.'}
+            </p>
           </div>
 
           <div className="company-list space-y-2">
@@ -355,15 +418,20 @@ export default function CompanyCandidatos() {
               <article key={candidato.id} className="company-card p-4 company-candidate-card">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-2 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap"><span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">Perfil protegido</span></div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">Perfil protegido</span>
+                      <span className={`company-candidate-chip ${candidato.candidato_verificado ? 'is-verified' : 'is-pending'}`}>
+                        {candidato.candidato_verificado ? 'Cuenta verificada' : 'Pendiente verificacion'}
+                      </span>
+                    </div>
                     <h3 className="font-heading text-base font-semibold truncate inline-flex items-center gap-1.5">
                       <span>{candidato.name}</span>
                       <VerifiedBadge entity={candidato} />
                     </h3>
                     <div className="company-candidate-meta">
-                      <p>Documento: {candidato.documento}</p>
-                      <p>Nacionalidad: {candidato.nacionalidad}</p>
-                      <p>Nacimiento: {candidato.fechaNacimiento}</p>
+                      <p>Area: {candidato.areaFormacion}</p>
+                      <p>Cargo reciente: {candidato.cargoReciente}</p>
+                      <p>Experiencia registrada: {candidato.totalExperiencia}</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs shrink-0">
