@@ -703,6 +703,7 @@ async function listPostulacionesByContratante({
       c.nombres,
       c.apellidos,
       c.documento_identidad,
+      f.foto_url,
       vc_candidato.estado AS candidato_verificacion_estado,
       CASE
         WHEN vc_candidato.estado = 'aprobada' THEN 1
@@ -720,6 +721,20 @@ async function listPostulacionesByContratante({
      LEFT JOIN verificaciones_cuenta vc_candidato
        ON vc_candidato.cuenta_tipo = 'candidato'
       AND vc_candidato.candidato_id = c.id
+     LEFT JOIN (
+       SELECT d1.candidato_id, d1.ruta_archivo AS foto_url
+       FROM candidatos_documentos d1
+       INNER JOIN (
+         SELECT candidato_id, MAX(id) AS max_id
+         FROM candidatos_documentos
+         WHERE deleted_at IS NULL
+           AND tipo_documento = 'foto'
+           AND COALESCE(TRIM(ruta_archivo), '') <> ''
+         GROUP BY candidato_id
+       ) d2
+         ON d2.max_id = d1.id
+     ) f
+       ON f.candidato_id = c.id
      LEFT JOIN candidatos_contacto cc
        ON cc.candidato_id = c.id
       AND cc.deleted_at IS NULL
