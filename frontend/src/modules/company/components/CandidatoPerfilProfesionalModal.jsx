@@ -49,6 +49,8 @@ function resolveEmpresaNombre(item) {
 }
 
 function buildResumenProfesional(perfil) {
+  const titularPublico = renderValue(perfil?.social_config?.titular_publico, '')
+  if (titularPublico) return titularPublico
   const firstExp = Array.isArray(perfil?.experiencia) ? perfil.experiencia[0] : null
   const cargo = renderValue(firstExp?.cargo, '')
   const empresa = resolveEmpresaNombre(firstExp)

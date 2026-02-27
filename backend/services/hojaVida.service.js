@@ -423,6 +423,23 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId, options = {}) {
     )
   ]);
 
+  let socialConfigRow = null;
+  try {
+    const [socialRows] = await db.query(
+      `SELECT perfil_publico, alias_publico, titular_publico
+       FROM candidatos_social_config
+       WHERE candidato_id = ?
+       LIMIT 1`,
+      [estudianteId]
+    );
+    socialConfigRow = socialRows[0] || null;
+  } catch (error) {
+    const code = String(error?.code || '');
+    const errno = Number(error?.errno || 0);
+    const isSchemaDrift = code === 'ER_BAD_FIELD_ERROR' || code === 'ER_NO_SUCH_TABLE' || errno === 1054 || errno === 1146;
+    if (!isSchemaDrift) throw error;
+  }
+
   const contacto = contactoRows[0] || null;
   const domicilio = domicilioRows[0] || null;
   const salud = saludRows[0] || null;
@@ -503,7 +520,8 @@ async function obtenerHojaVidaPorEstudianteId(estudianteId, options = {}) {
     fecha_nacimiento: estudiante.fecha_nacimiento,
     edad: calcularEdad(estudiante.fecha_nacimiento),
     sexo: estudiante.sexo,
-    estado_civil: estudiante.estado_civil
+    estado_civil: estudiante.estado_civil,
+    titular_publico: socialConfigRow?.titular_publico ? String(socialConfigRow.titular_publico).trim() : null
   };
 
   const previewHtml = buildHtml({
@@ -679,6 +697,14 @@ function buildHtml({
 }) {
   const ubicacion = [domicilio?.canton, domicilio?.provincia, domicilio?.pais].filter(Boolean).join(', ');
   const edad = perfil.edad ? `${perfil.edad} años` : null;
+  const perfilProfesional = textOrNull(perfil?.titular_publico);
+  const telefonoFijo = textOrNull(contacto?.telefono_fijo);
+  const contactoEmergenciaNombre = textOrNull(contacto?.contacto_emergencia_nombre);
+  const contactoEmergenciaTelefono = textOrNull(contacto?.contacto_emergencia_telefono);
+  const contactoEmergenciaDisplay = contactoEmergenciaTelefono
+    ? `${contactoEmergenciaTelefono}${contactoEmergenciaNombre ? ` (${contactoEmergenciaNombre})` : ''}`
+    : (contactoEmergenciaNombre ? contactoEmergenciaNombre : null);
+  const showContactoEmergenciaInHeader = !telefonoFijo && Boolean(contactoEmergenciaDisplay);
 
   const disponibilidades = [];
   if (logistica?.disp_viajar) disponibilidades.push('Disponible para viajar');
@@ -843,7 +869,8 @@ function buildHtml({
       <div class="contact-line">
         <span class="contact-item"><strong>Email:</strong> ${safe(withNd(contacto?.email))}</span>
         <span class="contact-item"><strong>Cel:</strong> ${safe(withNd(contacto?.telefono_celular))}</span>
-        <span class="contact-item"><strong>Tel:</strong> ${safe(withNd(contacto?.telefono_fijo))}</span>
+        ${telefonoFijo ? `<span class="contact-item"><strong>Tel:</strong> ${safe(telefonoFijo)}</span>` : ''}
+        ${showContactoEmergenciaInHeader ? `<span class="contact-item"><strong>Contacto emergencia:</strong> ${safe(contactoEmergenciaDisplay)}</span>` : ''}
       </div>
       <div class="ubic">${safe(withNd(ubicacion))}</div>
     </div>
@@ -862,10 +889,18 @@ function buildHtml({
       ${renderRow('Sexo', textOrNull(perfil.sexo))}
       ${renderRow('Estado civil', textOrNull(perfil.estado_civil))}
       ${renderRow('Tipo de sangre', textOrNull(salud?.tipo_sangre))}
-      ${renderRow('Contacto emergencia', textOrNull(contacto?.contacto_emergencia_nombre))}
-      ${renderRow('Telefono emergencia', textOrNull(contacto?.contacto_emergencia_telefono))}
+      ${!showContactoEmergenciaInHeader ? renderRow('Contacto emergencia', textOrNull(contacto?.contacto_emergencia_nombre)) : ''}
+      ${!showContactoEmergenciaInHeader ? renderRow('Telefono emergencia', textOrNull(contacto?.contacto_emergencia_telefono)) : ''}
     </div>
   </div>
+
+  ${perfilProfesional ? `
+  <div class="section">
+    <div class="section-title">Perfil Profesional</div>
+    <div class="card">
+      <p class="card-desc" style="margin-top:0;padding-top:0;border-top:none;">${safe(perfilProfesional)}</p>
+    </div>
+  </div>` : ''}
 
   <!-- EDUCACIÓN -->
   <div class="section">

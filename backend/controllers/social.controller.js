@@ -115,7 +115,9 @@ async function getMyCandidateSocialConfigHandler(req, res) {
 
 async function updateMyCandidateSocialConfigHandler(req, res) {
   const hasPerfilPublico = Object.prototype.hasOwnProperty.call(req.body || {}, 'perfil_publico');
-  if (!hasPerfilPublico) {
+  const hasAliasPublico = Object.prototype.hasOwnProperty.call(req.body || {}, 'alias_publico');
+  const hasTitularPublico = Object.prototype.hasOwnProperty.call(req.body || {}, 'titular_publico');
+  if (!hasPerfilPublico && !hasAliasPublico && !hasTitularPublico) {
     return res.status(400).json({ error: 'INVALID_PAYLOAD' });
   }
 
@@ -123,9 +125,30 @@ async function updateMyCandidateSocialConfigHandler(req, res) {
     const candidatoId = await resolveCandidateIdFromReq(req);
     if (!candidatoId) return res.status(404).json({ error: 'CANDIDATO_NOT_FOUND' });
 
-    const config = await updateCandidateSocialConfig(candidatoId, {
-      perfil_publico: toTinyBool(req.body.perfil_publico)
-    });
+    const patch = {};
+    if (hasPerfilPublico) {
+      patch.perfil_publico = toTinyBool(req.body.perfil_publico);
+    }
+    if (hasAliasPublico) {
+      const alias = req.body?.alias_publico === null || req.body?.alias_publico === undefined
+        ? null
+        : String(req.body.alias_publico).trim();
+      if (alias && alias.length > 120) {
+        return res.status(400).json({ error: 'INVALID_PAYLOAD', details: 'alias_publico max 120 chars' });
+      }
+      patch.alias_publico = alias || null;
+    }
+    if (hasTitularPublico) {
+      const titular = req.body?.titular_publico === null || req.body?.titular_publico === undefined
+        ? null
+        : String(req.body.titular_publico).trim();
+      if (titular && titular.length > 300) {
+        return res.status(400).json({ error: 'INVALID_PAYLOAD', details: 'titular_publico max 300 chars' });
+      }
+      patch.titular_publico = titular || null;
+    }
+
+    const config = await updateCandidateSocialConfig(candidatoId, patch);
     return res.json({ ok: true, config });
   } catch (error) {
     return res.status(500).json({

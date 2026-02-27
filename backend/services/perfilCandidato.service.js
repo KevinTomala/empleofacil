@@ -209,6 +209,30 @@ async function getPerfilByCandidatoId(candidatoId) {
     listFormacion(candidatoId)
   ]);
 
+  let socialConfig = {
+    perfil_publico: false,
+    alias_publico: null,
+    titular_publico: null
+  };
+  try {
+    const [socialRows] = await db.query(
+      `SELECT perfil_publico, alias_publico, titular_publico
+       FROM candidatos_social_config
+       WHERE candidato_id = ?
+       LIMIT 1`,
+      [candidatoId]
+    );
+    if (socialRows[0]) {
+      socialConfig = {
+        perfil_publico: Number(socialRows[0].perfil_publico || 0) === 1,
+        alias_publico: socialRows[0].alias_publico ? String(socialRows[0].alias_publico).trim() : null,
+        titular_publico: socialRows[0].titular_publico ? String(socialRows[0].titular_publico).trim() : null
+      };
+    }
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+  }
+
   return {
     datos_basicos: {
       id: row.c_id,
@@ -260,7 +284,8 @@ async function getPerfilByCandidatoId(candidatoId) {
     idiomas,
     experiencia,
     documentos,
-    formacion_detalle: formacion
+    formacion_detalle: formacion,
+    social_config: socialConfig
   };
 }
 

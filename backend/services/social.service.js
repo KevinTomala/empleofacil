@@ -67,12 +67,18 @@ async function ensureCandidateSocialConfigTable() {
       candidato_id BIGINT PRIMARY KEY,
       perfil_publico TINYINT(1) NOT NULL DEFAULT 0,
       alias_publico VARCHAR(120) NULL,
-      titular_publico VARCHAR(160) NULL,
+      titular_publico VARCHAR(300) NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       CONSTRAINT fk_candidatos_social_config_candidato FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE CASCADE,
       INDEX idx_candidatos_social_config_publico (perfil_publico)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  );
+
+  // Keep existing environments aligned with the latest max length.
+  await db.query(
+    `ALTER TABLE candidatos_social_config
+     MODIFY COLUMN titular_publico VARCHAR(300) NULL`
   );
 
   ensuredCandidateSocialConfigTable = true;

@@ -8,6 +8,8 @@ import { getMyHojaVida, getMyHojaVidaPdf, getMyPerfil, getPerfilErrorMessage } f
 import { buildProfileSections, getNextPendingRoute, getProfileProgressMetrics } from './profileSections'
 import { PdfPreviewViewer } from './PdfPreviewViewer'
 
+const MAX_PUBLIC_HEADLINE_LENGTH = 300
+
 export default function CandidateProfile() {
   const navigate = useNavigate()
   const [perfil, setPerfil] = useState(null)
@@ -17,6 +19,8 @@ export default function CandidateProfile() {
   const [socialConfig, setSocialConfig] = useState(null)
   const [loadingSocialConfig, setLoadingSocialConfig] = useState(true)
   const [savingSocialConfig, setSavingSocialConfig] = useState(false)
+  const [publicHeadline, setPublicHeadline] = useState('')
+  const [savingPublicHeadline, setSavingPublicHeadline] = useState(false)
   const [loadingPdf, setLoadingPdf] = useState(false)
   const [pdfError, setPdfError] = useState('')
   const [pdfPreviewInlineOpen, setPdfPreviewInlineOpen] = useState(false)
@@ -138,6 +142,10 @@ export default function CandidateProfile() {
   }, [candidatoNombre])
 
   const socialProfileEnabled = Boolean(socialConfig?.perfil_publico)
+  const publicHeadlineCount = publicHeadline.length
+  const publicHeadlineTrimmed = publicHeadline.trim()
+  const currentSavedHeadline = String(socialConfig?.titular_publico || '')
+  const isPublicHeadlineDirty = publicHeadlineTrimmed !== currentSavedHeadline
 
   const togglePublicProfile = async (enabled) => {
     try {
@@ -155,6 +163,32 @@ export default function CandidateProfile() {
       })
     } finally {
       setSavingSocialConfig(false)
+    }
+  }
+
+  useEffect(() => {
+    setPublicHeadline(String(socialConfig?.titular_publico || ''))
+  }, [socialConfig?.titular_publico])
+
+  const savePublicHeadline = async () => {
+    if (savingPublicHeadline) return
+    try {
+      setSavingPublicHeadline(true)
+      const response = await updateMyCandidateSocialConfig({ titular_publico: publicHeadlineTrimmed || null })
+      const nextConfig = response?.config || {
+        perfil_publico: Boolean(socialConfig?.perfil_publico),
+        alias_publico: socialConfig?.alias_publico || null,
+        titular_publico: publicHeadlineTrimmed || null,
+      }
+      setSocialConfig(nextConfig)
+      showToast({ type: 'success', message: 'Tu resumen profesional fue actualizado.' })
+    } catch (err) {
+      showToast({
+        type: 'error',
+        message: getSocialErrorMessage(err, 'No se pudo guardar el resumen profesional.'),
+      })
+    } finally {
+      setSavingPublicHeadline(false)
     }
   }
 
@@ -448,6 +482,31 @@ export default function CandidateProfile() {
               <p className="text-xs text-foreground/70">
                 Cuando esta activo, otros candidatos ven solo un resumen profesional. No se exponen datos personales sensibles.
               </p>
+              <div className="space-y-2">
+                <label className="block text-xs text-foreground/70" htmlFor="public-headline-input">
+                  Titular profesional publico
+                </label>
+                <textarea
+                  id="public-headline-input"
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background min-h-24"
+                  maxLength={MAX_PUBLIC_HEADLINE_LENGTH}
+                  placeholder="Ejemplo: Guardia de seguridad con experiencia en control de accesos y atencion al cliente."
+                  value={publicHeadline}
+                  onChange={(event) => setPublicHeadline(event.target.value)}
+                  disabled={loadingSocialConfig || savingPublicHeadline}
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-foreground/60">{publicHeadlineCount}/{MAX_PUBLIC_HEADLINE_LENGTH}</p>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 border border-border rounded-lg text-xs disabled:opacity-60"
+                    onClick={savePublicHeadline}
+                    disabled={loadingSocialConfig || savingPublicHeadline || !isPublicHeadlineDirty}
+                  >
+                    {savingPublicHeadline ? 'Guardando...' : 'Guardar titular'}
+                  </button>
+                </div>
+              </div>
               <label className="inline-flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
