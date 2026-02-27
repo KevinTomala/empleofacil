@@ -43,10 +43,11 @@ export function AuthProvider({ children }) {
 
     setCompanyAccessReady(false)
     try {
-      await apiRequest('/api/company/perfil/me')
-      setHasCompanyAccess(true)
+      const response = await apiRequest('/api/company/acceso/me')
+      const hasAccess = Boolean(response?.has_access)
+      setHasCompanyAccess(hasAccess)
       setCompanyAccessReady(true)
-      return true
+      return hasAccess
     } catch (error) {
       if (error?.status === 403 || error?.status === 404) {
         setHasCompanyAccess(false)

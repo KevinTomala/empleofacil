@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X, Briefcase } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { getMyPerfil } from '../services/perfilCandidato.api'
 import { getMyCompanyPerfil } from '../services/companyPerfil.api'
 import { getMensajesResumen } from '../services/mensajes.api'
 import { connectMensajesSocket, releaseMensajesSocket } from '../services/socket'
+
+const BRAND_LOGO_SRC = '/branding/logo.png'
 
 function toAssetUrl(value) {
   const raw = String(value || '').trim()
@@ -34,37 +36,61 @@ export default function Header() {
   const navigate = useNavigate()
   const { user, token, logout, hasCompanyAccess } = useAuth()
   const role = user?.rol
+  const userId = Number(user?.id || 0)
+  const photoCacheKey = useMemo(
+    () => (userId > 0 && role ? `auth_profile_photo_url:${role}:${userId}` : ''),
+    [role, userId]
+  )
+
+  useEffect(() => {
+    if (!photoCacheKey) {
+      setProfilePhotoUrl('')
+      setPhotoError(false)
+      return
+    }
+
+    const cached = String(sessionStorage.getItem(photoCacheKey) || '').trim()
+    setProfilePhotoUrl(cached)
+    setPhotoError(false)
+  }, [photoCacheKey])
 
   useEffect(() => {
     let active = true
 
     async function loadPhoto() {
       try {
+        let nextPhotoUrl = ''
+
         if (role === 'candidato') {
           const perfil = await getMyPerfil()
           if (!active) return
           const documentos = Array.isArray(perfil?.documentos) ? perfil.documentos : []
           const foto = documentos.find((doc) => doc?.tipo_documento === 'foto' && doc?.ruta_archivo)
-          setProfilePhotoUrl(foto?.ruta_archivo ? toAssetUrl(foto.ruta_archivo) : '')
-          setPhotoError(false)
-          return
-        }
-
-        if (role === 'empresa') {
+          nextPhotoUrl = foto?.ruta_archivo ? toAssetUrl(foto.ruta_archivo) : ''
+        } else if (role === 'empresa') {
           const perfilEmpresa = await getMyCompanyPerfil()
           if (!active) return
           const logo = String(perfilEmpresa?.perfil?.logo_url || '').trim()
-          setProfilePhotoUrl(logo ? toAssetUrl(logo) : '')
-          setPhotoError(false)
-          return
+          nextPhotoUrl = logo ? toAssetUrl(logo) : ''
+        } else {
+          if (!active) return
+          nextPhotoUrl = ''
         }
 
         if (!active) return
-        setProfilePhotoUrl('')
+
+        setProfilePhotoUrl(nextPhotoUrl)
         setPhotoError(false)
+
+        if (photoCacheKey) {
+          if (nextPhotoUrl) sessionStorage.setItem(photoCacheKey, nextPhotoUrl)
+          else sessionStorage.removeItem(photoCacheKey)
+        }
       } catch {
         if (!active) return
-        setProfilePhotoUrl('')
+        // Conserva foto cacheada si existe para evitar parpadeo/fallback al navegar.
+        const cached = photoCacheKey ? String(sessionStorage.getItem(photoCacheKey) || '').trim() : ''
+        if (cached) setProfilePhotoUrl(cached)
         setPhotoError(false)
       }
     }
@@ -74,7 +100,7 @@ export default function Header() {
     return () => {
       active = false
     }
-  }, [role, user?.id])
+  }, [role, userId, photoCacheKey])
 
   useEffect(() => {
     const allowedRoles = ['candidato', 'empresa', 'administrador', 'superadmin']
@@ -187,12 +213,16 @@ export default function Header() {
       { href: '/#beneficios-candidatos', label: 'Para Candidatos' },
       { href: '/#beneficios-empresas', label: 'Para Empresas' },
       { href: '/#como-funciona', label: 'Como Funciona' },
+      { href: '/#nosotros', label: 'Nosotros' },
       { href: '/#contacto', label: 'Contacto' },
     ]
   }, [role, hasCompanyAccess])
 
   const handleLogout = () => {
+    if (photoCacheKey) sessionStorage.removeItem(photoCacheKey)
     logout()
+    setProfilePhotoUrl('')
+    setPhotoError(false)
     setIsProfileOpen(false)
     if (location.pathname.startsWith('/app')) {
       navigate('/')
@@ -222,9 +252,11 @@ export default function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to={homeLink} className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <Briefcase className="w-6 h-6 text-white" />
-            </div>
+            <img
+              src={BRAND_LOGO_SRC}
+              alt="Logo de EmpleoFacil"
+              className="w-10 h-10 rounded-lg object-contain"
+            />
             <span className="font-heading font-bold text-xl text-foreground">
               EmpleoFácil
             </span>

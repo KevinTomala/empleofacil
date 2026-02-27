@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { Briefcase, ShieldCheck } from 'lucide-react'
+import { ShieldCheck } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Header from '../../components/Header'
 import { useAuth } from '../../context/AuthContext'
 import { showToast } from '../../utils/showToast'
 import './auth.css'
+
+const BRAND_LOGO_SRC = '/branding/logo.png'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -68,7 +70,7 @@ export default function Login() {
         <section className="auth-hero">
           <div className="auth-logo">
             <span className="auth-logo-badge">
-              <Briefcase size={22} />
+              <img src={BRAND_LOGO_SRC} alt="Logo de EmpleoFacil" className="auth-logo-image" />
             </span>
             EmpleoFacil
           </div>

@@ -182,10 +182,11 @@ export default function ProfileSidebarStatus({
     requiredSections,
     recommendedSections,
     phase2Sections,
-    progressFase1,
-    pendingRequired,
-    pendingRecommended
+    progressFase1
   } = getProfileProgressMetrics(sections)
+  const applyRequiredSections = [...requiredSections, ...recommendedSections, ...phase2Sections]
+  const pendingApplySections = applyRequiredSections.filter((section) => section.status !== 'complete')
+  const isApplyReady = pendingApplySections.length === 0
 
   const documentos = Array.isArray(perfil?.documentos) ? perfil.documentos : []
   const cedulaStatus = getCedulaStatus(documentos)
@@ -211,13 +212,9 @@ export default function ProfileSidebarStatus({
   const currentSection = sections.find((section) => section.route === currentTab)
 
   const recommendationText =
-    pendingRequired > 0
-      ? 'Completa las secciones obligatorias para postular sin bloqueos.'
-      : pendingRecommended > 0
-      ? 'Agrega secciones recomendadas para mejorar tu coincidencia.'
-      : 'Tu perfil base ya esta completo. Puedes avanzar a fase 2.'
-
-  const isFase1Complete = progressFase1 === 100
+    isApplyReady
+      ? 'Tu perfil esta completo para postular.'
+      : 'Para postular debes completar todas las secciones de Fase 1 y Fase 2.'
 
   const handleRequestVerification = async () => {
     if (!hasSupportDoc || requestingVerification || !canRequestVerificationByStatus) return
@@ -258,18 +255,13 @@ export default function ProfileSidebarStatus({
         <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>
       )}
 
-      {!isFase1Complete && (
+      {!isApplyReady && (
         <div className="rounded-xl border border-border bg-slate-50/70 p-3 space-y-2">
           <p className="text-xs font-semibold text-foreground">Para postular necesitas</p>
-          {pendingRequired > 0 ? (
-            requiredSections
-              .filter((section) => section.status !== 'complete')
-              .map((section) => (
-                <p key={section.id} className="text-xs text-foreground/75">- {section.title}</p>
-              ))
-          ) : (
-            <p className="text-xs text-emerald-700">- Requisitos obligatorios completos</p>
-          )}
+          {pendingApplySections
+            .map((section) => (
+              <p key={section.id} className="text-xs text-foreground/75">- {section.title}</p>
+            ))}
         </div>
       )}
 
@@ -339,7 +331,7 @@ export default function ProfileSidebarStatus({
       </div>
 
       <p className="text-xs text-foreground/65">
-        {isFase1Complete ? 'Perfil base completo. Puedes avanzar a Fase 2.' : recommendationText}
+        {recommendationText}
       </p>
       <p className="text-xs text-foreground/60">{lastSavedText}</p>
     </div>

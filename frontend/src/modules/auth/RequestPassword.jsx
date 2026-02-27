@@ -1,7 +1,9 @@
-import { Briefcase, Mail } from 'lucide-react'
+import { Mail } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Header from '../../components/Header'
 import './auth.css'
+
+const BRAND_LOGO_SRC = '/branding/logo.png'
 
 export default function RequestPassword() {
   return (
@@ -11,7 +13,7 @@ export default function RequestPassword() {
         <section className="auth-hero">
           <div className="auth-logo">
             <span className="auth-logo-badge">
-              <Briefcase size={22} />
+              <img src={BRAND_LOGO_SRC} alt="Logo de EmpleoFacil" className="auth-logo-image" />
             </span>
             EmpleoFacil
           </div>
