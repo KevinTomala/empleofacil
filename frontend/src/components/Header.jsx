@@ -6,6 +6,8 @@ import { Menu, X, Briefcase } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { getMyPerfil } from '../services/perfilCandidato.api'
 import { getMyCompanyPerfil } from '../services/companyPerfil.api'
+import { getMensajesResumen } from '../services/mensajes.api'
+import { connectMensajesSocket, releaseMensajesSocket } from '../services/socket'
 
 function toAssetUrl(value) {
   const raw = String(value || '').trim()
@@ -27,9 +29,10 @@ export default function Header() {
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [profilePhotoUrl, setProfilePhotoUrl] = useState('')
   const [photoError, setPhotoError] = useState(false)
+  const [unreadMensajes, setUnreadMensajes] = useState(0)
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, logout, hasCompanyAccess } = useAuth()
+  const { user, token, logout, hasCompanyAccess } = useAuth()
   const role = user?.rol
 
   useEffect(() => {
@@ -72,6 +75,62 @@ export default function Header() {
       active = false
     }
   }, [role, user?.id])
+
+  useEffect(() => {
+    const allowedRoles = ['candidato', 'empresa', 'administrador', 'superadmin']
+    if (!user?.id || !allowedRoles.includes(String(role || '').toLowerCase())) {
+      setUnreadMensajes(0)
+      return undefined
+    }
+
+    let active = true
+
+    async function loadUnreadResumen() {
+      try {
+        const data = await getMensajesResumen()
+        if (!active) return
+        setUnreadMensajes(Number(data?.unread_total || 0))
+      } catch {
+        if (!active) return
+        setUnreadMensajes(0)
+      }
+    }
+
+    loadUnreadResumen()
+
+    const safeToken = String(token || '').trim()
+    if (!safeToken) return () => { active = false }
+
+    const socket = connectMensajesSocket(safeToken)
+    if (!socket) return () => { active = false }
+
+    const handleUnreadResumen = (payload = {}) => {
+      if (!active) return
+      setUnreadMensajes(Number(payload?.unread_total || 0))
+    }
+
+    socket.on('mensajes:unread_resumen', handleUnreadResumen)
+
+    return () => {
+      active = false
+      socket.off('mensajes:unread_resumen', handleUnreadResumen)
+      releaseMensajesSocket()
+    }
+  }, [user?.id, role, token])
+
+  const renderLinkLabel = (link) => {
+    const isMensajesLink = String(link?.href || '').includes('/mensajes')
+    if (!isMensajesLink || unreadMensajes <= 0) return link.label
+
+    return (
+      <span className="inline-flex items-center gap-2">
+        <span>{link.label}</span>
+        <span className="inline-flex min-w-5 h-5 px-1 items-center justify-center rounded-full bg-primary text-white text-[11px] leading-none font-semibold">
+          {unreadMensajes > 99 ? '99+' : unreadMensajes}
+        </span>
+      </span>
+    )
+  }
 
   const homeLink = useMemo(() => {
     if (role === 'superadmin' || role === 'administrador') return '/app/admin'
@@ -180,7 +239,7 @@ export default function Header() {
                   to={link.href}
                   className="text-foreground/70 hover:text-foreground transition-colors font-medium text-sm"
                 >
-                  {link.label}
+                  {renderLinkLabel(link)}
                 </Link>
               ) : (
                 <a
@@ -188,7 +247,7 @@ export default function Header() {
                   href={link.href}
                   className="text-foreground/70 hover:text-foreground transition-colors font-medium text-sm"
                 >
-                  {link.label}
+                  {renderLinkLabel(link)}
                 </a>
               )
             ))}
@@ -283,7 +342,7 @@ export default function Header() {
                     className="text-foreground/70 hover:text-foreground transition-colors font-medium"
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    {link.label}
+                    {renderLinkLabel(link)}
                   </Link>
                 ) : (
                   <a
@@ -292,7 +351,7 @@ export default function Header() {
                     className="text-foreground/70 hover:text-foreground transition-colors font-medium"
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    {link.label}
+                    {renderLinkLabel(link)}
                   </a>
                 )
               ))}
